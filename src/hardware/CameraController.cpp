@@ -115,10 +115,11 @@ CameraController::CameraController(QObject *parent)
         m_mainCamera = new QCamera(usbCamera, this);
 
         // === 摄像头健康监控信号连接 ===
-        connect(m_mainCamera, &QCamera::errorOccurred,
-                this, &CameraController::onCameraErrorOccurred);
-        connect(m_mainCamera, &QCamera::statusChanged,
-                this, &CameraController::onCameraStatusChanged);
+        // 使用旧式 SIGNAL/SLOT 字符串语法（避免编译期需要 QCamera 完整定义）
+        connect(m_mainCamera, SIGNAL(errorOccurred(int, const QString &)),
+                this, SLOT(onCameraErrorOccurred(int, const QString &)));
+        connect(m_mainCamera, SIGNAL(statusChanged(QCamera::Status)),
+                this, SLOT(onCameraStatusChanged(int)));  // 槽用 int 接收
 
         // 设置摄像头分辨率和帧率（目标 15fps）
         const int TARGET_FPS = 30;
@@ -681,25 +682,39 @@ void CameraController::drawWatermarkOverlay(QPainter &painter, int imgW, int img
 
 // ============================================================
 // 🐕 摄像头健康监控系统 — 防卡死自动恢复
+//
+// 注意：此处避免直接引用 QCamera::Status 嵌套枚举，
+// 因为 Qt6 Multimedia 模块化头文件可能导致编译器看不到完整定义。
+// 使用与 Qt6 QCamera::Status 枚举值对应的 int 常量代替。
 // ============================================================
 
-void CameraController::onCameraStatusChanged(QCamera::Status status)
+namespace CamStatus {
+    // 与 Qt6 QCamera::Status 枚举值一一对应 (qcamera.h)
+    constexpr int UnloadedStatus  = 0;
+    constexpr int UnloadingStatus = 1;
+    constexpr int LoadingStatus   = 2;
+    constexpr int LoadedStatus    = 3;
+    constexpr int StandbyStatus   = 4;
+    constexpr int ActiveStatus    = 5;
+}
+
+void CameraController::onCameraStatusChanged(int status)
 {
     QString statusStr;
     switch (status) {
-    case QCamera::UnloadedStatus:   statusStr = QStringLiteral("Unloaded(未加载)"); break;
-    case QCamera::UnloadingStatus:  statusStr = QStringLiteral("Unloading(卸载中)"); break;
-    case QCamera::LoadingStatus:    statusStr = QStringLiteral("Loading(加载中)"); break;
-    case QCamera::LoadedStatus:     statusStr = QStringLiteral("Loaded(已就绪)"); break;
-    case QCamera::StandbyStatus:    statusStr = QStringLiteral("Standby(待机)"); break;
-    case QCamera::ActiveStatus:     statusStr = QStringLiteral("Active(活跃)"); break;
-    default:                       statusStr = QStringLiteral("Unknown(%1)").arg((int)status); break;
+    case CamStatus::UnloadedStatus:  statusStr = QStringLiteral("Unloaded(未加载)"); break;
+    case CamStatus::UnloadingStatus: statusStr = QStringLiteral("Unloading(卸载中)"); break;
+    case CamStatus::LoadingStatus:   statusStr = QStringLiteral("Loading(加载中)"); break;
+    case CamStatus::LoadedStatus:    statusStr = QStringLiteral("Loaded(已就绪)"); break;
+    case CamStatus::StandbyStatus:   statusStr = QStringLiteral("Standby(待机)"); break;
+    case CamStatus::ActiveStatus:    statusStr = QStringLiteral("Active(活跃)"); break;
+    default:                        statusStr = QStringLiteral("Unknown(%1)").arg(status); break;
     }
 
     qInfo() << "[CameraController] 主摄像头状态变更:" << statusStr;
 
     // 进入 Active 状态时重置心跳
-    if (status == QCamera::ActiveStatus) {
+    if (status == CamStatus::ActiveStatus) {
         m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
         if (!m_watchdogTimer->isActive()) {
             m_watchdogTimer->start();
@@ -709,7 +724,7 @@ void CameraController::onCameraStatusChanged(QCamera::Status status)
     Q_EMIT cameraStatusChanged(statusStr);
 }
 
-void CameraController::onCameraErrorOccurred(QCamera::Error error, const QString &errorString)
+void CameraController::onCameraErrorOccurred(int error, const QString &errorString)
 {
     qWarning() << "[CameraController] ⚠️ 主摄像头错误!"
                << "错误代码:" << error << "详情:" << errorString;
@@ -747,7 +762,15 @@ void CameraController::onWatchdogTimeout()
                    << "秒未收到视频帧，预览可能卡死";
 
         // 检查当前摄像头状态辅助判断
-        auto currentStatus = m_mainCamera ? m_mainCamera->status() : QCamera::UnloadedStatus;
+        // 注意：m_mainCamera->status() 在某些 Qt6 模块化头文件配置下不可见
+        // 使用 QMetaObject 属性读取替代（通过属性名 "status" 获取，返回 QVariant）
+        int currentStatus = CamStatus::UnloadedStatus;
+        if (m_mainCamera) {
+            QVariant propVal = m_mainCamera->property("status");
+            if (propVal.isValid()) {
+                currentStatus = propVal.toInt();
+            }
+        }
         qWarning() << "[CameraController] 当前QCamera状态:" << (int)currentStatus;
 
         if (m_restartCount < MAX_AUTO_RESTART) {
@@ -792,11 +815,11 @@ void CameraController::restartMainCamera()
     // 3. 延迟后重新启动（给 USB 总线释放资源的时间）
     QTimer::singleShot(800, this, [this]() {
         if (m_mainCamera) {
-            // 重新连接监控信号
-            connect(m_mainCamera, &QCamera::errorOccurred,
-                    this, &CameraController::onCameraErrorOccurred);
-            connect(m_mainCamera, &QCamera::statusChanged,
-                    this, &CameraController::onCameraStatusChanged);
+            // 重新连接监控信号（旧式字符串语法，避免编译期类型依赖）
+            connect(m_mainCamera, SIGNAL(errorOccurred(int, const QString &)),
+                    this, SLOT(onCameraErrorOccurred(int, const QString &)));
+            connect(m_mainCamera, SIGNAL(statusChanged(QCamera::Status)),
+                    this, SLOT(onCameraStatusChanged(int)));
 
             m_mainCamera->start();
 

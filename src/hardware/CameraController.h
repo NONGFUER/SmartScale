@@ -55,9 +55,9 @@ private Q_SLOTS:
 
     // === 摄像头健康监控 ===
     // QCamera 状态变化监控
-    void onCameraStatusChanged(QCamera::Status status);
+    void onCameraStatusChanged(int status);
     // QCamera 错误处理
-    void onCameraErrorOccurred(QCamera::Error error, const QString &errorString);
+    void onCameraErrorOccurred(int error, const QString &errorString);
     // 帧心跳：每收到一帧重置看门狗
     void onMainVideoFrameChanged();
     // 看门狗定时器触发：检测是否卡死
