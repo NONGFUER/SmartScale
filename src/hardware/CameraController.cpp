@@ -79,6 +79,13 @@ CameraController::CameraController(QObject *parent)
     m_aiService = new VisionAIService(this);
 
     // ==========================================
+    // 🐕 摄像头看门狗初始化（防卡死自动恢复）
+    // ==========================================
+    m_watchdogTimer = new QTimer(this);
+    m_watchdogTimer->setInterval(m_watchdogIntervalMs);
+    connect(m_watchdogTimer, &QTimer::timeout, this, &CameraController::onWatchdogTimeout);
+
+    // ==========================================
     // 🎥 主摄像头 (USB摄像头 - Qt Multimedia QCamera)
     // ==========================================
     // 遍历所有视频输入设备，找到 USB 摄像头
@@ -106,6 +113,12 @@ CameraController::CameraController(QObject *parent)
 
     if (found) {
         m_mainCamera = new QCamera(usbCamera, this);
+
+        // === 摄像头健康监控信号连接 ===
+        connect(m_mainCamera, &QCamera::errorOccurred,
+                this, &CameraController::onCameraErrorOccurred);
+        connect(m_mainCamera, &QCamera::statusChanged,
+                this, &CameraController::onCameraStatusChanged);
 
         // 设置摄像头分辨率和帧率（目标 15fps）
         const int TARGET_FPS = 30;
@@ -174,6 +187,10 @@ CameraController::CameraController(QObject *parent)
         // setVideoOutput 会在 setMainVideoSink 中调用
         m_mainCamera->start();
         qInfo() << "[CameraController] QCamera 主摄像头已启动";
+
+        // 启动看门狗（在 start 之后，确保摄像头进入 Active 状态后开始监控）
+        m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
+        m_watchdogTimer->start();
     } else {
         qWarning() << "[CameraController] 未找到任何视频输入设备！";
     }
@@ -242,6 +259,13 @@ void CameraController::setMainVideoSink(QVideoSink *sink) {
     m_mainSink = sink;
     // 将 QCamera 直接绑定到 QVideoSink，零拷贝原生渲染
     m_mainCaptureSession.setVideoOutput(sink);
+
+    // === 连接帧心跳信号（监控预览是否存活） ===
+    if (sink) {
+        connect(sink, &QVideoSink::videoFrameChanged,
+                this, &CameraController::onMainVideoFrameChanged, Qt::DirectConnection);
+        qInfo() << "[CameraController] 主摄像头帧心跳已连接";
+    }
 }
 void CameraController::setSubVideoSink(QVideoSink *sink) { m_subSink = sink; }
 
@@ -653,5 +677,139 @@ void CameraController::drawWatermarkOverlay(QPainter &painter, int imgW, int img
             painter.setFont(fontInfoLabel); // 恢复
         }
     }
+}
+
+// ============================================================
+// 🐕 摄像头健康监控系统 — 防卡死自动恢复
+// ============================================================
+
+void CameraController::onCameraStatusChanged(QCamera::Status status)
+{
+    QString statusStr;
+    switch (status) {
+    case QCamera::UnloadedStatus:   statusStr = QStringLiteral("Unloaded(未加载)"); break;
+    case QCamera::UnloadingStatus:  statusStr = QStringLiteral("Unloading(卸载中)"); break;
+    case QCamera::LoadingStatus:    statusStr = QStringLiteral("Loading(加载中)"); break;
+    case QCamera::LoadedStatus:     statusStr = QStringLiteral("Loaded(已就绪)"); break;
+    case QCamera::StandbyStatus:    statusStr = QStringLiteral("Standby(待机)"); break;
+    case QCamera::ActiveStatus:     statusStr = QStringLiteral("Active(活跃)"); break;
+    default:                       statusStr = QStringLiteral("Unknown(%1)").arg((int)status); break;
+    }
+
+    qInfo() << "[CameraController] 主摄像头状态变更:" << statusStr;
+
+    // 进入 Active 状态时重置心跳
+    if (status == QCamera::ActiveStatus) {
+        m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
+        if (!m_watchdogTimer->isActive()) {
+            m_watchdogTimer->start();
+        }
+    }
+
+    Q_EMIT cameraStatusChanged(statusStr);
+}
+
+void CameraController::onCameraErrorOccurred(QCamera::Error error, const QString &errorString)
+{
+    qWarning() << "[CameraController] ⚠️ 主摄像头错误!"
+               << "错误代码:" << error << "详情:" << errorString;
+
+    Q_EMIT cameraStatusChanged(QStringLiteral("Error: %1").arg(errorString));
+
+    // 尝试自动恢复
+    if (!m_isRestarting && m_restartCount < MAX_AUTO_RESTART) {
+        qWarning() << "[CameraController] 触发错误恢复重启...";
+        restartMainCamera();
+    } else if (m_restartCount >= MAX_AUTO_RESTART) {
+        qCritical() << "[CameraController] 🔴 已达最大重启次数(" << MAX_AUTO_RESTART
+                    << ")，停止自动恢复，需人工检查硬件";
+    }
+}
+
+void CameraController::onMainVideoFrameChanged()
+{
+    // 每收到一帧就更新时间戳（DirectConnection 保证实时）
+    m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
+}
+
+void CameraController::onWatchdogTimeout()
+{
+    // 如果正在重启中或摄像头未创建，跳过检测
+    if (m_isRestarting || !m_mainCamera) return;
+
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
+    qint64 elapsed = now - m_lastFrameTimeMs;
+
+    // 判定卡死：超过 watchdogInterval 秒没收到帧
+    // 给 1 个 interval 的容差（即 2 倍时间才判定真正卡死）
+    if (elapsed > m_watchdogIntervalMs * 2) {
+        qWarning() << "[CameraController] 🐕 看门狗触发! 已" << elapsed / 1000.0
+                   << "秒未收到视频帧，预览可能卡死";
+
+        // 检查当前摄像头状态辅助判断
+        auto currentStatus = m_mainCamera ? m_mainCamera->status() : QCamera::UnloadedStatus;
+        qWarning() << "[CameraController] 当前QCamera状态:" << (int)currentStatus;
+
+        if (m_restartCount < MAX_AUTO_RESTART) {
+            restartMainCamera();
+        } else {
+            qCritical() << "[CameraController] 🔴 已达最大重启次数(" << MAX_AUTO_RESTART
+                        << ")，停止自动恢复";
+            m_watchdogTimer->stop();  // 停止看门狗避免刷日志
+        }
+    }
+    // 正常情况：只打 trace 日志（每 30 秒一次，避免刷屏）
+    else if ((int)(elapsed / 1000) % 30 == 0 && elapsed > 1000) {
+        qDebug() << "[CameraController] 🐕 心跳正常，距上次帧:" << elapsed / 1000.0 << "秒前";
+    }
+}
+
+// ============================================================
+// 🔁 摄像头自动重启核心逻辑
+// ============================================================
+
+void CameraController::restartMainCamera()
+{
+    if (m_isRestarting) {
+        qDebug() << "[CameraController] 重已在进行中，跳过重复调用";
+        return;
+    }
+    m_isRestarting = true;
+    m_restartCount++;
+
+    qWarning() << "[CameraController] 🔁 开始第" << m_restartCount << "次自动重启摄像头...";
+
+    // 1. 停止看门狗（防止重启过程中误触）
+    m_watchdogTimer->stop();
+
+    // 2. 停止旧摄像头
+    if (m_mainCamera) {
+        m_mainCamera->stop();
+        // 断开旧信号连接（避免旧对象残留信号干扰）
+        m_mainCamera->disconnect(this);
+    }
+
+    // 3. 延迟后重新启动（给 USB 总线释放资源的时间）
+    QTimer::singleShot(800, this, [this]() {
+        if (m_mainCamera) {
+            // 重新连接监控信号
+            connect(m_mainCamera, &QCamera::errorOccurred,
+                    this, &CameraController::onCameraErrorOccurred);
+            connect(m_mainCamera, &QCamera::statusChanged,
+                    this, &CameraController::onCameraStatusChanged);
+
+            m_mainCamera->start();
+
+            // 重置心跳时间戳
+            m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
+            // 重启看门狗
+            m_watchdogTimer->start();
+
+            qInfo() << "[CameraController] ✅ 摄像头重启完成，看门狗已恢复";
+        }
+
+        Q_EMIT cameraStatusChanged(QStringLiteral("Restarted(第%1次重启)").arg(m_restartCount));
+        m_isRestarting = false;
+    });
 }
 

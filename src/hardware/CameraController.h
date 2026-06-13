@@ -16,6 +16,7 @@
 #include <QCamera>
 #include <QMediaCaptureSession>
 #include <QMediaDevices>
+#include <QTimer>
 #include "ai/VisionAIService.h"
 #include "hardware/VoiceSpeaker.h"
 #include "services/AuthService.h"
@@ -42,6 +43,8 @@ Q_SIGNALS:
     void aiRecognitionCompleted(const QString &predictedLabel, const QString &imagePath, qint64 inferenceTimeMs);
     // 副摄像头抓拍完成，用于串联主摄像头抓拍
     void subCaptureReady();   //
+    // 摄像头状态变化通知（供 QML 监控显示）
+    void cameraStatusChanged(const QString &statusText);
 private Q_SLOTS:
     // 副摄像头管道数据泵 (rpicam-vid, 主摄像头已切换到QCamera不再需要)
     void readSubCameraData();
@@ -49,6 +52,19 @@ private Q_SLOTS:
     void handleMainCameraCapture();
     // 副摄像头抓拍完成后触发主摄像头（串联）
     void onSubCaptureReady();
+
+    // === 摄像头健康监控 ===
+    // QCamera 状态变化监控
+    void onCameraStatusChanged(QCamera::Status status);
+    // QCamera 错误处理
+    void onCameraErrorOccurred(QCamera::Error error, const QString &errorString);
+    // 帧心跳：每收到一帧重置看门狗
+    void onMainVideoFrameChanged();
+    // 看门狗定时器触发：检测是否卡死
+    void onWatchdogTimeout();
+
+    // 摄像头自动重启（卡死/错误恢复）
+    void restartMainCamera();
 
 private:
     QPointer<QVideoSink> m_mainSink;
@@ -88,6 +104,14 @@ private:
     // 副摄像头最新抓拍图像（用于主摄像头水印中的"员工照片"区域）
     QImage m_lastSubCaptureImage;
     mutable QMutex m_subImageMutex;   // 线程安全保护
+
+    // === 摄像头健康监控（防卡死） ===
+    QTimer *m_watchdogTimer = nullptr;      // 看门狗定时器
+    qint64  m_lastFrameTimeMs = 0;          // 最近一次收到帧的时间戳
+    int     m_watchdogIntervalMs = 5000;    // 看门狗检测间隔（5秒无帧=判定卡死）
+    int     m_restartCount = 0;             // 重启计数（防止无限重启循环）
+    static constexpr int MAX_AUTO_RESTART = 10;  // 最大自动重启次数
+    bool    m_isRestarting = false;         // 正在重启标志（防止重入）
 
     // 辅助函数
     int frameSizeFor(int width, int height) const {
