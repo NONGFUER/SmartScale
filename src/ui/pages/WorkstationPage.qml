@@ -1,0 +1,1268 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import QtMultimedia
+import App.Backend 1.0
+import SmartScale.Tools 1.0
+
+Item {
+    id: root
+    
+    // ==========================================
+    // 用于缓存 AI 状态的全局属性
+    // ==========================================
+    property string currentPrediction: "等待识别..."
+    property string currentImagePath: ""
+    property var currentDetailRecord: null
+    
+    // 推理耗时相关属性
+    property string lastInferenceTime: "-- ms"
+
+    // ===== 外层：蓝色渐变底色 =====
+    Rectangle {
+        anchors.fill: parent
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: "#2B7DE9" }
+            GradientStop { position: 1.0; color: "#5BA8F5" }
+        }
+
+        // ===== 内层：白色圆角主卡片 =====
+        Rectangle {
+            id: mainCard
+            anchors.fill: parent
+            anchors.margins: 16
+            radius: 20
+            color: "#FFFFFF"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.margins: 24
+                spacing: 24
+
+                // ================================================================
+                // 左侧区域 (60%) — 历史记录列表 + 蔬菜拍摄区域
+                // ================================================================
+                ColumnLayout {
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: parent.width * 0.6
+                    spacing: 16
+
+                    // ========== 历史记录区块 ==========
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: parent.height * 0.42
+                        color: "#F8FAFC"
+                        radius: 12
+                        border.color: "#E2E8F0"
+                        border.width: 1
+                        clip: true
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 10
+
+                            // 标题行：历史记录 + 更多>
+                            RowLayout {
+                                Layout.fillWidth: true
+
+                                Row {
+                                    spacing: 6
+                                    Text {
+                                        text: "\uD83D\uDCCB"
+                                        font.pixelSize: 18
+                                    }
+                                    Text {
+                                        text: "历史记录"
+                                        font.pixelSize: 18
+                                        font.bold: true
+                                        color: "#1E293B"
+                                    }
+                                }
+
+                                Item { Layout.fillWidth: true }
+
+                                Text {
+                                    text: "更多 >"
+                                    font.pixelSize: 14
+                                    color: "#3B82F6"
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: console.log("查看更多历史记录...")
+                                    }
+                                }
+                            }
+
+                            // 分隔线
+                            Rectangle {
+                                Layout.fillWidth: true
+                                height: 1
+                                color: "#E2E8F0"
+                            }
+
+                            // 历史记录列表（ListView 单列）
+                            ScrollView {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                clip: true
+                                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                                ListView {
+                                    id: historyListView
+                                    width: parent.width
+                                    model: WeightHistoryService ? WeightHistoryService.historyEntries : []
+                                    spacing: 8
+
+                                    delegate: Rectangle {
+                                        width: historyListView.width
+                                        height: 48
+                                        radius: 8
+                                        color: index % 2 === 0 ? "#FFFFFF" : "#F1F5F9"
+                                        border.color: "#E2E8F0"
+                                        border.width: 1
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.leftMargin: 12
+                                            anchors.rightMargin: 12
+                                            spacing: 12
+
+                                            Text {
+                                                text: modelData.categoryName || "未识别"
+                                                font.pixelSize: 24
+                                                font.bold: true
+                                                color: "#334155"
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
+
+                                            Text {
+                                                text: modelData.weight ? modelData.weight.toFixed(1) + "kg" : "0.0kg"
+                                                font.pixelSize: 24
+                                                color: "#16A34A"
+                                                font.bold: true
+                                            }
+
+                                            Text {
+                                                text: (modelData.recordTime || "").substring(5, 16)
+                                                font.pixelSize: 13
+                                                color: "#94A3B8"
+                                            }
+                                        }
+
+                                        // 点击打开详情弹窗，显示水印图片
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                root.currentDetailRecord = modelData
+                                                detailDialog.open()
+                                            }
+                                        }
+                                    }
+
+                                    // 空状态提示
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: parent.width * 0.9
+                                        height: 120
+                                        visible: historyListView.count === 0
+                                        color: "transparent"
+
+                                        Column {
+                                            anchors.centerIn: parent
+                                            spacing: 10
+
+                                            Text {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                text: "暂无称重记录"
+                                                font.pixelSize: 18
+                                                font.bold: true
+                                                color: "#94A3B8"
+                                            }
+
+                                            Text {
+                                                anchors.horizontalCenter: parent.horizontalCenter
+                                                text: "开始称重后，记录将显示在这里"
+                                                font.pixelSize: 13
+                                                color: "#CBD5E1"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ========== 蔬菜拍摄区块 — 双摄像头并排 ==========
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        color: "#ECEFF4"
+                        radius: 14
+                        clip: true
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            spacing: 0
+
+                            // 区域标题栏
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 40
+
+                                Row {
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.leftMargin: 14
+                                    spacing: 6
+                                    Text { text: "\uD83D\uDCF7"; font.pixelSize: 24; color: "#475569" }
+                                    Text { text: "实时监控"; font.pixelSize: 24; font.bold: true; color: "#334155" }
+                                }
+
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.rightMargin: 14
+                                    spacing: 5
+                                    Rectangle { width: 10; height: 10; radius: 4; color: "#22C55E" }
+                                    Text { text: "2路在线"; font.pixelSize: 18; color: "#22C55E"; font.bold: true }
+                                }
+                            }
+
+                            // 双视频并排区
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 10
+                                    anchors.topMargin: 6
+                                    spacing: 10
+
+                            // ========== 主摄像头 — 蓝调主题（核心工作区） ==========
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                radius: 12
+                                color: "#DBEAFE"       // 浅蓝背景，暗示主要区域
+                                border.color: "#93C5FD" // 柔和蓝边框
+                                border.width: 2
+                                clip: true
+
+                                VideoOutput {
+                                    id: mainVideo
+                                    anchors.fill: parent
+                                    fillMode: VideoOutput.PreserveAspectCrop
+                                    Component.onCompleted: {
+                                        CameraController.setMainVideoSink(mainVideo.videoSink)
+                                    }
+                                }
+
+                                // ========== 取景引导框 — 对齐 AI 裁剪区域 ==========
+                                // C++ 裁剪参数 (CameraController._processCommon):
+                                //   边长: min(w,h) * 0.35, 中心: 水平45%, 垂直53%
+                                Item {
+                                    anchors.fill: parent
+                                    clip: true
+                                    Rectangle {
+                                        id: guideBox
+                                        width: Math.min(parent.width, parent.height) * 0.35
+                                        height: width
+                                        x: parent.width * 0.45 - width / 2
+                                        y: parent.height * 0.53 - height / 2
+                                        color: "transparent"
+                                        radius: 8
+                                        border.width: 2
+                                        border.color: "#3B82F6"
+                                        Rectangle {
+                                            anchors.fill: parent
+                                            anchors.margins: parent.border.width
+                                            radius: 6
+                                            color: "#3B82F6"
+                                            opacity: 0.08
+                                        }
+                                        property real cLen: Math.min(width, height) * 0.2
+                                        Canvas {
+                                            anchors.fill: parent
+                                            onPaint: {
+                                                var ctx = getContext("2d")
+                                                var cl = parent.cLen
+                                                ctx.clearRect(0, 0, width, height)
+                                                ctx.strokeStyle = "#2563EB"
+                                                ctx.lineWidth = 3
+                                                ctx.lineCap = "square"
+                                                ctx.beginPath(); ctx.moveTo(0, cl); ctx.lineTo(0, 0); ctx.lineTo(cl, 0); ctx.stroke()
+                                                ctx.beginPath(); ctx.moveTo(width - cl, 0); ctx.lineTo(width, 0); ctx.lineTo(width, cl); ctx.stroke()
+                                                ctx.beginPath(); ctx.moveTo(0, height - cl); ctx.lineTo(0, height); ctx.lineTo(cl, height); ctx.stroke()
+                                                ctx.beginPath(); ctx.moveTo(width - cl, height); ctx.lineTo(width, height); ctx.lineTo(width - cl, height - cl); ctx.stroke()
+                                            }
+                                            Component.onCompleted: requestPaint()
+                                        }
+                                    }
+                                    Rectangle {
+                                        x: guideBox.x + (guideBox.width - width) / 2
+                                        y: guideBox.y - 28
+                                        width: guideTextLabel.width + 16
+                                        height: 24
+                                        radius: 4
+                                        color: "#2563EB"
+                                        visible: guideBox.y > 30
+                                        Text {
+                                            id: guideTextLabel
+                                            anchors.centerIn: parent
+                                            text: "\u8BF7\u5C06\u83DC\u83D0\u653E\u7F6E\u4E8E\u6B64\u533A\u57DF"
+                                            font.pixelSize: 12
+                                            color: "#FFFFFF"
+                                        }
+                                    }
+                                }
+
+                                // 左上角标签 — 蓝色调，醒目
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.margins: 10
+                                    width: auto_width.width + 24
+                                    height: 30
+                                    radius: 6
+                                    color: "#2563EB"        // 蓝色实心底
+
+                                    Row {
+                                        id: auto_width
+                                        spacing: 5
+                                        anchors.centerIn: parent
+                                        Text { text: "\uD83D\uDDCF"; font.pixelSize: 13; color: "#FFFFFF" }
+                                        Text { text: "蔬菜拍摄"; font.pixelSize: 13; font.bold: true; color: "#FFFFFF" }
+                                    }
+                                }
+
+                                // 右下角实时状态指示
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    anchors.margins: 8
+                                    spacing: 5
+                                    Rectangle { width: 8; height: 8; radius: 4; color: "#22C55E" }  // 绿点=在线
+                                    Text { text: "LIVE"; font.pixelSize: 10; font.bold: true; color: "#22C55E" }
+                                }
+                            }
+
+                            // ========== 副摄像头 — 暖灰主题（辅助观察区） ==========
+                            Rectangle {
+                                Layout.preferredWidth: Math.min(parent.width * 0.38, 280)
+                                Layout.fillHeight: true
+                                Layout.minimumWidth: 160
+                                radius: 12
+                                color: "#F1F0EF"        // 暖灰背景，与主摄形成冷暖对比
+                                border.color: "#D6D3D1" // 柔和暖边框
+                                border.width: 2
+                                clip: true
+
+                                VideoOutput {
+                                    id: subVideo
+                                    anchors.fill: parent
+                                    fillMode: VideoOutput.PreserveAspectCrop
+                                    Component.onCompleted: {
+                                        CameraController.setSubVideoSink(subVideo.videoSink)
+                                    }
+                                }
+
+                                // 左上角胶囊标签 — 暖色调
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.margins: 10
+                                    width: aux_label_w.width + 24
+                                    height: 30
+                                    radius: 6
+                                    color: "#78716C"        // 暖灰实心底
+
+                                    Row {
+                                        id: aux_label_w
+                                        spacing: 5
+                                        anchors.centerIn: parent
+                                        Text { text: "\uD83D\uDC64"; font.pixelSize: 13; color: "#FFFFFF" }  // 👤
+                                        Text { text: "操作员视角"; font.pixelSize: 12; font.bold: true; color: "#FFFFFF" }
+                                    }
+                                }
+
+                                // 右下角状态指示
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    anchors.margins: 8
+                                    spacing: 5
+                                    Rectangle { width: 7; height: 7; radius: 3; color: "#F97316" }
+                                    Text { text: "AUX"; font.pixelSize: 9; font.bold: true; color: "#78716C" }
+                                }
+                            }
+                            } // RowLayout
+                        } // Item (双视频区)
+                    } // ColumnLayout
+                    } // 蔬菜拍摄区块 Rectangle
+                    } // 左侧区域 ColumnLayout
+
+                // ================================================================
+                // 右侧区域 (40%) — 自然流式布局（顶部紧凑/中部弹性/底部固定）
+                // ================================================================
+                ColumnLayout {
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: parent.width * 0.4
+                    spacing: 16
+
+                    // ==================== 顶部区（紧凑）：用户信息 ====================
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 64
+                        spacing: 12
+
+                        // 圆形头像
+                        Rectangle {
+                            width: 48; height: 48; radius: 24
+                            color: "#3B82F6"
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: BackendAuth.currentUser ? BackendAuth.currentUser.charAt(0).toUpperCase() : "?"
+                                font.pixelSize: 24
+                                font.bold: true
+                                color: "#FFFFFF"
+                            }
+                        }
+
+                        // 用户名称 + 岗位标签
+                        ColumnLayout {
+                            spacing: 4
+                            Layout.alignment: Qt.AlignVCenter
+
+                            Text {
+                                text: BackendAuth.currentUser || "未登录"
+                                font.pixelSize: 22
+                                font.bold: true
+                                color: "#1E293B"
+                            }
+
+                            // 蓝色背景岗位标签
+                            Rectangle {
+                                width: 60; height: 24; radius: 4
+                                color: "#DBEAFE"
+                                visible: BackendAuth.currentUser !== "" && BackendAuth.currentUser !== undefined
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "操作员"
+                                    font.pixelSize: 12
+                                    color: "#2563EB"
+                                }
+                            }
+                        }
+
+                        // 弹性 spacer 把内容推顶部对齐
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    // ==================== 中部区（弹性）：称重 + 物品名称 ====================
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+
+                        ColumnLayout {
+                            anchors.centerIn: parent
+                            width: parent.width
+                            spacing: 12
+
+                            // "称重克数" 独立标签 — 在卡片外部上方
+                            Text {
+                                text: "称重克数"
+                                font.pixelSize:24
+                                color: "#64748B"
+                            }
+
+                            // 称重卡片 — 蓝色圆角色块，白色大字（只放数字），固定高度不撑满
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 240
+                                Layout.maximumHeight: 280
+                                radius: 16
+                                color: "#3B82F6"
+
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+
+                                    Text {
+                                        text: WeightManager.netWeight.toFixed(2)
+                                        font.pixelSize: 192
+                                        font.bold: true
+                                        color: "#FFFFFF"
+                                        font.family: "Monospace"
+                                    }
+
+                                    Text {
+                                        text: "/kg"
+                                        font.pixelSize: 28
+                                        color: "#DBEAFE"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                }
+                            }
+
+                            // "物品名称" 独立标签 — 在名称卡片上方
+                            Row {
+                                spacing: 8
+                                Text {
+                                    text: "物品名称"
+                                    font.pixelSize: 24
+                                    color: "#64748B"
+                                }
+
+                                Rectangle {
+                                    width: 78; height: 20; radius: 4
+                                    color: "#DBEAFE"
+                                   
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "AI辅助识别"
+                                        font.pixelSize: 18
+                                        color: "#2563EB"
+                                    }
+                                }
+                            }
+
+                            // 名称卡片 — 虚线边框 + 文字 + 右侧识别按钮
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 220
+                                Layout.minimumHeight: 180
+                                radius: 12
+                                color: root.currentPrediction === "等待识别..." || root.currentPrediction === "AI未就绪"
+                                       ? "#F8FAFC" : "#EFF6FF"
+                                border.width: 0
+
+                                Canvas {
+                                    anchors.fill: parent
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.strokeStyle = "#1E40AF"
+                                        ctx.lineWidth = 3
+                                        ctx.setLineDash([8, 5])
+                                        ctx.strokeRect(1, 1, width - 2, height - 2)
+                                    }
+                                    Component.onCompleted: requestPaint()
+                                }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 12
+                                    spacing: 10
+
+                                    // 左侧：文字展示
+                                    Text {
+                                        Layout.fillWidth: true
+                                        horizontalAlignment: Text.AlignHCenter
+                                        text: root.currentPrediction === "等待识别..."
+                                              || root.currentPrediction === "AI未就绪"
+                                              ? "点击选择品类..."
+                                              : Translator.translate(root.currentPrediction)
+                                        font.pixelSize: 88
+                                        font.bold: true
+                                        color: root.currentPrediction === "等待识别..."
+                                               || root.currentPrediction === "AI未就绪"
+                                               ? "#94A3B8" : "#1E40AF"
+                                    }
+
+                                    // 右侧：识别按钮（手动演示用）
+                                    Rectangle {
+                                        width: 44; height: 44; radius: 22
+                                        color: captureMouseArea.containsMouse ? "#60A5FA" : "#3B82F6"
+                                        border.color: "#FFFFFF"
+                                        border.width: 2
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "识别"
+                                            font.pixelSize: 18
+                                            color: "#FFFFFF"
+                                        }
+
+                                        MouseArea {
+                                            id: captureMouseArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: {
+                                                console.log("手动触发拍照...")
+                                                root.currentPrediction = "识别中..."
+                                                CameraController.captureVegetable(WeightManager.netWeight);
+                                                captureBtnAnim.start();
+                                            }
+                                        }
+
+                                        NumberAnimation {
+                                            id: captureBtnAnim
+                                            target: parent
+                                            property: "scale"
+                                            from: 1.0
+                                            to: 0.9
+                                            duration: 100
+                                            loops: 1
+                                            easing.type: Easing.InOutQuad
+                                            onStopped: parent.scale = 1.0
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // ==================== 底部区（固定高度）：操作按钮（三等分）====================
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: false
+                        Layout.minimumHeight: 70
+                        Layout.maximumHeight: 80
+                        spacing: 12
+
+                        // 可复用的次要按钮样式组件
+                        Component {
+                            id: secondaryButton
+                            Button {
+                                font.pixelSize: 32
+                                font.bold: true
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                background: Rectangle {
+                                    radius: 12
+                                    color: parent.down ? "#E2E8F0" : "#F1F5F9"
+                                    border.color: "#CBD5E1"
+                                    border.width: 1
+                                }
+                                contentItem: Text {
+                                    text: parent.text
+                                    color: "#475569"
+                                    font: parent.font
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
+                        }
+
+                            // 归零按钮
+                            Loader {
+                                sourceComponent: secondaryButton
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                onLoaded: {
+                                    item.text = "归零"; 
+                                    item.clicked.connect(function() { WeightManager.zero() })
+                                    }
+                            }
+
+                            // 去皮按钮
+                            Loader {
+                                sourceComponent: secondaryButton
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                onLoaded: {
+                                    item.text = "去皮"; 
+                                    item.clicked.connect(function() { WeightManager.tare() })
+                                    }
+                            }
+
+                            // 保存按钮（蓝色渐变主按钮）
+                            Button {
+                                text: "保存"
+                                enabled: WeightManager.netWeight > 0.01 && 
+                                         root.currentPrediction !== "等待识别..." && 
+                                         root.currentPrediction !== "AI未就绪" &&
+                                         root.currentPrediction !== "识别中..." &&
+                                         root.currentPrediction !== "未知物品" &&
+                                         root.currentPrediction !== "--"
+                                font.pixelSize: 32
+                                font.bold: true
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                onClicked: {
+                                    let currentWeight = WeightManager.netWeight
+                                    if (currentWeight > 0.01) {
+                                        let currentTime = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm")
+                                        let chineseLabel = Translator.translate(root.currentPrediction)
+                                        console.log(">> 手动提交称重记录:", chineseLabel, currentWeight.toFixed(2) + "kg", "时间:", currentTime, "图片路径:", root.currentImagePath)
+                                        WeightHistoryService.addRecord(currentWeight, chineseLabel, BackendAuth.currentUser, root.currentImagePath, "")
+                                        root.currentPrediction = "等待识别..."
+                                        root.currentImagePath = ""
+                                    } else {
+                                        console.warn("重量不足，无法提交记录")
+                                    }
+                                }
+                                background: Rectangle {
+                                    radius: 12
+                                    gradient: Gradient {
+                                        orientation: Gradient.Horizontal
+                                        GradientStop { position: 0.0; color: parent.parent.enabled ? "#3B82F6" : "#CBD5E1" }
+                                        GradientStop { position: 1.0; color: parent.parent.enabled ? "#1D4ED8" : "#94A3B8" }
+                                    }
+                                }
+                                contentItem: Text {
+                                    text: parent.text
+                                    color: parent.enabled ? "#FFFFFF" : "#FFFFFF"
+                                    font: parent.font
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+    // ===== 白屏闪光动画效果 =====
+    Rectangle {
+        id: flashEffect
+        anchors.fill: parent
+        color: "white"
+        opacity: 0.0
+        z: 99 
+        Behavior on opacity { NumberAnimation { duration: 150 } }
+    }
+
+    // ===== 演示控制面板（保持 hidden）======
+    Rectangle {
+        id: demoPanel
+        visible: false
+        width: 200
+        height: 210
+        color: "#FFFFFF"
+        border.color: "#E4E7ED"
+        border.width: 1
+        radius: 8
+        anchors.left: parent.left
+        anchors.top: parent.top
+         anchors.leftMargin: 20
+        anchors.topMargin: 80
+      
+        opacity: 0.9
+        z: 10
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 10
+            
+            Text {
+                text: "硬件调试 (真实秤)"
+                font.pixelSize: 16
+                font.bold: true
+                color: "#303133"
+                Layout.alignment: Qt.AlignHCenter
+            }
+
+            Text {
+                text: "串口: /dev/ttyAMA0 @9600"
+                font.pixelSize: 13
+                color: "#606266"
+                Layout.alignment: Qt.AlignHCenter
+            }
+            
+            Text {
+                text: "净重(原始g): " + (WeightManager.netWeight * 1000).toFixed(0)
+                font.pixelSize: 13
+                color: "#606266"
+                Layout.alignment: Qt.AlignHCenter
+            }
+
+            Text {
+                text: "稳定状态: " + (WeightManager.isStable ? "✓ 稳定" : "○ 波动")
+                font.pixelSize: 13
+                color: WeightManager.isStable ? "#67C23A" : "#E6A23C"
+                Layout.alignment: Qt.AlignHCenter
+            }
+            
+            Text {
+                text: "推理耗时: " + root.lastInferenceTime
+                font.pixelSize: 14
+                color: "#606266"
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: 5
+            }
+        }
+    }
+
+    // ==========================================
+    // 信号拦截区：处理后端事件
+    // ==========================================
+    Connections {
+       target: WeightManager
+       function onStableTriggered() {
+           console.log("重量锁定！拍摄证据照片...")
+           root.currentPrediction = "识别中..."
+           CameraController.captureVegetable(WeightManager.netWeight);
+       }
+    }
+
+    Connections {
+        target: CameraController
+        function onPhotoSaved(cameraIndex, filePath) { 
+            if (cameraIndex === 0) {
+                flashEffect.opacity = 0.8
+                fadeTimer.start()
+                console.log("照片落盘:", filePath)
+                root.currentImagePath = filePath
+            }
+        }
+    }
+
+    Connections {
+        target: CameraController
+        function onAiRecognitionCompleted(predictedLabel, imagePath, inferenceTimeMs) {
+            console.log(">> QML收到AI分类结果:", predictedLabel)
+            root.currentPrediction = predictedLabel
+            root.currentImagePath = imagePath
+            
+            if (inferenceTimeMs !== undefined) {
+                root.lastInferenceTime = inferenceTimeMs + " ms"
+            } else {
+                root.lastInferenceTime = "-- ms"
+            }
+        }
+    }
+
+    Timer {
+       id: fadeTimer
+       interval: 100
+       onTriggered: flashEffect.opacity = 0.0
+    }
+
+    // ==========================================
+    // 闭环纠错弹窗
+    // ==========================================
+    Dialog {
+        id: correctionDialog
+        title: "请选择正确的商品类别"
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 700
+        height: 550
+        modal: true
+        
+        footer: DialogButtonBox {
+            alignment: Qt.AlignRight
+            Button {
+                text: "取消"
+                DialogButtonBox.buttonRole: DialogButtonBox.RejectRole
+                background: Rectangle {
+                    radius: 6
+                    color: parent.down ? "#DCDFE6" : "#F5F7FA"
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: '#2793c1'
+                    font.pixelSize: 16
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+            Button {
+                text: "确定"
+                DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
+                enabled: selectedLabel !== ""
+                background: Rectangle {
+                    radius: 6
+                    color: parent.down ? "#3A8EE6" : (parent.enabled ? "#409EFF" : "#C0C4CC")
+                }
+                contentItem: Text {
+                    text: parent.text
+                    color: "white"
+                    font.pixelSize: 16
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+        }
+        
+        property string selectedLabel: ""
+        
+        function getAllCategories() {
+            return [
+                { name: "叶菜类", color: "#67C23A", items: [
+                    { en: "Cabbage", cn: "卷心菜" }, { en: "Broccoli", cn: "西兰花" },
+                    { en: "Cauliflower", cn: "花椰菜" }
+                ]},
+                { name: "根茎类", color: "#E6A23C", items: [
+                    { en: "Carrot", cn: "胡萝卜" }, { en: "Radish", cn: "萝卜" },
+                    { en: "Potato", cn: "土豆" }
+                ]},
+                { name: "瓜果类", color: "#909399", items: [
+                    { en: "Cucumber", cn: "黄瓜" }, { en: "Bitter_Gourd", cn: "苦瓜" },
+                    { en: "Bottle_Gourd", cn: "葫芦" }, { en: "Pumpkin", cn: "南瓜" }
+                ]},
+                { name: "茄果类", color: "#F56C6C", items: [
+                    { en: "Tomato", cn: "番茄" }, { en: "Brinjal", cn: "茄子" },
+                    { en: "Capsicum", cn: "甜椒" }
+                ]},
+                { name: "豆类", color: "#409EFF", items: [
+                    { en: "Bean", cn: "豆类" }
+                ]},
+                { name: "其他", color: "#9C27B0", items: [
+                    { en: "Papaya", cn: "木瓜" }
+                ]}
+            ]
+        }
+        
+        function getFilteredCategories(searchText) {
+            if (!searchText) return getAllCategories()
+            var filtered = []
+            var cats = getAllCategories()
+            for (var i = 0; i < cats.length; i++) {
+                var cat = cats[i]
+                var filteredItems = []
+                for (var j = 0; j < cat.items.length; j++) {
+                    var item = cat.items[j]
+                    if (item.cn.indexOf(searchText) >= 0 || item.en.toLowerCase().indexOf(searchText.toLowerCase()) >= 0) {
+                        filteredItems.push(item)
+                    }
+                }
+                if (filteredItems.length > 0) {
+                    filtered.push({ name: cat.name, color: cat.color, items: filteredItems })
+                }
+            }
+            return filtered
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 15
+            
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 70
+                color: "#F5F7FA"
+                radius: 8
+                border.color: "#E4E7ED"
+                border.width: 1
+                
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 4
+                    
+                    Text {
+                        text: "当前 AI 识别结果"
+                        color: "#909399"
+                        font.pixelSize: 14
+                    }
+                    
+                    Text {
+                        text: Translator.translate(root.currentPrediction)
+                        color: "#F56C6C"
+                        font.pixelSize: 24
+                        font.bold: true
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+            
+            TextField {
+                id: searchField
+                Layout.fillWidth: true
+                placeholderText: "搜索商品名称..."
+                font.pixelSize: 16
+                padding: 12
+                background: Rectangle {
+                    radius: 8
+                    color: "#FFFFFF"
+                    border.color: "#DCDFE6"
+                    border.width: 1
+                }
+                onTextChanged: {
+                    categoryList.model = getFilteredCategories(text)
+                }
+            }
+            
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                
+                ListView {
+                    id: categoryList
+                    width: parent.width
+                    model: getAllCategories()
+                    spacing: 12
+                    
+                    delegate: ColumnLayout {
+                        width: categoryList.width
+                        spacing: 8
+                        
+                        RowLayout {
+                            spacing: 8
+                            Layout.fillWidth: true
+                            
+                            Rectangle {
+                                width: 8
+                                height: 8
+                                radius: 4
+                                color: modelData.color
+                            }
+                            
+                            Text {
+                                text: modelData.name
+                                color: "#303133"
+                                font.pixelSize: 18
+                                font.bold: true
+                            }
+                            
+                            Item { Layout.fillWidth: true }
+                            
+                            Text {
+                                text: modelData.items.length + "项"
+                                color: "#909399"
+                                font.pixelSize: 14
+                            }
+                        }
+                        
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: 2
+                            columnSpacing: 10
+                            rowSpacing: 10
+                            
+                            Repeater {
+                                model: modelData.items
+                                
+                                Rectangle {
+                                    id: itemRect
+                                    Layout.fillWidth: true
+                                    height: 50
+                                    radius: 8
+                                
+                                    border.width: 1
+                                    border.color: correctionDialog.selectedLabel === modelData.en ? modelData.color : "#E4E7ED"
+                                   color: correctionDialog.selectedLabel === modelData.en 
+                                        ? Qt.rgba(Qt.red(modelData.color)/255, 
+                                            Qt.green(modelData.color)/255, 
+                                            Qt.blue(modelData.color)/255, 0.15)         
+                                        : (mouseArea.containsMouse ? "#F5F7FA" : "#FFFFFF")
+                                    
+                                    property var itemData: modelData
+                                    
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 10
+                                        spacing: 10
+                                        
+                                        Rectangle {
+                                            width: 12
+                                            height: 12
+                                            radius: 6
+                                            color: modelData.color
+                                        }
+                                        
+                                        ColumnLayout {
+                                            spacing: 2
+                                            Layout.fillWidth: true
+                                            
+                                            Text {
+                                                text: modelData.cn
+                                                color: "#303133"
+                                                font.pixelSize: 16
+                                                font.bold: true
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
+                                            
+                                            Text {
+                                                text: modelData.en
+                                                color: "#909399"
+                                                font.pixelSize: 12
+                                                elide: Text.ElideRight
+                                                Layout.fillWidth: true
+                                            }
+                                        }
+                                    }
+                                    
+                                    MouseArea {
+                                        id: mouseArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            correctionDialog.selectedLabel = modelData.en
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 50
+                radius: 8
+                color: "#E8F4FF"
+                border.color: "#409EFF"
+                border.width: 1
+                visible: correctionDialog.selectedLabel !== ""
+                
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 10
+                    
+                    Rectangle {
+                        width: 8
+                        height: 8
+                        radius: 4
+                        color: "#409EFF"
+                    }
+                    
+                    Text {
+                        text: "已选择: " + (function() {
+                            var cats = correctionDialog.getAllCategories()
+                            for (var i = 0; i < cats.length; i++) {
+                                for (var j = 0; j < cats[i].items.length; j++) {
+                                    if (cats[i].items[j].en === correctionDialog.selectedLabel) {
+                                        return cats[i].items[j].cn + " (" + correctionDialog.selectedLabel + ")"
+                                    }
+                                }
+                            }
+                            return correctionDialog.selectedLabel
+                        })()
+                        color: "#409EFF"
+                        font.pixelSize: 16
+                        font.bold: true
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+        }
+        
+        onOpened: {
+            selectedLabel = ""
+            searchField.text = ""
+            categoryList.model = getAllCategories()
+        }
+        
+        onAccepted: {
+            let correctLabel = selectedLabel
+            VisionAI.submitCorrection(root.currentImagePath, root.currentPrediction, correctLabel)
+            root.currentPrediction = correctLabel
+        }
+    }
+
+    // ==========================================
+    //  称重记录详情查看弹窗
+    // ==========================================
+    Dialog {
+        id: detailDialog
+        title: "称重记录详情"
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+        width: 700
+        height: 500
+        modal: true
+        standardButtons: Dialog.Close
+
+        ColumnLayout {
+            anchors.fill: parent
+            spacing: 20
+
+            Rectangle {
+                id: imageContainer
+                Layout.fillWidth: true
+                Layout.preferredHeight: 200
+                color: "#F5F7FA"
+                radius: 8
+                border.color: "#E4E7ED"
+                border.width: 1
+
+                Image {
+                    id: detailImage
+                    anchors.fill: parent
+                    anchors.margins: 8
+                    fillMode: Image.PreserveAspectFit
+                    source: root.currentDetailRecord && root.currentDetailRecord.mainImagePath ? (root.currentDetailRecord.mainImagePath.startsWith("file://") ? root.currentDetailRecord.mainImagePath : "file://" + root.currentDetailRecord.mainImagePath) : ""
+                    visible: source !== ""
+                    onStatusChanged: {
+                        if (status === Image.Error) {
+                            console.warn("图片加载失败:", source);
+                        }
+                    }
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "暂无图片"
+                    color: "#909399"
+                    font.pixelSize: 16
+                    visible: !detailImage.visible
+                }
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: 20
+                rowSpacing: 12
+
+                Text { text: "时间:"; color: "#606266"; font.bold: true }
+                Text { 
+                    text: root.currentDetailRecord ? root.currentDetailRecord.recordTime : "--"
+                    color: "#303133" 
+                    Layout.fillWidth: true
+                }
+
+                Text { text: "名称:"; color: "#606266"; font.bold: true }
+                Text { 
+                    text: root.currentDetailRecord ? root.currentDetailRecord.categoryName : "--"
+                    color: "#303133" 
+                    Layout.fillWidth: true
+                }
+
+                Text { text: "重量:"; color: "#606266"; font.bold: true }
+                Text { 
+                    text: root.currentDetailRecord ? (root.currentDetailRecord.weight ? root.currentDetailRecord.weight.toFixed(2) + " kg" : "--") : "--"
+                    color: "#28A745"
+                    font.bold: true
+                    Layout.fillWidth: true
+                }
+
+                Text { text: "图片状态:"; color: "#606266"; font.bold: true }
+                Text { 
+                    text: root.currentDetailRecord && root.currentDetailRecord.mainImagePath ? "已保存" : "无图片"
+                    color: root.currentDetailRecord && root.currentDetailRecord.mainImagePath ? "#67C23A" : "#909399"
+                    Layout.fillWidth: true
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: "#E4E7ED"
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: " "
+                color: "#909399"
+                font.pixelSize: 12
+                horizontalAlignment: Text.AlignHCenter
+            }
+        }
+
+        onClosed: {
+            root.currentDetailRecord = null
+        }
+    }
+}
