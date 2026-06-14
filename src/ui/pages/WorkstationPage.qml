@@ -578,45 +578,45 @@ Item {
                                     }
 
                                     // 右侧：识别按钮（手动演示用）
-                                    Rectangle {
-                                        width: 44; height: 44; radius: 22
-                                        color: captureMouseArea.containsMouse ? "#60A5FA" : "#3B82F6"
-                                        border.color: "#FFFFFF"
-                                        border.width: 2
+                                    // Rectangle {
+                                    //     width: 44; height: 44; radius: 22
+                                    //     color: captureMouseArea.containsMouse ? "#60A5FA" : "#3B82F6"
+                                    //     border.color: "#FFFFFF"
+                                    //     border.width: 2
 
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: "识别"
-                                            font.pixelSize: 18
-                                            color: "#FFFFFF"
-                                        }
+                                    //     Text {
+                                    //         anchors.centerIn: parent
+                                    //         text: "识别"
+                                    //         font.pixelSize: 18
+                                    //         color: "#FFFFFF"
+                                    //     }
 
-                                        MouseArea {
-                                            id: captureMouseArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                console.log("手动触发拍照...")
-                                                root.currentPrediction = "识别中..."
-                                                CameraController.captureVegetable(WeightManager.netWeight);
-                                                captureBtnAnim.start();
-                                            }
-                                        }
+                                    //     MouseArea {
+                                    //         id: captureMouseArea
+                                    //         anchors.fill: parent
+                                    //         hoverEnabled: true
+                                    //         cursorShape: Qt.PointingHandCursor
+                                    //         onClicked: {
+                                    //             console.log("手动触发拍照...")
+                                    //             root.currentPrediction = "识别中..."
+                                    //             CameraController.captureVegetable(WeightManager.netWeight);
+                                    //             captureBtnAnim.start();
+                                    //         }
+                                    //     }
 
-                                        NumberAnimation {
-                                            id: captureBtnAnim
-                                            target: parent
-                                            property: "scale"
-                                            from: 1.0
-                                            to: 0.9
-                                            duration: 100
-                                            loops: 1
-                                            easing.type: Easing.InOutQuad
-                                            onStopped: parent.scale = 1.0
-                                        }
+                                    //     NumberAnimation {
+                                    //         id: captureBtnAnim
+                                    //         target: parent
+                                    //         property: "scale"
+                                    //         from: 1.0
+                                    //         to: 0.9
+                                    //         duration: 100
+                                    //         loops: 1
+                                    //         easing.type: Easing.InOutQuad
+                                    //         onStopped: parent.scale = 1.0
+                                    //     }
+                                    // }                                
                                     }
-                                }
                             }
                         }
                     }
