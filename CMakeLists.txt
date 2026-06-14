@@ -28,6 +28,7 @@ qt_add_qml_module(appSmartScale
         src/ui/components/StatusBar.qml
         src/ui/components/FoodItemCard.qml
         src/ui/components/LoginDialog.qml      # 登录弹窗
+        src/ui/pages/CategoryCorrectionDialog.qml  # 品类纠错弹窗
 
         # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
