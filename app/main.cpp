@@ -17,6 +17,7 @@
 // 业务层 (已接入 Repository)
 #include "services/AuthService.h"
 #include "services/WeightHistoryService.h"
+#include "services/CategoryService.h"
 
 // 数据层
 #include "data/DatabaseManager.h"
@@ -62,6 +63,7 @@ int main(int argc, char *argv[])
     WeightSensor *weightSensor = new WeightSensor(&app);
     CameraController *cameraController = new CameraController(&app);
     WeightHistoryService *historyService = new WeightHistoryService(weightRecordRepo, &app);
+    CategoryService *categoryService = new CategoryService(&app);
     VoiceSpeaker *voiceSpeaker = new VoiceSpeaker(&app);
 
     // 语音播报注入 CameraController，AI推理完成后直接播报（省掉QML往返）
@@ -71,6 +73,9 @@ int main(int argc, char *argv[])
 
     // 注入 AuthService 给 HistoryService（云同步需要 token/userId）
     historyService->setAuthService(authService);
+
+    // 注入 AuthService 给 CategoryService（云端拉取品类需要 token）
+    categoryService->setAuthService(authService);
 
     // 从 CameraController 中借出 AI 服务指针，准备注册给前端
     VisionAIService *aiService = cameraController->aiService();
@@ -83,6 +88,7 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "BackendAuth", authService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "VisionAI", aiService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "WeightHistoryService", historyService);
+    qmlRegisterSingletonInstance("App.Backend", 1, 0, "CategoryService", categoryService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "VoiceSpeaker", voiceSpeaker);
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());
 

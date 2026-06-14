@@ -17,9 +17,10 @@ namespace NetworkUtils {
 
     // === API 路径（集中管理，新增接口在此处添加）===
     namespace Api {
-        inline constexpr const char *LOGIN         = "/api/Auth/login";
-        inline constexpr const char *REFRESH_TOKEN = "/api/Auth/refresh-token";
-        inline constexpr const char *WEIGHT_CREATE = "/api/ems/WeightRecord/create";
+        inline constexpr const char *LOGIN          = "/api/Auth/login";
+        inline constexpr const char *REFRESH_TOKEN  = "/api/Auth/refresh-token";
+        inline constexpr const char *WEIGHT_CREATE  = "/api/ems/WeightRecord/create";
+        inline constexpr const char *CATEGORY_LIST  = "/api/ems/Ingr/paged";  // 品类列表
     }
 
     /**
