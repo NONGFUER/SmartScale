@@ -441,7 +441,7 @@ Item {
                             Layout.alignment: Qt.AlignVCenter
 
                             Text {
-                                text: BackendAuth.currentUser ?? "未登录"
+                                text: BackendAuth.currentUser || "未登录"
                                 font.pixelSize: 22
                                 font.bold: true
                                 color: "#1E293B"

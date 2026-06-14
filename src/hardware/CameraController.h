@@ -2,7 +2,6 @@
 #define CAMERACONTROLLER_H
 
 #include <QObject>
-#include <QtGlobal>
 #include <QPointer>
 #include <QVideoSink>
 #include <QVideoFrame>
@@ -31,129 +30,91 @@ public:
 
     Q_INVOKABLE void setMainVideoSink(QVideoSink *sink);
     Q_INVOKABLE void setSubVideoSink(QVideoSink *sink);
-    
-    // 跨线程/UI触发抓拍，传入当前重量
     Q_INVOKABLE void captureVegetable(double currentWeight);
-    //通过CameraController获取AI服务指针
+
     VisionAIService* aiService() const { return m_aiService; }
     void setVoiceSpeaker(VoiceSpeaker *speaker) { m_voiceSpeaker = speaker; }
     void setAuthService(AuthService *authSvc) { m_authService = authSvc; }
+
 Q_SIGNALS:
     void photoSaved(int cameraIndex, const QString &filePath);
     void aiRecognitionCompleted(const QString &predictedLabel, const QString &imagePath, qint64 inferenceTimeMs);
-    // 副摄像头抓拍完成，用于串联主摄像头抓拍
-    void subCaptureReady();   //
-    // 摄像头状态变化通知（供 QML 监控显示）
+    void subCaptureReady();
     void cameraStatusChanged(const QString &statusText);
+
 private Q_SLOTS:
-    // 副摄像头管道数据泵 (rpicam-vid, 主摄像头已切换到QCamera不再需要)
     void readSubCameraData();
-    // 主摄像头截图槽（从QVideoSink取当前帧）
     void handleMainCameraCapture();
-    // 副摄像头抓拍完成后触发主摄像头（串联）
     void onSubCaptureReady();
-
-    // === 摄像头健康监控 ===
-    // QCamera 状态变化监控
     void onCameraStatusChanged(int status);
-    // QCamera 错误处理
     void onCameraErrorOccurred(int error, const QString &errorString);
-    // 帧心跳：每收到一帧重置看门狗
     void onMainVideoFrameChanged();
-    // 看门狗定时器触发：检测是否卡死
     void onWatchdogTimeout();
-
-    // 摄像头自动重启（卡死/错误恢复）
     void restartMainCamera();
 
 private:
+    // === 公共工具方法（消除构造函数/重启函数重复代码）===
+    QCameraDevice findUsbCamera();                          // 扫描USB摄像头设备
+    void setupCameraFormat(QCameraDevice &device);          // 设置最佳分辨率格式
+
     QPointer<QVideoSink> m_mainSink;
     QPointer<QVideoSink> m_subSink;
-    
+
     std::atomic<double> m_lastWeight;
-    std::atomic<bool> m_captureRequestedMain; 
+    std::atomic<bool> m_captureRequestedMain;
     std::atomic<bool> m_captureRequestedSub;
 
-    // === 摄像头硬件流 ===
-    // 主摄像头: Qt Multimedia QCamera (原生集成，零子进程)
     QCamera *m_mainCamera = nullptr;
     QMediaCaptureSession m_mainCaptureSession;
-    // 副摄像头: rpicam-vid 子进程 (保持不变)
     QProcess *m_subProcess;
 
-    QByteArray m_subBuffer;       // 副摄像头帧缓冲（主摄像头不再需要）
-    
-    // 摄像头配置 - 模块化设计，支持快速切换
-    
-    // 主摄像头配置 (USB摄像头)
-    int m_mainWidth;      // USB摄像头分辨率
-    int m_mainHeight;
-    int m_mainFrameSize;  // YUV420P帧大小
-    
-    // 副摄像头配置 (IMX708)
-    int m_subWidth;       // IMX708分辨率
-    int m_subHeight;
-    int m_subFrameSize;   // YUV420P帧大小
+    QByteArray m_subBuffer;
+    int m_mainWidth = 1920;
+    int m_mainHeight = 1080;
+    int m_subWidth = 1280;
+    int m_subHeight = 720;
+    int m_subFrameSize = 0;
 
-    VisionAIService* m_aiService;
+    VisionAIService* m_aiService = nullptr;
     VoiceSpeaker *m_voiceSpeaker = nullptr;
-    AuthService *m_authService = nullptr;  // 登录用户信息
+    AuthService *m_authService = nullptr;
 
-    QThreadPool *m_captureThreadPool;  // 异步拍照线程池
-
-    // 副摄像头最新抓拍图像（用于主摄像头水印中的"员工照片"区域）
+    QThreadPool *m_captureThreadPool = nullptr;
     QImage m_lastSubCaptureImage;
-    mutable QMutex m_subImageMutex;   // 线程安全保护
+    mutable QMutex m_subImageMutex;
 
-    // === 摄像头健康监控（防卡死） ===
-    QTimer *m_watchdogTimer = nullptr;      // 看门狗定时器
-    qint64  m_lastFrameTimeMs = 0;          // 最近一次收到帧的时间戳
-    int     m_watchdogIntervalMs = 5000;    // 看门狗检测间隔（5秒无帧=判定卡死）
-    int     m_restartCount = 0;             // 重启计数（防止无限重启循环）
-    static constexpr int MAX_AUTO_RESTART = 10;  // 最大自动重启次数
-    bool    m_isRestarting = false;         // 正在重启标志（防止重入）
+    // 看门狗（防卡死）
+    QTimer *m_watchdogTimer = nullptr;
+    qint64  m_lastFrameTimeMs = 0;
+    int     m_watchdogIntervalMs = 5000;
+    int     m_restartCount = 0;
+    static constexpr int MAX_AUTO_RESTART = 10;
+    bool    m_isRestarting = false;
 
     // 辅助函数
-    int frameSizeFor(int width, int height) const {
-        return width * height * 3 / 2; // YUV420P大小计算
-    }
-    static QString formatDuration(qint64 ms);  // 毫秒 → "XmXs" 格式
+    int frameSizeFor(int w, int h) const { return w * h * 3 / 2; }
 
-    // 渲染与图像处理管线
+    // 图像处理管线
     void pushFrameToQML(int cameraIndex, const uint8_t *data, int width, int height, int stride);
-    void processAndSaveImage(int cameraIndex, QByteArray frameData, int width, int height, int stride);
-    void processAndSaveImage(int cameraIndex, QImage image);  // QCamera 截图用 (已解码RGB)
+    void processAndSaveImage(int cameraIndex, QByteArray frameData, int w, int h, int stride);
+    void processAndSaveImage(int cameraIndex, QImage image);
+    void _processCommon(int cameraIndex, QImage &img);
+    void drawWatermarkOverlay(QPainter &painter, int imgW, int imgH,
+                              const QString &label, const QImage &empPhoto = QImage());
 
-    // 共享处理：裁剪 → 分发 → 时间戳 → AI推理 → 水印 → 保存（统一主/副摄逻辑）
-    void _processCommon(int cameraIndex, QImage &watermarkedImg);
-
-    // 图像锐化 (Unsharp Mask)，补偿低分辨率/插值导致的模糊
-    static QImage sharpenImage(const QImage &src, float strength = 0.5f, int radius = 1);
-
-    // 水印绘制（小管事风格：顶部栏 + 右侧员工区(副摄像照片) + 左下公章 + 右下信息）
-    void drawWatermarkOverlay(QPainter &painter, int imgWidth, int imgHeight,
-                              const QString &predictedLabel,
-                              const QImage &employeePhoto = QImage());
-
-private:
-    // 异步拍照任务（QRunnable，提交到 m_captureThreadPool 执行）
+    // 异步拍照任务
     class CaptureTask : public QRunnable {
     public:
-        // 副摄像头: YUV420P 原始数据 (rpicam-vid 管道)
         CaptureTask(CameraController *mgr, int camIdx, QByteArray data, int w, int h, int s, double weight)
             : manager(mgr), cameraIndex(camIdx), frameData(std::move(data)),
               width(w), height(h), stride(s), captureWeight(weight), useImage(false) {}
-        // 主摄像头: 已解码的 QImage (QCamera 截图)
         CaptureTask(CameraController *mgr, int camIdx, QImage img, double weight)
             : manager(mgr), cameraIndex(camIdx), image(std::move(img)),
               captureWeight(weight), useImage(true) {}
         void run() override {
             manager->m_lastWeight.store(captureWeight);
-            if (useImage) {
-                manager->processAndSaveImage(cameraIndex, std::move(image));
-            } else {
-                manager->processAndSaveImage(cameraIndex, std::move(frameData), width, height, stride);
-            }
+            if (useImage) manager->processAndSaveImage(cameraIndex, std::move(image));
+            else manager->processAndSaveImage(cameraIndex, std::move(frameData), width, height, stride);
         }
     private:
         CameraController *manager;

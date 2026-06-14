@@ -10,263 +10,117 @@
 #include <QCoreApplication>
 #include <algorithm>
 
+// 副摄像头配置 (IMX708 CSI)
+#define SUB_TUNING_FILE "/usr/share/libcamera/ipa/rpi/pisp/imx708.json"
+// ============================================================
+//  公共工具方法
+// ============================================================
 
-// ==========================================
-// 📷 摄像头配置模块
-// ==========================================
-// 副摄像头选择：
-// 1. 使用 IMX708 (CSI摄像头0) - 推荐方案
-// 2. 使用 OV5647 (CSI摄像头1) - 旧方案
-// 修改下面的宏定义来切换摄像头方案
-#define SUB_CAMERA_IMX708   1
-#define SUB_CAMERA_OV5647   2
-#define CURRENT_SUB_CAMERA  SUB_CAMERA_IMX708  // 当前使用的副摄像头
-#define USB_CAMERA_DEVICE_BY_ID  "/dev/v4l/by-id/usb-UGREEN_Camera_2K_UGREEN_Camera_2K_CM8260001-video-index0"
-#define USB_CAMERA_DEVICE_BY_ID2  "/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._UGREEN_Camera_1080P_SN0001-video-index0"
-#define USB_CAMERA_DEVICE_BY_ID3  "/dev/v4l/by-id/usb-USB_2.0_Camera_USB_2.0_Camera-video-index0"
-
-
-// USB摄像头设备路径（可根据实际情况修改）
-#define USB_CAMERA_DEVICE   USB_CAMERA_DEVICE_BY_ID3
-
-
-// 副摄像头显示名称（根据 CURRENT_SUB_CAMERA 自动确定）
-#if CURRENT_SUB_CAMERA == SUB_CAMERA_IMX708
-#define SUB_CAMERA_NAME "IMX708"
-#elif CURRENT_SUB_CAMERA == SUB_CAMERA_OV5647
-#define SUB_CAMERA_NAME "OV5647"
-#else
-#define SUB_CAMERA_NAME "Unknown"
-#endif
-
-// ==========================================
-
-/**
- * @brief 构造函数，初始化双摄像头控制器及所有子模块。
- *
- * 完成以下初始化工作：
- * - 预分配副摄像头帧缓冲区
- * - 创建单线程异步拍照线程池
- * - 初始化 AI 视觉服务模块
- * - 启动看门狗定时器（检测主摄像头帧卡死并自动恢复）
- * - 扫描并配置 USB 主摄像头（QCamera），自动匹配目标分辨率与帧率
- * - 启动副摄像头子进程（rpicam-vid），根据 CURRENT_SUB_CAMERA 宏选择 IMX708 或 OV5647
- *
- * 主摄像头设备选择优先级：
- * 1. 设备 ID 包含 "USB" 或描述包含 "UGREEN"/"2K"/"1080P"
- * 2. 若无匹配则使用系统默认视频输入设备
- *
- * 主摄像头分辨率匹配策略：
- * 1. 精确匹配目标分辨率且帧率 ≤ 目标帧率（+1 容差）
- * 2. 同分辨率下取最低可用帧率
- * 3. 选择面积最接近且不超过目标分辨率的格式
- *
- * @param parent 父 QObject，用于 Qt 对象树内存管理
- */
-CameraController::CameraController(QObject *parent)
-    : QObject(parent), 
-      m_mainSink(nullptr), m_subSink(nullptr),
-      m_lastWeight(0.0), 
-      m_captureRequestedMain(false), m_captureRequestedSub(false),
-     
-      m_mainWidth(1920), m_mainHeight(1080),
-      
-      m_subWidth(1280), m_subHeight(720)
+QCameraDevice CameraController::findUsbCamera()
 {
-    // ==========================================
-    // 树莓派ISP调优文件路径差异
-    // Pi 4B / Compute Module 4 使用 vc4 目录："/usr/share/libcamera/ipa/rpi/vc4/"
-    // Pi 5 使用 pisp 目录："/usr/share/libcamera/ipa/rpi/pisp/"
-    // ==========================================
-    QString tuningBaseDir = "/usr/share/libcamera/ipa/rpi/pisp/";
+    const QList<QCameraDevice> cameras = QMediaDevices::videoInputs();
+    for (const auto &cam : cameras) {
+        QString id = QString::fromUtf8(cam.id());
+        QString desc = cam.description();
+        if (id.contains("USB", Qt::CaseInsensitive) || desc.contains("UGREEN", Qt::CaseInsensitive)
+            || desc.contains("2K", Qt::CaseInsensitive) || desc.contains("1080P", Qt::CaseInsensitive)) {
+            qDebug() << "[Camera] 找到USB摄像头:" << desc;
+            return cam;
+        }
+    }
+    if (!cameras.isEmpty()) {
+        qDebug() << "[Camera] 使用默认摄像头:" << cameras.first().description();
+        return cameras.first();
+    }
+    return {};
+}
 
-    // 计算副摄像头帧大小（主摄像头使用 QCamera 不需要手动计算）
-    // m_mainFrameSize = frameSizeFor(m_mainWidth, m_mainHeight);  // 不再需要
+void CameraController::setupCameraFormat(QCameraDevice &device)
+{
+    static constexpr int TARGET_FPS = 15;
+    auto formats = device.videoFormats();
+
+    // 策略1: 精确匹配分辨率 + 低帧率
+    QCameraFormat best;
+    for (const auto &f : formats) {
+        if (f.resolution().width() == m_mainWidth && f.resolution().height() == m_mainHeight) {
+            if (f.maxFrameRate() <= TARGET_FPS + 1) { best = f; break; }
+            if (best.isNull() || f.maxFrameRate() < best.maxFrameRate()) best = f;
+        }
+    }
+
+    // 策略2: 取最接近的小分辨率
+    if (best.isNull()) {
+        int bestDiff = INT_MAX;
+        for (const auto &f : formats) {
+            int diff = std::abs(f.resolution().width() * f.resolution().height()
+                                - m_mainWidth * m_mainHeight);
+            if (diff < bestDiff && f.resolution().width() <= m_mainWidth) {
+                bestDiff = diff;
+                best = f;
+            }
+        }
+    }
+
+    if (!best.isNull()) {
+        m_mainCamera->setCameraFormat(best);
+        qDebug() << "[Camera] 分辨率:" << best.resolution().width() << "x" << best.resolution().height()
+                 << " @" << best.maxFrameRate() << "fps";
+    }
+}
+
+// ============================================================
+//  构造/析构
+// ============================================================
+
+CameraController::CameraController(QObject *parent)
+    : QObject(parent),
+      m_lastWeight(0.0), m_captureRequestedMain(false), m_captureRequestedSub(false)
+{
     m_subFrameSize = frameSizeFor(m_subWidth, m_subHeight);
-
-    // 预分配副摄像头内存
-    // m_mainBuffer.reserve(m_mainFrameSize * 2);  // 主摄像头已切换到 QCamera
     m_subBuffer.reserve(m_subFrameSize * 2);
 
-    // 初始化异步拍照线程池（单线程，避免并发拍照）
     m_captureThreadPool = new QThreadPool(this);
     m_captureThreadPool->setMaxThreadCount(1);
-
-    // 初始化外挂的 AI 服务模块
     m_aiService = new VisionAIService(this);
 
-    // ==========================================
-    // 摄像头看门狗初始化（防卡死自动恢复）
-    // ==========================================
+    // === 看门狗 ===
     m_watchdogTimer = new QTimer(this);
     m_watchdogTimer->setInterval(m_watchdogIntervalMs);
     connect(m_watchdogTimer, &QTimer::timeout, this, &CameraController::onWatchdogTimeout);
 
-    // ==========================================
-    // 主摄像头 (USB摄像头 - Qt Multimedia QCamera)
-    // ==========================================
-    // 遍历所有视频输入设备，找到 USB 摄像头
-    const QList<QCameraDevice> cameras = QMediaDevices::videoInputs();
-    QCameraDevice usbCamera;
-    bool found = false;
-    for (const auto &cam : cameras) {
-        QString camId = QString::fromUtf8(cam.id());
-        qDebug() << "[CameraController] 发现摄像头:" << camId << cam.description();
-        if (camId.contains("USB", Qt::CaseInsensitive) ||
-            cam.description().contains("UGREEN", Qt::CaseInsensitive) ||
-            cam.description().contains("2K", Qt::CaseInsensitive) ||
-            cam.description().contains("1080P", Qt::CaseInsensitive)) {
-            usbCamera = cam;
-            found = true;
-            qInfo() << "[CameraController] 选择USB主摄像头:" << cam.description() << "ID:" << cam.id();
-            break;
-        }
-    }
-    if (!found && !cameras.isEmpty()) {
-        usbCamera = cameras.first();
-        found = true;
-        qInfo() << "[CameraController] 未匹配到特定USB摄像头，使用默认设备:" << usbCamera.description();
-    }
-
-    if (found) {
-        m_mainCamera = new QCamera(usbCamera, this);
-
-        // === 摄像头健康监控信号连接 ===
-        // 使用旧式 SIGNAL/SLOT 字符串语法（避免编译期需要 QCamera 完整定义）
+    // === 主摄像头 (USB QCamera) ===
+    auto usbCam = findUsbCamera();
+    if (!usbCam.isNull()) {
+        m_mainCamera = new QCamera(usbCam, this);
         connect(m_mainCamera, SIGNAL(errorOccurred(int, const QString &)),
                 this, SLOT(onCameraErrorOccurred(int, const QString &)));
         connect(m_mainCamera, SIGNAL(statusChanged(QCamera::Status)),
-                this, SLOT(onCameraStatusChanged(int)));  // 槽用 int 接收
-
-        // 设置摄像头分辨率和帧率（目标 15fps，USB 2.0 带宽限制）
-        const int TARGET_FPS = 15;
-        auto supportedFormats = usbCamera.videoFormats();
-
-        qInfo() << "[CameraController] 主摄像头支持的所有格式:";
-        for (const auto &fmt : supportedFormats) {
-            qInfo() << "  " << fmt.resolution().width() << "x" << fmt.resolution().height()
-                    << " @" << fmt.minFrameRate() << "-" << fmt.maxFrameRate() << "fps";
-        }
-
-        QCameraFormat targetFormat;
-        bool formatFound = false;
-
-        // 第一轮：精确匹配分辨率 + 帧率 ≤ 16fps（+1 容差）
-        for (const auto &fmt : supportedFormats) {
-            if (fmt.resolution().width() == m_mainWidth && fmt.resolution().height() == m_mainHeight) {
-                if (fmt.maxFrameRate() <= TARGET_FPS + 1) {
-                    targetFormat = fmt;
-                    formatFound = true;
-                    break;
-                }
-            }
-        }
-
-        // 第二轮：同分辨率取最低帧率的
-        if (!formatFound) {
-            QCameraFormat lowestFpsFormat;
-            for (const auto &fmt : supportedFormats) {
-                if (fmt.resolution().width() == m_mainWidth && fmt.resolution().height() == m_mainHeight) {
-                    if (lowestFpsFormat.resolution().isEmpty() || fmt.maxFrameRate() < lowestFpsFormat.maxFrameRate()) {
-                        lowestFpsFormat = fmt;
-                    }
-                }
-            }
-            if (!lowestFpsFormat.resolution().isEmpty()) {
-                targetFormat = lowestFpsFormat;
-                formatFound = true;
-            }
-        }
-        if (formatFound) {
-            m_mainCamera->setCameraFormat(targetFormat);
-            qInfo() << "[CameraController] 主摄像头已设置为:"
-                    << targetFormat.resolution().width() << "x" << targetFormat.resolution().height()
-                    << " @" << targetFormat.maxFrameRate() << "fps";
-        } else {
-            // 未精确匹配时，选择最接近的较小分辨率
-            QCameraFormat bestMatch;
-            int bestDiff = INT_MAX;
-            for (const auto &fmt : supportedFormats) {
-                int diff = std::abs(fmt.resolution().width() * fmt.resolution().height()
-                                   - m_mainWidth * m_mainHeight);
-                if (diff < bestDiff && fmt.resolution().width() <= m_mainWidth) {
-                    bestDiff = diff;
-                    bestMatch = fmt;
-                }
-            }
-            if (!bestMatch.resolution().isEmpty()) {
-                m_mainCamera->setCameraFormat(bestMatch);
-                qInfo() << "[CameraController] 主摄像头使用最接近分辨率:"
-                        << bestMatch.resolution().width() << "x" << bestMatch.resolution().height();
-            }
-        }
-
+                this, SLOT(onCameraStatusChanged(int)));
+        setupCameraFormat(usbCam);
         m_mainCaptureSession.setCamera(m_mainCamera);
-        // setVideoOutput 会在 setMainVideoSink 中调用
         m_mainCamera->start();
-        qInfo() << "[CameraController] QCamera 主摄像头已启动";
-
-        // 启动看门狗（在 start 之后，确保摄像头进入 Active 状态后开始监控）
         m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
         m_watchdogTimer->start();
     } else {
-        qWarning() << "[CameraController] 未找到任何视频输入设备！";
+        qWarning() << "[Camera] 未找到USB摄像头!";
     }
 
-    // ==========================================
-    //  副摄像头进程配置（模块化设计）
-    // 通过修改 CURRENT_SUB_CAMERA 宏来切换摄像头方案
-    // ==========================================
+    // === 副摄像头 (rpicam-vid IMX708) ===
     m_subProcess = new QProcess(this);
     connect(m_subProcess, &QProcess::readyReadStandardOutput, this, &CameraController::readSubCameraData);
-    // 串联信号：副摄像头完成 → 触发主摄像头
     connect(this, &CameraController::subCaptureReady, this, &CameraController::onSubCaptureReady);
-    
-    QStringList subArgs;
-    
-    #if CURRENT_SUB_CAMERA == SUB_CAMERA_IMX708
-    // IMX708 配置 (CSI摄像头0)
-    subArgs = {
-        "--camera", "0",  // 使用CSI摄像头0 (IMX708)
-        "--tuning-file", tuningBaseDir + "imx708.json",
-        "--width", QString::number(m_subWidth),
-        "--height", QString::number(m_subHeight),
-        "--framerate", "15",
-        "--codec", "yuv420",
-        "--nopreview",
-        "--timeout", "0",
-        "-o", "-"
-    };
-    qInfo() << "[CameraController] 副摄像头(IMX708)进程已启动，分辨率:" << m_subWidth << "x" << m_subHeight;
-    
-    #elif CURRENT_SUB_CAMERA == SUB_CAMERA_OV5647
-    // OV5647 配置 (CSI摄像头1)
-    subArgs = {
-        "--camera", "1", 
-        "--tuning-file", tuningBaseDir + "ov5647.json",
-        "--width", QString::number(m_subWidth), 
-        "--height", QString::number(m_subHeight), 
-        "--framerate", "15", 
-        "--codec", "yuv420", 
-        "--nopreview", 
-        "--timeout", "0", 
-        "-o", "-"
-    };
-    qInfo() << "[CameraController] 副摄(OV5647)进程已启动...";
-    
-    #else
-    #error "请为 CURRENT_SUB_CAMERA 宏选择有效的摄像头配置"
-    #endif
-    
+
+    QStringList subArgs = {"--camera", "0", "--tuning-file", SUB_TUNING_FILE,
+                           "--width", QString::number(m_subWidth),
+                           "--height", QString::number(m_subHeight),
+                           "--framerate", "15", "--codec", "yuv420",
+                           "--nopreview", "--timeout", "0", "-o", "-"};
     m_subProcess->start("rpicam-vid", subArgs);
 }
 
 CameraController::~CameraController() {
-    // 停止主摄像头 (QCamera)
-    if (m_mainCamera) {
-        m_mainCamera->stop();
-    }
-    // 优雅且强制地回收副摄像头子进程
+    if (m_mainCamera) m_mainCamera->stop();
     if (m_subProcess && m_subProcess->state() == QProcess::Running) {
         m_subProcess->terminate();
         m_subProcess->waitForFinished(1000);
@@ -275,39 +129,18 @@ CameraController::~CameraController() {
 
 void CameraController::setMainVideoSink(QVideoSink *sink) {
     m_mainSink = sink;
-    // 将 QCamera 直接绑定到 QVideoSink，零拷贝原生渲染
     m_mainCaptureSession.setVideoOutput(sink);
-
-    // === 连接帧心跳信号（监控预览是否存活） ===
     if (sink) {
         connect(sink, &QVideoSink::videoFrameChanged,
                 this, &CameraController::onMainVideoFrameChanged, Qt::DirectConnection);
-        qInfo() << "[CameraController] 主摄像头帧心跳已连接";
     }
 }
+
 void CameraController::setSubVideoSink(QVideoSink *sink) { m_subSink = sink; }
-
-// ============================================================
-//  辅助工具函数
-// ============================================================
-
-QString CameraController::formatDuration(qint64 ms)
-{
-    if (ms < 0) ms = 0;
-    int totalSec = (int)(ms / 1000);
-    int min = totalSec / 60;
-    int sec = totalSec % 60;
-    if (min > 0) {
-        return QString("%1m%2s").arg(min).arg(sec, 2, 10, QChar('0'));
-    }
-    return QString("%1s").arg(sec);
-}
 
 void CameraController::captureVegetable(double currentWeight) {
     m_lastWeight.store(currentWeight);
-    // === 串行方案: 先触发副摄像头，完成后自动触发主摄像头 ===
     m_captureRequestedSub.store(true);
-    qDebug() << "[CameraController] 串行抓拍: 第1步-请求副摄像头...";
 }
 
 // -----------------------------------------------------
@@ -776,70 +609,17 @@ void CameraController::onCameraErrorOccurred(int error, const QString &errorStri
 
 void CameraController::onMainVideoFrameChanged()
 {
-    // 每收到一帧就更新时间戳（DirectConnection 保证实时）
     m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
-
-    // ===== 诊断: 帧心跳计数，每 300 帧(~10秒@30fps) 打一次确认帧在流动 =====
-    static qint64 frameCount = 0;
-    frameCount++;
-    if (frameCount % 300 == 1) {
-        qDebug() << "[FrameHeartbeat] frame#" << frameCount << "alive at" << m_lastFrameTimeMs;
-    }
 }
 
 void CameraController::onWatchdogTimeout()
 {
-    // 如果正在重启中或摄像头未创建，跳过检测
     if (m_isRestarting || !m_mainCamera) return;
 
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
-    qint64 elapsed = now - m_lastFrameTimeMs;
-
-    // ===== 诊断: 每次看门狗触发都记录详细状态 =====
-    static int logCounter = 0;
-    logCounter++;
-
-    // 获取 QCamera 实际状态
-    int currentStatus = CamStatus::UnloadedStatus;
-    if (m_mainCamera) {
-        QVariant propVal = m_mainCamera->property("status");
-        if (propVal.isValid()) currentStatus = propVal.toInt();
-    }
-
-    // 是否正在拍照（通过 capture 标志判断）
-    bool capturing = m_captureRequestedMain.load() || m_captureRequestedSub.load();
-
-    // 稳定运行时间：距离上一帧的时间（近似稳定时长）
-    qint64 stableMs = now - m_lastFrameTimeMs + elapsed;
-
-    qInfo().nospace() << "[WatchDog] #" << logCounter
-                      << " elapsed=" << QString::number(elapsed / 1000.0, 'f', 1) << "s"
-                      << " stable=" << formatDuration(stableMs)
-                      << " camStatus=" << currentStatus
-                      << " capturing=" << (capturing ? "Y" : "N")
-                      << " restartCount=" << m_restartCount;
-
-    // 判定卡死：超过 watchdogInterval 秒没收到帧
-    // 给 1 个 interval 的容差（即 2 倍时间才判定真正卡死）
-    if (elapsed > m_watchdogIntervalMs * 2) {
-        qWarning().nospace() << "[WatchDog] ⚠️ 触发! 已 "
-                             << QString::number(elapsed / 1000.0, 'f', 1) << "s 无帧"
-                             << " | camStatus=" << currentStatus
-                             << " | 正在拍照=" << (capturing ? "是" : "否")
-                             << " | 已重启" << m_restartCount << "次";
-
-        // 如果正在拍照过程中触发，大概率是分辨率切换导致的假死
-        if (capturing) {
-            qWarning() << "[WatchDog] ⚠️ 怀疑原因: 拍照期间分辨率切换导致帧中断(假死)";
-        }
-
-        if (m_restartCount < MAX_AUTO_RESTART) {
-            restartMainCamera();
-        } else {
-            qCritical() << "[CameraController] 已达最大重启次数(" << MAX_AUTO_RESTART
-                        << ")，停止自动恢复";
-            m_watchdogTimer->stop();  // 停止看门狗避免刷日志
-        }
+    qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - m_lastFrameTimeMs;
+    if (elapsed > m_watchdogIntervalMs * 2 && m_restartCount < MAX_AUTO_RESTART) {
+        qWarning() << "[Camera] 看门狗触发:" << elapsed / 1000.0 << "s无帧, 重启#" << (m_restartCount + 1);
+        restartMainCamera();
     }
 }
 
@@ -849,177 +629,58 @@ void CameraController::onWatchdogTimeout()
 
 void CameraController::restartMainCamera()
 {
-    if (m_isRestarting) {
-        qDebug() << "[CameraController] 重启已在进行中，跳过重复调用";
-        return;
-    }
+    if (m_isRestarting) return;
     m_isRestarting = true;
     m_restartCount++;
-    qint64 now = QDateTime::currentMSecsSinceEpoch();
-
-    // 诊断: 记录本次重启的死亡时长
-    qint64 deadTime = now - m_lastFrameTimeMs;
-    qWarning() << "[WatchDog] 🔁 开始第" << m_restartCount << "次自动重启, 死亡时长:"
-               << QString::number(deadTime / 1000.0, 'f', 1) << "秒";
-
-    // ==========================================
-    // 步骤 1: 停止看门狗（防止重启过程中误触）
-    // ==========================================
     m_watchdogTimer->stop();
 
-    // ==========================================
-    // 步骤 2: 完全销毁旧的 QCamera 对象（关键改动！）
-    // ==========================================
+    // 销毁旧摄像头
     if (m_mainCamera) {
         m_mainCamera->stop();
-        // 从 captureSession 中移除（避免悬空引用）
         m_mainCaptureSession.setCamera(nullptr);
-        // 删除旧对象
         m_mainCamera->deleteLater();
         m_mainCamera = nullptr;
     }
 
-    qInfo() << "[CameraController] 旧摄像头对象已销毁，等待 USB 总线稳定...";
-
-    // ==========================================
-    // 步骤 2.5: 连续崩溃≥3次时尝试重置 USB 设备（防止驱动状态耗尽）
-    // ==========================================
+    // 崩溃≥3次时尝试重置USB设备
     if (m_restartCount >= 3) {
-        qInfo() << "[CameraController] ⚠️ 崩溃次数≥3, 尝试通过 v4l2-ctl 重置USB设备...";
         QProcess::execute("bash", {"-c", "v4l2-ctl --list-devices 2>/dev/null || true"});
     }
 
-    // ==========================================
-    // 步骤 3: 指数退避延迟（频繁崩溃时逐步增大等待时间）
-    //   第1次: 1.5s → 第2次: 3s → 第3次: 6s → ... → 上限 30s
-    // ==========================================
-    int backoffDelayMs = qMin(1500 * (1 << qMin(m_restartCount - 1, 4)), 30000);
-    qInfo() << "[CameraController] 退避延迟:" << (backoffDelayMs / 1000.0) << "秒"
-            << "(第" << m_restartCount << "次崩溃)";
+    // 指数退避: 1.5s → 3s → 6s → ... → 30s
+    int delay = qMin(1500 * (1 << qMin(m_restartCount - 1, 4)), 30000);
 
-    QTimer::singleShot(backoffDelayMs, this, [this, now]() {
-        // ==========================================
-        // 步骤 4: 重新扫描并创建全新的 QCamera
-        // ==========================================
-        const QList<QCameraDevice> cameras = QMediaDevices::videoInputs();
-        QCameraDevice usbCamera;
-        bool found = false;
-
-        for (const auto &cam : cameras) {
-            QString camId = QString::fromUtf8(cam.id());
-            if (camId.contains("USB", Qt::CaseInsensitive) ||
-                cam.description().contains("UGREEN", Qt::CaseInsensitive) ||
-                cam.description().contains("2K", Qt::CaseInsensitive) ||
-                cam.description().contains("1080P", Qt::CaseInsensitive)) {
-                usbCamera = cam;
-                found = true;
-                qInfo() << "[CameraController] 重新发现USB摄像头:" << cam.description();
-                break;
-            }
-        }
-
-        if (!found && !cameras.isEmpty()) {
-            usbCamera = cameras.first();
-            found = true;
-            qWarning() << "[CameraController] ⚠️ 未匹配到特定USB摄像头(设备可能已重识别)，使用默认设备:"
-                       << usbCamera.description();
-        }
-
-        if (!found) {
-            qCritical() << "[CameraController] 重启失败! 未找到任何视频输入设备，USB总线可能需要物理重插";
-            // 即使失败也要恢复看门狗，否则监控彻底停止
+    QTimer::singleShot(delay, this, [this]() {
+        auto usbCam = findUsbCamera();
+        if (usbCam.isNull()) {
+            qCritical() << "[Camera] 重启失败: 无可用设备";
             m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
             m_watchdogTimer->start();
             m_isRestarting = false;
             return;
         }
 
-        if (found) {
-            //  创建全新的 QCamera 对象
-            m_mainCamera = new QCamera(usbCamera, this);
+        m_mainCamera = new QCamera(usbCam, this);
+        connect(m_mainCamera, SIGNAL(errorOccurred(int, const QString &)),
+                this, SLOT(onCameraErrorOccurred(int, const QString &)));
+        connect(m_mainCamera, SIGNAL(statusChanged(QCamera::Status)),
+                this, SLOT(onCameraStatusChanged(int)));
+        setupCameraFormat(usbCam);
+        m_mainCaptureSession.setCamera(m_mainCamera);
 
-            // 重新设置分辨率格式（复用原有逻辑，目标 15fps）
-            const int TARGET_FPS = 15;
-            auto supportedFormats = usbCamera.videoFormats();
-
-            QCameraFormat targetFormat;
-            bool formatFound = false;
-
-            for (const auto &fmt : supportedFormats) {
-                if (fmt.resolution().width() == m_mainWidth &&
-                    fmt.resolution().height() == m_mainHeight) {
-                    if (fmt.maxFrameRate() <= TARGET_FPS + 1) {
-                        targetFormat = fmt;
-                        formatFound = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!formatFound) {
-                QCameraFormat lowestFpsFormat;
-                for (const auto &fmt : supportedFormats) {
-                    if (fmt.resolution().width() == m_mainWidth &&
-                        fmt.resolution().height() == m_mainHeight) {
-                        if (lowestFpsFormat.resolution().isEmpty() ||
-                            fmt.maxFrameRate() < lowestFpsFormat.maxFrameRate()) {
-                            lowestFpsFormat = fmt;
-                        }
-                    }
-                }
-                if (!lowestFpsFormat.resolution().isEmpty()) {
-                    targetFormat = lowestFpsFormat;
-                    formatFound = true;
-                }
-            }
-
-            if (formatFound) {
-                m_mainCamera->setCameraFormat(targetFormat);
-            }
-
-            // 重新绑定到 captureSession
-            m_mainCaptureSession.setCamera(m_mainCamera);
-
-            // 如果之前有设置 videoSink，需要重新绑定
-            if (m_mainSink) {
-                m_mainCaptureSession.setVideoOutput(m_mainSink);
-                // 重新连接帧心跳信号
-                m_mainSink->disconnect(this);  // 防止重复连接
-                connect(m_mainSink, &QVideoSink::videoFrameChanged,
-                        this, &CameraController::onMainVideoFrameChanged, Qt::DirectConnection);
-            }
-
-            // 重新连接监控信号（检查连接结果，防止静默失败）
-            bool errorOk = connect(m_mainCamera, SIGNAL(errorOccurred(int, const QString &)),
-                                    this, SLOT(onCameraErrorOccurred(int, const QString &)));
-            bool statusOk = connect(m_mainCamera, SIGNAL(statusChanged(QCamera::Status)),
-                                    this, SLOT(onCameraStatusChanged(int)));
-            if (!errorOk || !statusOk) {
-                qWarning() << "[CameraController] ⚠️ 信号连接异常!"
-                           << "errorOccurred=" << (errorOk ? "OK" : "FAIL")
-                           << " statusChanged=" << (statusOk ? "OK" : "FAIL")
-                           << "(可能是默认设备类型不同)";
-            }
-
-            // 启动新摄像头
-            m_mainCamera->start();
-
-            qInfo() << "[CameraController] 新摄像头对象已创建并启动";
-        } else {
-            qCritical() << "[CameraController] 重启失败! 未找到任何视频输入设备";
+        if (m_mainSink) {
+            m_mainCaptureSession.setVideoOutput(m_mainSink);
+            m_mainSink->disconnect(this);
+            connect(m_mainSink, &QVideoSink::videoFrameChanged,
+                    this, &CameraController::onMainVideoFrameChanged, Qt::DirectConnection);
         }
 
-        // ==========================================
-        // 步骤 5: 恢复看门狗监控 + 稳定性重置
-        // ==========================================
+        m_mainCamera->start();
         m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
-
         m_watchdogTimer->start();
-
-        Q_EMIT cameraStatusChanged(QStringLiteral("Restarted(第%1次重启)").arg(m_restartCount));
+        Q_EMIT cameraStatusChanged(QString("Restarted(#%1)").arg(m_restartCount));
         m_isRestarting = false;
-
-        qInfo() << "[CameraController]  摄像头重启流程完成";
+        qDebug() << "[Camera] 重启完成";
     });
 }
 
