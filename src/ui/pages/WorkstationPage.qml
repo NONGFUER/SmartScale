@@ -14,6 +14,7 @@ Item {
     property string currentPrediction: "等待识别..."
     property string currentImagePath: ""
     property var currentDetailRecord: null
+    property bool categorySelectMode: false  // 是否为手动品类选择模式
     
     // 推理耗时相关属性
     property string lastInferenceTime: "-- ms"
@@ -535,8 +536,9 @@ Item {
                                 }
                             }
 
-                            // 名称卡片 — 虚线边框 + 文字 + 右侧识别按钮
+                            // 名称卡片 — 虚线边框 + 文字（可点击选择品类）
                             Rectangle {
+                                id: categoryCard
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 220
                                 Layout.minimumHeight: 180
@@ -544,6 +546,18 @@ Item {
                                 color: root.currentPrediction === "等待识别..." || root.currentPrediction === "AI未就绪"
                                        ? "#F8FAFC" : "#EFF6FF"
                                 border.width: 0
+
+                                // 点击选择品类
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        console.log("打开品类选择...")
+                                        root.categorySelectMode = true
+                                        correctionDialog.open()
+                                    }
+                                }
 
                                 Canvas {
                                     anchors.fill: parent
@@ -844,7 +858,7 @@ Item {
     // ==========================================
     Dialog {
         id: correctionDialog
-        title: "请选择正确的商品类别"
+        title: root.categorySelectMode ? "选择食材品类" : "请选择正确的商品类别"
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
         width: 700
@@ -946,6 +960,7 @@ Item {
                 radius: 8
                 border.color: "#E4E7ED"
                 border.width: 1
+                visible: !root.categorySelectMode  // 手动选择模式下隐藏
                 
                 ColumnLayout {
                     anchors.fill: parent
@@ -1156,8 +1171,22 @@ Item {
         
         onAccepted: {
             let correctLabel = selectedLabel
-            VisionAI.submitCorrection(root.currentImagePath, root.currentPrediction, correctLabel)
-            root.currentPrediction = correctLabel
+            if (root.categorySelectMode) {
+                // 手动选择模式：直接设置品类，不做纠错
+                root.currentPrediction = correctLabel
+                root.categorySelectMode = false
+            } else {
+                // 纠错模式：提交纠错数据
+                VisionAI.submitCorrection(root.currentImagePath, root.currentPrediction, correctLabel)
+                root.currentPrediction = correctLabel
+            }
+        }
+        
+        onRejected: {
+            // 取消时重置模式
+            if (root.categorySelectMode) {
+                root.categorySelectMode = false
+            }
         }
     }
 
