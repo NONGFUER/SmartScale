@@ -115,6 +115,7 @@ CameraController::CameraController(QObject *parent)
                            "--width", QString::number(m_subWidth),
                            "--height", QString::number(m_subHeight),
                            "--framerate", "15", "--codec", "yuv420",
+                           "--autofocus-mode", "continuous",
                            "--nopreview", "--timeout", "0", "-o", "-"};
     m_subProcess->start("rpicam-vid", subArgs);
 }
