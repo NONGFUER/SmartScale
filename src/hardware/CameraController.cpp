@@ -37,7 +37,7 @@ QCameraDevice CameraController::findUsbCamera()
 
 void CameraController::setupCameraFormat(QCameraDevice &device)
 {
-    static constexpr int TARGET_FPS = 15;
+    static constexpr int TARGET_FPS = 30;
     auto formats = device.videoFormats();
 
     // 策略1: 精确匹配分辨率 + 低帧率
