@@ -4,8 +4,15 @@
 #include <QObject>
 #include <QQueue>
 #include <QThread>
+#include <QTimer>
 
 class WeightSensorWorker;
+
+struct WeightSample {
+    double weightKg = 0;
+    uint16_t statusWord = 0;
+    int32_t adcRaw = 0;
+};
 
 /**
  * @brief 称重传感器 (GUI 线程薄代理)
@@ -44,10 +51,12 @@ Q_SIGNALS:
     void requestTare();
 
 private Q_SLOTS:
-    /** 接收 Worker 的称重数据, 执行滤波+稳定检测 */
+    /** 接收 Worker 的称重数据, 写入缓冲池 */
     void onWeightDataReady(int32_t weight_g, uint16_t status, int32_t adc_raw);
     /** 接收 Worker 的去皮结果 */
     void onTareDone(bool ok);
+    /** 消费缓冲池数据 (低频定时器驱动) */
+    void consumeBuffer();
 
 private:
     // ==================== 线程管理 ====================
@@ -67,6 +76,12 @@ private:
     static constexpr int    STABLE_REQUIRED_COUNT = 3;       // 连续稳定次数
     int  m_stableCount  = 0;
     bool m_triggered    = false; // 防止重复触发
+
+    // ==================== 缓冲池 (生产者-消费者) ====================
+    WeightSample   m_buffer;                    // 最新数据缓存（覆盖写）
+    bool           m_bufferHasData = false;     // 是否有待消费数据
+    QTimer        *m_consumeTimer = nullptr;    // 消费定时器
+    static constexpr int CONSUME_INTERVAL_MS = 150;  // 消费间隔(ms)
 };
 
 #endif // WEIGHTSENSOR_H

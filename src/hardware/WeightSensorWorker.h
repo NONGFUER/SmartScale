@@ -75,7 +75,7 @@ private:
     static constexpr uint16_t CMD_CALIBRATE  = 2;
 
     // ==================== 超时参数 ====================
-    static constexpr int POLL_INTERVAL_MS  = 50;    // 轮询间隔 (降低延迟)
+    static constexpr int POLL_INTERVAL_MS  = 200;   // 轮询间隔
     static constexpr int READ_TIMEOUT_MS   = 1000;  // 读取总超时 (Worker线程中阻塞无压力!)
     static constexpr int SINGLE_WAIT_MS    = 30;    // 单次 waitForReadyRead
 };

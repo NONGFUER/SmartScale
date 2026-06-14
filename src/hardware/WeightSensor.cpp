@@ -43,6 +43,12 @@ WeightSensor::WeightSensor(QObject *parent)
 
     m_workerThread->start();
 
+    // 消费定时器：主线程空闲时从缓冲池取最新数据
+    m_consumeTimer = new QTimer(this);
+    m_consumeTimer->setInterval(CONSUME_INTERVAL_MS);
+    connect(m_consumeTimer, &QTimer::timeout, this, &WeightSensor::consumeBuffer);
+    m_consumeTimer->start();
+
     qDebug() << "[WeightSensor] 初始化完成, Worker线程已启动";
 }
 
@@ -91,49 +97,10 @@ void WeightSensor::zero()
 
 void WeightSensor::onWeightDataReady(int32_t weight_g, uint16_t statusWord, int32_t adcRaw)
 {
-    // g -> kg 转换
-    double rawWeightKg = weight_g / 1000.0;
-
-    // 电子秤硬件稳定标志
-    // 0x0001=bit0 去皮, 0x0002=bit1 稳定, 0x0004=bit2 负重
-    bool hwStable = (statusWord & 0x02);
-    bool hwTared  = (statusWord & 0x01);
-
-    qDebug().nospace() << "[Scale] raw=" << rawWeightKg << "kg"
-                       << " ADC=" << adcRaw
-                       << QString(" status=0x%1").arg(statusWord, 4, 16, QChar('0'))
-                       << (hwStable ? " [HW:稳定]" : " [HW:波动]")
-                       << (hwTared  ? " [去皮]" : "")
-                       << ((statusWord & 0x04) ? " 负重" : "");
-
-    // === 直接使用原始值，不进行滤波 ===
-    double newNetWeight = rawWeightKg - m_zeroOffset - m_tareWeight;
-
-    // 更新稳定状态（直接使用硬件标志）
-    if (hwStable != m_isStable) {
-        m_isStable = hwStable;
-        Q_EMIT stableChanged();
-    }
-
-    // 不稳定时重置触发标志（关键：允许重量变化后再次触发）
-    if (!hwStable) {
-        m_triggered = false;
-    }
-
-    // 硬件判定稳定时触发拍照（正负值均可触发）
-    if (hwStable && !m_triggered) {
-        if (std::abs(newNetWeight) > 0.05) {
-            Q_EMIT stableTriggered();
-            m_triggered = true;
-            qDebug() << "[Scale] *** stableTriggered! *** weight=" << newNetWeight << "kg";
-        }
-    }
-
-    // 变化量 > 0.001kg 才刷新 UI
-    if (std::abs(newNetWeight - m_netWeight) > 0.001) {
-        m_netWeight = newNetWeight;  // 允许负值
-        Q_EMIT weightChanged();
-    }
+    m_buffer.weightKg   = weight_g / 1000.0;
+    m_buffer.statusWord = statusWord;
+    m_buffer.adcRaw     = adcRaw;
+    m_bufferHasData = true;
 }
 
 // ============================================================================
@@ -146,5 +113,57 @@ void WeightSensor::onTareDone(bool ok)
         qDebug() << "[WeightSensor]去皮成功 (来自 Worker)";
     } else {
         qWarning() << "[WeightSensor]去皮失败 (来自 Worker)";
+    }
+}
+
+// ============================================================================
+// 缓冲池消费 — 低频定时器驱动, 执行滤波+稳定检测+属性更新
+// ============================================================================
+
+void WeightSensor::consumeBuffer()
+{
+    if (!m_bufferHasData) return;
+    m_bufferHasData = false;
+
+    double rawWeightKg = m_buffer.weightKg;
+    uint16_t statusWord = m_buffer.statusWord;
+    int32_t adcRaw = m_buffer.adcRaw;
+
+    bool hwStable = (statusWord & 0x02);
+    bool hwTared  = (statusWord & 0x01);
+
+    qDebug().nospace() << "[Scale] raw=" << rawWeightKg << "kg"
+                       << " ADC=" << adcRaw
+                       << QString(" status=0x%1").arg(statusWord, 4, 16, QChar('0'))
+                       << (hwStable ? " [HW:稳定]" : " [HW:波动]")
+                       << (hwTared  ? " [去皮]" : "")
+                       << ((statusWord & 0x04) ? " 负重" : "");
+
+    double newNetWeight = rawWeightKg - m_zeroOffset - m_tareWeight;
+
+    // 更新稳定状态（直接使用硬件标志）
+    if (hwStable != m_isStable) {
+        m_isStable = hwStable;
+        Q_EMIT stableChanged();
+    }
+
+    // 不稳定时重置触发标志
+    if (!hwStable) {
+        m_triggered = false;
+    }
+
+    // 硬件判定稳定时触发拍照
+    if (hwStable && !m_triggered) {
+        if (std::abs(newNetWeight) > 0.05) {
+            Q_EMIT stableTriggered();
+            m_triggered = true;
+            qDebug() << "[Scale] *** stableTriggered! *** weight=" << newNetWeight << "kg";
+        }
+    }
+
+    // 变化量 > 0.001kg 才刷新 UI
+    if (std::abs(newNetWeight - m_netWeight) > 0.001) {
+        m_netWeight = newNetWeight;
+        Q_EMIT weightChanged();
     }
 }
