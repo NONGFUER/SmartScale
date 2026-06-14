@@ -58,7 +58,7 @@ Rectangle {
 
         // ===== 中间：大标题 =====
         Text {
-            text: "蔬菜称重系统"
+            text: "AI称重系统"
             font.pixelSize: 28
             font.bold: true
             color: "#FFFFFF"

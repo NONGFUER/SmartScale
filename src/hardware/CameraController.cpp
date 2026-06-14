@@ -762,6 +762,13 @@ void CameraController::onMainVideoFrameChanged()
 {
     // 每收到一帧就更新时间戳（DirectConnection 保证实时）
     m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
+
+    // ===== 诊断: 帧心跳计数，每 300 帧(~10秒@30fps) 打一次确认帧在流动 =====
+    static qint64 frameCount = 0;
+    frameCount++;
+    if (frameCount % 300 == 1) {
+        qDebug() << "[FrameHeartbeat] frame#" << frameCount << "alive at" << m_lastFrameTimeMs;
+    }
 }
 
 void CameraController::onWatchdogTimeout()
@@ -772,23 +779,39 @@ void CameraController::onWatchdogTimeout()
     qint64 now = QDateTime::currentMSecsSinceEpoch();
     qint64 elapsed = now - m_lastFrameTimeMs;
 
+    // ===== 诊断: 每次看门狗触发都记录详细状态 =====
+    static int logCounter = 0;
+    logCounter++;
+
+    // 获取 QCamera 实际状态
+    int currentStatus = CamStatus::UnloadedStatus;
+    if (m_mainCamera) {
+        QVariant propVal = m_mainCamera->property("status");
+        if (propVal.isValid()) currentStatus = propVal.toInt();
+    }
+
+    // 是否正在拍照（通过 capture 标志判断）
+    bool capturing = m_captureRequestedMain.load() || m_captureRequestedSub.load();
+
+    qInfo().nospace() << "[WatchDog] #" << logCounter
+                      << " elapsed=" << QString::number(elapsed / 1000.0, 'f', 1) << "s"
+                      << " camStatus=" << currentStatus
+                      << " capturing=" << (capturing ? "Y" : "N")
+                      << " restartCount=" << m_restartCount;
+
     // 判定卡死：超过 watchdogInterval 秒没收到帧
     // 给 1 个 interval 的容差（即 2 倍时间才判定真正卡死）
     if (elapsed > m_watchdogIntervalMs * 2) {
-        qWarning() << "[CameraController]  看门狗触发! 已" << elapsed / 1000.0
-                   << "秒未收到视频帧，预览可能卡死";
+        qWarning().nospace() << "[WatchDog] ⚠️ 触发! 已 "
+                             << QString::number(elapsed / 1000.0, 'f', 1) << "s 无帧"
+                             << " | camStatus=" << currentStatus
+                             << " | 正在拍照=" << (capturing ? "是" : "否")
+                             << " | 已重启" << m_restartCount << "次";
 
-        // 检查当前摄像头状态辅助判断
-        // 注意：m_mainCamera->status() 在某些 Qt6 模块化头文件配置下不可见
-        // 使用 QMetaObject 属性读取替代（通过属性名 "status" 获取，返回 QVariant）
-        int currentStatus = CamStatus::UnloadedStatus;
-        if (m_mainCamera) {
-            QVariant propVal = m_mainCamera->property("status");
-            if (propVal.isValid()) {
-                currentStatus = propVal.toInt();
-            }
+        // 如果正在拍照过程中触发，大概率是分辨率切换导致的假死
+        if (capturing) {
+            qWarning() << "[WatchDog] ⚠️ 怀疑原因: 拍照期间分辨率切换导致帧中断(假死)";
         }
-        qWarning() << "[CameraController] 当前QCamera状态:" << (int)currentStatus;
 
         if (m_restartCount < MAX_AUTO_RESTART) {
             restartMainCamera();
@@ -797,10 +820,6 @@ void CameraController::onWatchdogTimeout()
                         << ")，停止自动恢复";
             m_watchdogTimer->stop();  // 停止看门狗避免刷日志
         }
-    }
-    // 正常情况：只打 trace 日志（每 30 秒一次，避免刷屏）
-    else if ((int)(elapsed / 1000) % 30 == 0 && elapsed > 1000) {
-        qDebug() << "[CameraController] 心跳正常，距上次帧:" << elapsed / 1000.0 << "秒前";
     }
 }
 
@@ -816,8 +835,12 @@ void CameraController::restartMainCamera()
     }
     m_isRestarting = true;
     m_restartCount++;
+    qint64 now = QDateTime::currentMSecsSinceEpoch();
 
-    qWarning() << "[CameraController] 🔁 开始第" << m_restartCount << "次自动重启摄像头...";
+    // 诊断: 记录本次重启的死亡时长
+    qint64 deadTime = now - m_lastFrameTimeMs;
+    qWarning() << "[WatchDog] 🔁 开始第" << m_restartCount << "次自动重启, 死亡时长:"
+               << QString::number(deadTime / 1000.0, 'f', 1) << "秒";
 
     // ==========================================
     // 步骤 1: 停止看门狗（防止重启过程中误触）
@@ -839,9 +862,14 @@ void CameraController::restartMainCamera()
     qInfo() << "[CameraController] 旧摄像头对象已销毁，等待 USB 总线稳定...";
 
     // ==========================================
-    // 步骤 3: 延迟 1500ms（给 USB 总线足够时间重置）
+    // 步骤 3: 指数退避延迟（频繁崩溃时逐步增大等待时间）
+    //   第1次: 1.5s → 第2次: 3s → 第3次: 6s → ... → 上限 30s
     // ==========================================
-    QTimer::singleShot(1500, this, [this]() {
+    int backoffDelayMs = qMin(1500 * (1 << qMin(m_restartCount - 1, 4)), 30000);
+    qInfo() << "[CameraController] 退避延迟:" << (backoffDelayMs / 1000.0) << "秒"
+            << "(第" << m_restartCount << "次崩溃)";
+
+    QTimer::singleShot(backoffDelayMs, this, [this, now]() {
         // ==========================================
         // 步骤 4: 重新扫描并创建全新的 QCamera
         // ==========================================
@@ -938,9 +966,11 @@ void CameraController::restartMainCamera()
         }
 
         // ==========================================
-        // 步骤 5: 恢复看门狗监控
+        // 步骤 5: 恢复看门狗监控 + 稳定性重置
         // ==========================================
         m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
+        m_lastRestartTimeMs = m_lastFrameTimeMs;
+
         m_watchdogTimer->start();
 
         Q_EMIT cameraStatusChanged(QStringLiteral("Restarted(第%1次重启)").arg(m_restartCount));
