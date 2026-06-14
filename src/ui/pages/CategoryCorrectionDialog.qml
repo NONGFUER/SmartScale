@@ -19,8 +19,8 @@ Dialog {
 
     x: (parent.width - width) / 2
     y: (parent.height - height) / 2
-    width: Math.min(parent.width * 0.9, 800)
-    height: Math.min(parent.height * 0.88, 620)
+    width: Math.min(parent.width * 0.9, 1920)
+    height: Math.min(parent.height * 0.88, 1080)
     modal: true
     padding: 0
 

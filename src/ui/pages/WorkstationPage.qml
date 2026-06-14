@@ -747,66 +747,6 @@ Item {
         Behavior on opacity { NumberAnimation { duration: 150 } }
     }
 
-    // ===== 演示控制面板（保持 hidden）======
-    Rectangle {
-        id: demoPanel
-        visible: false
-        width: 200
-        height: 210
-        color: "#FFFFFF"
-        border.color: "#E4E7ED"
-        border.width: 1
-        radius: 8
-        anchors.left: parent.left
-        anchors.top: parent.top
-         anchors.leftMargin: 20
-        anchors.topMargin: 80
-      
-        opacity: 0.9
-        z: 10
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 10
-            
-            Text {
-                text: "硬件调试 (真实秤)"
-                font.pixelSize: 16
-                font.bold: true
-                color: "#303133"
-                Layout.alignment: Qt.AlignHCenter
-            }
-
-            Text {
-                text: "串口: /dev/ttyAMA0 @9600"
-                font.pixelSize: 13
-                color: "#606266"
-                Layout.alignment: Qt.AlignHCenter
-            }
-            
-            Text {
-                text: "净重(原始g): " + (WeightManager.netWeight * 1000).toFixed(0)
-                font.pixelSize: 13
-                color: "#606266"
-                Layout.alignment: Qt.AlignHCenter
-            }
-
-            Text {
-                text: "稳定状态: " + (WeightManager.isStable ? "✓ 稳定" : "○ 波动")
-                font.pixelSize: 13
-                color: WeightManager.isStable ? "#67C23A" : "#E6A23C"
-                Layout.alignment: Qt.AlignHCenter
-            }
-            
-            Text {
-                text: "推理耗时: " + root.lastInferenceTime
-                font.pixelSize: 14
-                color: "#606266"
-                Layout.alignment: Qt.AlignHCenter
-                Layout.topMargin: 5
-            }
-        }
-    }
 
     // ==========================================
     // 信号拦截区：处理后端事件
@@ -881,8 +821,8 @@ Item {
         title: "称重记录详情"
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
-        width: 700
-        height: 500
+        width: 1920
+        height: 1080
         modal: true
         standardButtons: Dialog.Close
 
