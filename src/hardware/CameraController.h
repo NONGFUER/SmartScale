@@ -117,6 +117,7 @@ private:
     int frameSizeFor(int width, int height) const {
         return width * height * 3 / 2; // YUV420P大小计算
     }
+    static QString formatDuration(qint64 ms);  // 毫秒 → "XmXs" 格式
 
     // 渲染与图像处理管线
     void pushFrameToQML(int cameraIndex, const uint8_t *data, int width, int height, int stride);

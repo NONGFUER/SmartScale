@@ -138,8 +138,8 @@ CameraController::CameraController(QObject *parent)
         connect(m_mainCamera, SIGNAL(statusChanged(QCamera::Status)),
                 this, SLOT(onCameraStatusChanged(int)));  // 槽用 int 接收
 
-        // 设置摄像头分辨率和帧率（目标 15fps）
-        const int TARGET_FPS = 30;
+        // 设置摄像头分辨率和帧率（目标 15fps，USB 2.0 带宽限制）
+        const int TARGET_FPS = 15;
         auto supportedFormats = usbCamera.videoFormats();
 
         qInfo() << "[CameraController] 主摄像头支持的所有格式:";
@@ -286,6 +286,22 @@ void CameraController::setMainVideoSink(QVideoSink *sink) {
     }
 }
 void CameraController::setSubVideoSink(QVideoSink *sink) { m_subSink = sink; }
+
+// ============================================================
+//  辅助工具函数
+// ============================================================
+
+QString CameraController::formatDuration(qint64 ms)
+{
+    if (ms < 0) ms = 0;
+    int totalSec = (int)(ms / 1000);
+    int min = totalSec / 60;
+    int sec = totalSec % 60;
+    if (min > 0) {
+        return QString("%1m%2s").arg(min).arg(sec, 2, 10, QChar('0'));
+    }
+    return QString("%1s").arg(sec);
+}
 
 void CameraController::captureVegetable(double currentWeight) {
     m_lastWeight.store(currentWeight);
@@ -793,8 +809,12 @@ void CameraController::onWatchdogTimeout()
     // 是否正在拍照（通过 capture 标志判断）
     bool capturing = m_captureRequestedMain.load() || m_captureRequestedSub.load();
 
+    // 稳定运行时间：距离上一帧的时间（近似稳定时长）
+    qint64 stableMs = now - m_lastFrameTimeMs + elapsed;
+
     qInfo().nospace() << "[WatchDog] #" << logCounter
                       << " elapsed=" << QString::number(elapsed / 1000.0, 'f', 1) << "s"
+                      << " stable=" << formatDuration(stableMs)
                       << " camStatus=" << currentStatus
                       << " capturing=" << (capturing ? "Y" : "N")
                       << " restartCount=" << m_restartCount;
@@ -862,6 +882,14 @@ void CameraController::restartMainCamera()
     qInfo() << "[CameraController] 旧摄像头对象已销毁，等待 USB 总线稳定...";
 
     // ==========================================
+    // 步骤 2.5: 连续崩溃≥3次时尝试重置 USB 设备（防止驱动状态耗尽）
+    // ==========================================
+    if (m_restartCount >= 3) {
+        qInfo() << "[CameraController] ⚠️ 崩溃次数≥3, 尝试通过 v4l2-ctl 重置USB设备...";
+        QProcess::execute("bash", {"-c", "v4l2-ctl --list-devices 2>/dev/null || true"});
+    }
+
+    // ==========================================
     // 步骤 3: 指数退避延迟（频繁崩溃时逐步增大等待时间）
     //   第1次: 1.5s → 第2次: 3s → 第3次: 6s → ... → 上限 30s
     // ==========================================
@@ -893,15 +921,25 @@ void CameraController::restartMainCamera()
         if (!found && !cameras.isEmpty()) {
             usbCamera = cameras.first();
             found = true;
-            qWarning() << "[CameraController] 未匹配到特定摄像头，使用默认设备";
+            qWarning() << "[CameraController] ⚠️ 未匹配到特定USB摄像头(设备可能已重识别)，使用默认设备:"
+                       << usbCamera.description();
+        }
+
+        if (!found) {
+            qCritical() << "[CameraController] 重启失败! 未找到任何视频输入设备，USB总线可能需要物理重插";
+            // 即使失败也要恢复看门狗，否则监控彻底停止
+            m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
+            m_watchdogTimer->start();
+            m_isRestarting = false;
+            return;
         }
 
         if (found) {
             //  创建全新的 QCamera 对象
             m_mainCamera = new QCamera(usbCamera, this);
 
-            // 重新设置分辨率格式（复用原有逻辑）
-            const int TARGET_FPS = 30;
+            // 重新设置分辨率格式（复用原有逻辑，目标 15fps）
+            const int TARGET_FPS = 15;
             auto supportedFormats = usbCamera.videoFormats();
 
             QCameraFormat targetFormat;
@@ -951,11 +989,17 @@ void CameraController::restartMainCamera()
                         this, &CameraController::onMainVideoFrameChanged, Qt::DirectConnection);
             }
 
-            // 重新连接监控信号
-            connect(m_mainCamera, SIGNAL(errorOccurred(int, const QString &)),
-                    this, SLOT(onCameraErrorOccurred(int, const QString &)));
-            connect(m_mainCamera, SIGNAL(statusChanged(QCamera::Status)),
-                    this, SLOT(onCameraStatusChanged(int)));
+            // 重新连接监控信号（检查连接结果，防止静默失败）
+            bool errorOk = connect(m_mainCamera, SIGNAL(errorOccurred(int, const QString &)),
+                                    this, SLOT(onCameraErrorOccurred(int, const QString &)));
+            bool statusOk = connect(m_mainCamera, SIGNAL(statusChanged(QCamera::Status)),
+                                    this, SLOT(onCameraStatusChanged(int)));
+            if (!errorOk || !statusOk) {
+                qWarning() << "[CameraController] ⚠️ 信号连接异常!"
+                           << "errorOccurred=" << (errorOk ? "OK" : "FAIL")
+                           << " statusChanged=" << (statusOk ? "OK" : "FAIL")
+                           << "(可能是默认设备类型不同)";
+            }
 
             // 启动新摄像头
             m_mainCamera->start();
@@ -969,7 +1013,6 @@ void CameraController::restartMainCamera()
         // 步骤 5: 恢复看门狗监控 + 稳定性重置
         // ==========================================
         m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
-        m_lastRestartTimeMs = m_lastFrameTimeMs;
 
         m_watchdogTimer->start();
 
