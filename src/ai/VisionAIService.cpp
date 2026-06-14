@@ -172,7 +172,7 @@ QString VisionAIService::predict(const QImage &img)
     // 明确指针减法得到的是 ptrdiff_t，再转为 int
     //auto max_it = std::max_element(output_data, output_data + output_size);
     //int max_index = static_cast<int>(max_it - output_data);
-    int max_index = getPredictionIndex(logits, 0.5f); // 阈值：0.5→0.35→0.2，进一步放宽
+    int max_index = getPredictionIndex(logits, 0.3f); // 阈值：0.5→0.35→0.2，进一步放宽
     //
     if (max_index != -1 && max_index < m_labels.size()) {
         return m_labels[max_index];

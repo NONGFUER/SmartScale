@@ -20,6 +20,11 @@ ApplicationWindow {
         loginDialog.open()
     }
 
+    // 打开登录弹窗（供子页面调用）
+    function showLogin() {
+        loginDialog.open()
+    }
+
     Component.onCompleted: {
         VirtualKeyboard.locale = "zh_CN"
         VirtualKeyboard.availableLocales = ["zh_CN", "en_GB"]

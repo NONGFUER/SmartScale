@@ -183,57 +183,118 @@ Dialog {
             Item { Layout.fillWidth: true }
         }
 
-        // ===== 品类网格区域 =====
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.margins: 16
-            clip: true
-
-            GridView {
-                id: foodGridView
-                anchors.fill: parent
-                cellWidth: (foodGridView.width - 48) / 5
-                cellHeight: 52
+            // ===== 品类网格区域 =====
+            Item {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.margins: 16
                 clip: true
 
-                model: dialogRoot.getActiveItems()
+                GridView {
+                    id: foodGridView
+                    anchors.fill: parent
+                    cellWidth: (foodGridView.width - 48) / 5
+                    cellHeight: 52
+                    clip: true
 
-                delegate: Rectangle {
-                    id: foodCard
-                    width: foodGridView.cellWidth - 10
-                    height: foodGridView.cellHeight - 6
-                    radius: 8
-                    color: dialogRoot.selectedLabel === modelData.en
-                           ? "#EBF2FF" : "#FAFAFA"
-                    border.width: 1.2
-                    border.color: dialogRoot.selectedLabel === modelData.en
-                                  ? "#4C72F9"
-                                  : (cardArea.containsMouse ? "#B8D4FF" : "#E5E7EB")
+                    model: dialogRoot.getActiveItems()
 
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                    Behavior on border.color { ColorAnimation { duration: 120 } }
+                    delegate: Rectangle {
+                        id: foodCard
+                        width: foodGridView.cellWidth - 10
+                        height: foodGridView.cellHeight - 6
+                        radius: 8
+                        color: dialogRoot.selectedLabel === modelData.en
+                               ? "#EBF2FF" : "#FAFAFA"
+                        border.width: 1.2
+                        border.color: dialogRoot.selectedLabel === modelData.en
+                                      ? "#4C72F9"
+                                      : (cardArea.containsMouse ? "#B8D4FF" : "#E5E7EB")
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: modelData.cn
-                        font.pixelSize: 15
-                        font.family: "Microsoft YaHei"
-                        color: dialogRoot.selectedLabel === modelData.en ? "#4C72F9" : "#1B263B"
-                    }
+                        Behavior on color { ColorAnimation { duration: 120 } }
+                        Behavior on border.color { ColorAnimation { duration: 120 } }
 
-                    MouseArea {
-                        id: cardArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            dialogRoot.selectedLabel = modelData.en
+                        Text {
+                            anchors.centerIn: parent
+                            text: modelData.cn
+                            font.pixelSize: 15
+                            font.family: "Microsoft YaHei"
+                            color: dialogRoot.selectedLabel === modelData.en ? "#4C72F9" : "#1B263B"
+                        }
+
+                        MouseArea {
+                            id: cardArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                dialogRoot.selectedLabel = modelData.en
+                            }
                         }
                     }
                 }
             }
-        }
+
+            // ===== 底部按钮栏 =====
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: 22
+                Layout.rightMargin: 22
+                Layout.bottomMargin: 18
+                Layout.topMargin: 10
+                spacing: 12
+
+                Item { Layout.fillWidth: true }
+
+                // 取消按钮
+                Rectangle {
+                    width: 100; height: 38; radius: 8
+                    color: cancelBtnMouse.containsMouse ? "#F1F5F9" : "#FFFFFF"
+                    border.color: "#D1D5DB"
+                    border.width: 1
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "取消"
+                        font.pixelSize: 15
+                        font.bold: true
+                        color: "#64748B"
+                    }
+                    MouseArea {
+                        id: cancelBtnMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: dialogRoot.reject()
+                    }
+                }
+
+                // 确认按钮
+                Rectangle {
+                    width: 100; height: 38; radius: 8
+                    gradient: Gradient {
+                        GradientStop { position: 0.0; color: dialogRoot.selectedLabel === "" ? "#94A3B8" : "#4C72F9" }
+                        GradientStop { position: 1.0; color: dialogRoot.selectedLabel === "" ? "#CBD5E1" : "#4BC8F6" }
+                    }
+                    opacity: dialogRoot.selectedLabel === "" ? 0.5 : 1.0
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "确认"
+                        font.pixelSize: 15
+                        font.bold: true
+                        color: "white"
+                    }
+                    MouseArea {
+                        id: confirmBtnMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        enabled: dialogRoot.selectedLabel !== ""
+                        onClicked: dialogRoot.accept()
+                    }
+                }
+            }
     }  // end ColumnLayout
 
     onOpened: {
