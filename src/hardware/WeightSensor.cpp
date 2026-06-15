@@ -2,7 +2,6 @@
 #include "WeightSensorWorker.h"
 #include <QDebug>
 #include <QtMath>
-#include <algorithm>
 
 // ============================================================================
 // 构造 / 析构 — 创建并启动 Worker 线程
@@ -147,17 +146,27 @@ void WeightSensor::consumeBuffer()
         Q_EMIT stableChanged();
     }
 
-    // 不稳定时重置触发标志
+    // 不稳定时重置计数和触发标志
     if (!hwStable) {
+        m_stableCount = 0;
         m_triggered = false;
     }
 
-    // 硬件判定稳定时触发拍照
+    // 硬件判定稳定时：累计连续稳定次数 + 重量阈值双重校验
     if (hwStable && !m_triggered) {
-        if (std::abs(newNetWeight) > 0.05) {
-            Q_EMIT stableTriggered();
-            m_triggered = true;
-            qDebug() << "[Scale] *** stableTriggered! *** weight=" << newNetWeight << "kg";
+        // 第一道门槛：重量必须超过最小阈值(150g)，过滤微小数据
+        if (std::abs(newNetWeight) > MIN_TRIGGER_WEIGHT_KG) {
+            m_stableCount++;
+            // 第二道门槛：连续足够次数的稳定才触发（防瞬时假稳定）
+            if (m_stableCount >= MIN_STABLE_COUNT) {
+                Q_EMIT stableTriggered();
+                m_triggered = true;
+                qDebug() << "[Scale] *** stableTriggered! *** weight=" << newNetWeight << "kg"
+                         << "stableCount=" << m_stableCount;
+            }
+        } else {
+            // 重量在阈值以下时重置计数（微小波动不累积）
+            m_stableCount = 0;
         }
     }
 

@@ -2,7 +2,6 @@
 #define WEIGHTSENSOR_H
 
 #include <QObject>
-#include <QQueue>
 #include <QThread>
 #include <QTimer>
 
@@ -69,11 +68,9 @@ private:
     double m_zeroOffset;    // 软件零点偏移 (kg)
     double m_tareWeight;    // 皮重 (kg)
 
-    // ==================== 滤波 & 稳定检测 ====================
-    QQueue<double> m_filterWindow;
-    static constexpr int    FILTER_WINDOW_SIZE = 3;          // 滑动窗口大小（3次=150ms）
-    static constexpr double STABLE_THRESHOLD_KG = 0.03;      // 极差阈值
-    static constexpr int    STABLE_REQUIRED_COUNT = 3;       // 连续稳定次数
+    // ==================== 稳定检测 & 触发防抖 ====================
+    static constexpr double MIN_TRIGGER_WEIGHT_KG = 0.15;     // 最小触发重量(150g)，过滤微小数据误报
+    static constexpr int    MIN_STABLE_COUNT        = 2;      // 连续稳定次数才触发（防瞬时假稳定）
     int  m_stableCount  = 0;
     bool m_triggered    = false; // 防止重复触发
 
