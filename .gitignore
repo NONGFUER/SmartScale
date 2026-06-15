@@ -82,6 +82,6 @@ CMakeLists.txt.user*
 .uic/
 /build*/
 /.qtcreator/
-/3rdparty
+
 
 andrej-karpathy-skills-main
