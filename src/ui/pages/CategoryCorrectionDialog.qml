@@ -217,7 +217,7 @@ Dialog {
                         Text {
                             anchors.centerIn: parent
                             text: modelData.cn
-                            font.pixelSize: 15
+                            font.pixelSize: 32
                             font.family: "Microsoft YaHei"
                             color: dialogRoot.selectedLabel === modelData.en ? "#4C72F9" : "#1B263B"
                         }
@@ -256,7 +256,7 @@ Dialog {
                     Text {
                         anchors.centerIn: parent
                         text: "取消"
-                        font.pixelSize: 15
+                        font.pixelSize: 32
                         font.bold: true
                         color: "#64748B"
                     }
