@@ -121,10 +121,15 @@ CameraController::CameraController(QObject *parent)
 }
 
 CameraController::~CameraController() {
+    m_watchdogTimer->stop();
     if (m_mainCamera) m_mainCamera->stop();
     if (m_subProcess && m_subProcess->state() == QProcess::Running) {
         m_subProcess->terminate();
         m_subProcess->waitForFinished(1000);
+    }
+    if (m_captureThreadPool) {
+        m_captureThreadPool->clear();
+        m_captureThreadPool->waitForDone(3000);
     }
 }
 
@@ -140,6 +145,10 @@ void CameraController::setMainVideoSink(QVideoSink *sink) {
 void CameraController::setSubVideoSink(QVideoSink *sink) { m_subSink = sink; }
 
 void CameraController::captureVegetable(double currentWeight) {
+    if (m_isRestarting) {
+        qWarning() << "[Camera] 摄像头重启中，跳过本次拍照";
+        return;
+    }
     m_lastWeight.store(currentWeight);
     m_captureRequestedSub.store(true);
 }
@@ -150,6 +159,10 @@ void CameraController::captureVegetable(double currentWeight) {
 void CameraController::handleMainCameraCapture()
 {
     if (!m_captureRequestedMain.exchange(false)) return;
+    if (m_isRestarting) {
+        qWarning() << "[Camera] 摄像头重启中，跳过主摄截图";
+        return;
+    }
     if (!m_mainSink || !m_mainSink->videoFrame().isValid()) {
         qWarning() << "[CameraController] 主摄像头截图失败: sink为空或当前帧无效";
         return;
@@ -598,13 +611,10 @@ void CameraController::onCameraErrorOccurred(int error, const QString &errorStri
 
     Q_EMIT cameraStatusChanged(QStringLiteral("Error: %1").arg(errorString));
 
-    // 尝试自动恢复
-    if (!m_isRestarting && m_restartCount < MAX_AUTO_RESTART) {
+    // 尝试自动恢复（restartMainCamera 内部会循环重试，永不放弃）
+    if (!m_isRestarting) {
         qWarning() << "[CameraController] 触发错误恢复重启...";
         restartMainCamera();
-    } else if (m_restartCount >= MAX_AUTO_RESTART) {
-        qCritical() << "[CameraController] 已达最大重启次数(" << MAX_AUTO_RESTART
-                    << ")，停止自动恢复，需人工检查硬件";
     }
 }
 
@@ -618,7 +628,7 @@ void CameraController::onWatchdogTimeout()
     if (m_isRestarting || !m_mainCamera) return;
 
     qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - m_lastFrameTimeMs;
-    if (elapsed > m_watchdogIntervalMs * 2 && m_restartCount < MAX_AUTO_RESTART) {
+    if (elapsed > m_watchdogIntervalMs * 2) {
         qWarning() << "[Camera] 看门狗触发:" << elapsed / 1000.0 << "s无帧, 重启#" << (m_restartCount + 1);
         restartMainCamera();
     }
@@ -632,6 +642,12 @@ void CameraController::restartMainCamera()
 {
     if (m_isRestarting) return;
     m_isRestarting = true;
+
+    // 超过最大次数后重置计数器，允许持续尝试（不放弃）
+    if (m_restartCount >= MAX_AUTO_RESTART) {
+        qWarning() << "[Camera] 重启计数归零，继续监控恢复";
+        m_restartCount = 0;
+    }
     m_restartCount++;
     m_watchdogTimer->stop();
 
@@ -643,21 +659,14 @@ void CameraController::restartMainCamera()
         m_mainCamera = nullptr;
     }
 
-    // 崩溃≥3次时尝试重置USB设备
-    if (m_restartCount >= 3) {
-        QProcess::execute("bash", {"-c", "v4l2-ctl --list-devices 2>/dev/null || true"});
-    }
-
-    // 指数退避: 1.5s → 3s → 6s → ... → 30s
-    int delay = qMin(1500 * (1 << qMin(m_restartCount - 1, 4)), 30000);
-
-    QTimer::singleShot(delay, this, [this]() {
+    // 固定 2s 延迟等待 USB 释放，不做指数退避
+    QTimer::singleShot(2000, this, [this]() {
         auto usbCam = findUsbCamera();
         if (usbCam.isNull()) {
-            qCritical() << "[Camera] 重启失败: 无可用设备";
-            m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
-            m_watchdogTimer->start();
+            qCritical() << "[Camera] 重启失败: 无可用设备，5秒后重试";
             m_isRestarting = false;
+            m_restartCount--; // 不算作有效重启，回退计数
+            QTimer::singleShot(5000, this, &CameraController::restartMainCamera);
             return;
         }
 
@@ -677,7 +686,7 @@ void CameraController::restartMainCamera()
         }
 
         m_mainCamera->start();
-        m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
+        // 心跳由 onCameraStatusChanged(Active) 统一重置，此处不提前打戳
         m_watchdogTimer->start();
         Q_EMIT cameraStatusChanged(QString("Restarted(#%1)").arg(m_restartCount));
         m_isRestarting = false;
