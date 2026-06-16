@@ -1,4 +1,5 @@
 #include "FoodTranslator.h"
+#include "core/PState.h"
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -83,7 +84,7 @@ QString FoodTranslator::translate(const QString &englishName) const {
     }
   
     qWarning() << "Missing translation for:" << englishName;
-    return QStringLiteral("未知物品");
+    return PState::UNKNOWN;
 }
 
 // 进阶功能：支持从本地 JSON 文件更新翻译，无需重新编译程序

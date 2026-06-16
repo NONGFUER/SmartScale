@@ -23,6 +23,7 @@
 #include "data/DatabaseManager.h"
 #include "data/repositories/WeightRecordRepo.h"
 #include "data/repositories/UserRepo.h"
+#include "core/PState.h"
 
 int main(int argc, char *argv[])
 {
@@ -91,6 +92,7 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "CategoryService", categoryService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "VoiceSpeaker", voiceSpeaker);
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());
+    qmlRegisterSingletonInstance<PState>("SmartScale.Tools", 1, 0, "PState", &PState::inst());
 
     QObject::connect(
         &engine,

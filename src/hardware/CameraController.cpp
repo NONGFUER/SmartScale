@@ -1,5 +1,6 @@
 #include "CameraController.h"
 #include "utils/FoodTranslator.h"
+#include "core/PState.h"
 #include <QVideoFrameFormat>
 #include <QPainter>
 #include <QDateTime>
@@ -409,7 +410,7 @@ void CameraController::drawWatermarkOverlay(QPainter &painter, int imgW, int img
                            : QStringLiteral("操作员");
 
     double weightKg = m_lastWeight.load();
-    QString chineseName = (predictedLabel == "未知物品" || predictedLabel == "--")
+    QString chineseName = (predictedLabel == PState::UNKNOWN || predictedLabel == PState::NONE)
                           ? predictedLabel
                           : FoodTranslator::instance()->translate(predictedLabel);
     QDateTime now = QDateTime::currentDateTime();
@@ -772,7 +773,7 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
     if (reply->error() != QNetworkReply::NoError) {
         qWarning() << "[在线AI] 请求失败:" << reply->errorString()
                    << "HTTP状态:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        emitAiResult("未知物品", savePath, elapsed);
+        emitAiResult(PState::UNKNOWN, savePath, elapsed);
         return;
     }
 
@@ -783,18 +784,18 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
     QJsonDocument doc = QJsonDocument::fromJson(data);
     if (doc.isNull() || !doc.isObject()) {
         qWarning() << "[在线AI] JSON 解析失败";
-        emitAiResult("未知物品", savePath, elapsed);
+        emitAiResult(PState::UNKNOWN, savePath, elapsed);
         return;
     }
 
     QJsonObject obj = doc.object();
     bool success = obj["success"].toBool(false);
-    QString label = obj["data"].toString("--");
+    QString label = obj["data"].toString(PState::NONE);
 
-    if (!success || label == "--" || label.isEmpty()) {
+    if (!success || label == PState::NONE || label.isEmpty()) {
         qWarning() << "[在线AI] 识别失败, success=" << success
                    << "message=" << obj["message"].toString();
-        label = "未知物品";
+        label = PState::UNKNOWN;
     }
 
     qInfo() << "[在线AI] 识别结果:" << label << "耗时:" << elapsed << "ms";
@@ -816,7 +817,7 @@ void CameraController::emitAiResult(const QString &label, const QString &path, q
 
 void CameraController::speakPredictedLabel(const QString &label)
 {
-    if (!m_voiceSpeaker || label == "--" || label == "未知物品") return;
+    if (!m_voiceSpeaker || label == PState::NONE || label == PState::UNKNOWN) return;
 
     QString chineseName = FoodTranslator::instance()->translate(label);
     QString speakText = QString("识别到%1").arg(chineseName);

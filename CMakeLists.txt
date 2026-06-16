@@ -32,6 +32,7 @@ qt_add_qml_module(appSmartScale
 
         # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
+        SOURCES src/core/PState.h src/core/PState.cpp
 
         # --- 硬件层 (Hardware) ---
         SOURCES src/hardware/WeightSensorWorker.h src/hardware/WeightSensorWorker.cpp

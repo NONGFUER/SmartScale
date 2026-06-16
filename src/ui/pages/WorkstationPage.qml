@@ -11,13 +11,13 @@ Item {
     // ==========================================
     // 用于缓存 AI 状态的全局属性
     // ==========================================
-    property string currentPrediction: "等待识别..."
+    property string currentPrediction: PState.IDLE
     property string currentImagePath: ""
     property var currentDetailRecord: null
     property bool categorySelectMode: false  // 是否为手动品类选择模式
     
     // 推理耗时相关属性
-    property string lastInferenceTime: "-- ms"
+    property string lastInferenceTime: PState.NONE + " ms"
 
     // ===== 外层：蓝色渐变底色 =====
     Rectangle {
@@ -554,7 +554,7 @@ Item {
                                 Layout.preferredHeight: 220
                                 Layout.minimumHeight: 180
                                 radius: 12
-                                color: root.currentPrediction === "等待识别..." || root.currentPrediction === "AI未就绪"
+                                color: root.currentPrediction === PState.IDLE || root.currentPrediction === PState.NOT_READY
                                        ? "#F8FAFC" : "#EFF6FF"
                                 border.width: 0
 
@@ -591,15 +591,13 @@ Item {
                                     Text {
                                         Layout.fillWidth: true
                                         horizontalAlignment: Text.AlignHCenter
-                                        text: root.currentPrediction === "等待识别..."
-                                              || root.currentPrediction === "AI未就绪"
-                                              ? "点击选择品类..."
-                                              : Translator.translate(root.currentPrediction)
+                                        text: PState.isValid(root.currentPrediction)
+                                            ? Translator.translate(root.currentPrediction)
+                                            : PState.label(root.currentPrediction)  
                                         font.pixelSize: 88
                                         font.bold: true
-                                        color: root.currentPrediction === "等待识别..."
-                                               || root.currentPrediction === "AI未就绪"
-                                               ? "#94A3B8" : "#1E40AF"
+                                        color: PState.isValid(root.currentPrediction)
+                                               ? "#1E40AF" : "#94A3B8"
                                     }
 
                                     // 右侧：识别按钮（手动演示用）
@@ -623,7 +621,7 @@ Item {
                                     //         cursorShape: Qt.PointingHandCursor
                                     //         onClicked: {
                                     //             console.log("手动触发拍照...")
-                                    //             root.currentPrediction = "识别中..."
+                                    //             root.currentPrediction = PState.BUSY
                                     //             CameraController.captureVegetable(WeightManager.netWeight);
                                     //             captureBtnAnim.start();
                                     //         }
@@ -704,11 +702,7 @@ Item {
                             Button {
                                 text: "保存"
                                 enabled: WeightManager.netWeight > 0.01 && 
-                                         root.currentPrediction !== "等待识别..." && 
-                                         root.currentPrediction !== "AI未就绪" &&
-                                         root.currentPrediction !== "识别中..." &&
-                                         root.currentPrediction !== "未知物品" &&
-                                         root.currentPrediction !== "--"
+                                         PState.isValid(root.currentPrediction)
                                 font.pixelSize: 32
                                 font.bold: true
                                 Layout.fillWidth: true
@@ -720,7 +714,7 @@ Item {
                                         let chineseLabel = Translator.translate(root.currentPrediction)
                                         console.log(">> 手动提交称重记录:", chineseLabel, currentWeight.toFixed(2) + "kg", "时间:", currentTime, "图片路径:", root.currentImagePath)
                                         WeightHistoryService.addRecord(currentWeight, chineseLabel, BackendAuth.currentUser, root.currentImagePath, "")
-                                        root.currentPrediction = "等待识别..."
+                                        root.currentPrediction = PState.IDLE
                                         root.currentImagePath = ""
                                     } else {
                                         console.warn("重量不足，无法提交记录")
@@ -766,7 +760,7 @@ Item {
        target: WeightManager
        function onStableTriggered() {
            console.log("重量锁定！拍摄证据照片...")
-           root.currentPrediction = "识别中..."
+           root.currentPrediction = PState.BUSY
            CameraController.captureVegetable(WeightManager.netWeight);
        }
     }
@@ -793,7 +787,7 @@ Item {
             if (inferenceTimeMs !== undefined) {
                 root.lastInferenceTime = inferenceTimeMs + " ms"
             } else {
-                root.lastInferenceTime = "-- ms"
+                root.lastInferenceTime = PState.NONE + " ms"
             }
         }
     }

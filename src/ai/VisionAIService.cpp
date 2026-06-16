@@ -1,4 +1,5 @@
 #include "VisionAIService.h"
+#include "core/PState.h"
 #include <QCoreApplication>
 #include <QFile>
 #include <QDir>
@@ -142,7 +143,7 @@ std::vector<float> VisionAIService::preprocessImage(const QImage &img)
 */
 QString VisionAIService::predict(const QImage &img)
 {
-    if (!m_session || m_labels.isEmpty()) return "AI未就绪";
+    if (!m_session || m_labels.isEmpty()) return PState::NOT_READY;
 
     auto input_tensor_values = preprocessImage(img);
     std::vector<int64_t> input_shape = {1, 3, 224, 224};
@@ -184,7 +185,7 @@ QString VisionAIService::predict(const QImage &img)
     // if (max_index < m_labels.size()) {
     //     return m_labels[max_index];
     // }
-    return "未知物品";
+    return PState::UNKNOWN;
 }
 
 QStringList VisionAIService::getLabels() const {
