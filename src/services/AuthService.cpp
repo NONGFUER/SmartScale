@@ -89,6 +89,7 @@ void AuthService::tryOnlineLogin(const QString &userCode, const QString &passwor
     bodyObj["Sn"]       = "";     // 设备序列号
     bodyObj["Role"]     = 2;      // 角色类型
     bodyObj["Dev"]      = 4;      // 设备类型
+    bodyObj["zone"]     = "Asia/Shanghai";     // 区域
 
     QJsonDocument bodyDoc(bodyObj);
     QByteArray bodyData = bodyDoc.toJson(QJsonDocument::Compact);
