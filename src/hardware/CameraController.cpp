@@ -539,7 +539,7 @@ void CameraController::drawWatermarkOverlay(QPainter &painter, int imgW, int img
             now.toString("yyyyMMdd"),
             now.toString("HH:mm:ss"),
             chineseName,
-            QString("%1KG").arg(int(weightKg)),
+            QString("%1 KG").arg(weightKg, 0, 'f', 2),
             operatorName,
         };
 

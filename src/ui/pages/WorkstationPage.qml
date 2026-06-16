@@ -140,7 +140,7 @@ Item {
                                             }
 
                                             Text {
-                                                text: modelData.weight ? modelData.weight.toFixed(1) + "kg" : "0.0kg"
+                                                text: modelData.weight ? modelData.weight.toFixed(2) + "kg" : "0.00kg"
                                                 font.pixelSize: 24
                                                 color: "#16A34A"
                                                 font.bold: true
