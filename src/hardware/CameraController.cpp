@@ -9,6 +9,11 @@
 #include <QMetaObject>
 #include <QCoreApplication>
 #include <algorithm>
+#include <QHttpMultiPart>
+#include <QBuffer>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include "core/NetworkUtils.h"
 
 // 副摄像头配置 (IMX708 CSI)
 #define SUB_TUNING_FILE "/usr/share/libcamera/ipa/rpi/pisp/imx519.json"
@@ -82,7 +87,11 @@ CameraController::CameraController(QObject *parent)
 
     m_captureThreadPool = new QThreadPool(this);
     m_captureThreadPool->setMaxThreadCount(1);
-    m_aiService = new VisionAIService(this);
+    //暂不启用本地AI模型
+    //m_aiService = new VisionAIService(this);  
+    m_networkMgr = new QNetworkAccessManager(this);
+    connect(m_networkMgr, &QNetworkAccessManager::finished,
+        this, &CameraController::onNetworkReply);
 
     // === 看门狗 ===
     m_watchdogTimer = new QTimer(this);
@@ -299,14 +308,14 @@ void CameraController::processAndSaveImage(int cameraIndex, QImage image)
 // -----------------------------------------------------
 void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
 {
-    // ② 裁剪（按比例切到称台区域，分辨率变化时自动适配）
+    // 2 裁剪（按比例切到称台区域，分辨率变化时自动适配）
     // 称台位置: 水平偏左(45%), 垂直偏下(53%); 大小约占画面35%
     double cropRatio = 0.35;                    // 裁剪区占画面边长的比例
     int side = (int)(qMin(watermarkedImg.width(), watermarkedImg.height()) * cropRatio);
     int cropX = (int)(watermarkedImg.width() * 0.45) - (side / 2);
     int cropY = (int)(watermarkedImg.height() * 0.53) - (side / 2);
 
-    // ③ 分发：主摄存 yt0.jpg，副摄存 yt1.jpg + 缓存员工照片 + 串联通知
+    // 3 分发：主摄存 yt0.jpg，副摄存 yt1.jpg + 缓存员工照片 + 串联通知
     QString debugPrefix = (cameraIndex == 0) ? "yt0" : "yt1";
     watermarkedImg.save(QString("/home/sjwu/Pictures/%1.jpg").arg(debugPrefix), "JPG", 90);
 
@@ -324,7 +333,7 @@ void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
         QMetaObject::invokeMethod(this, "onSubCaptureReady", Qt::QueuedConnection);
     }
 
-    // ④ 时间戳 / 路径准备（仅主摄生成最终保存路径）
+    // 4时间戳 / 路径准备（仅主摄生成最终保存路径）
     QString timeStamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
     QString predictedLabel = "--";
     QString savePath = "";
@@ -334,50 +343,52 @@ void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
         savePath = dir.absolutePath() + QString("/WLC200A_V-XXXXXX_%1.jpg").arg(timeStamp);
     }
 
-    // ⑤ 主摄 AI 推理 + 语音播报
-    if (cameraIndex == 0 && m_aiService) {
-        // 调用 AI 类的预测接口
-        qint64 startTime = QDateTime::currentMSecsSinceEpoch();
-        predictedLabel = m_aiService->predict(pureImageForAI);
-        qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - startTime;
-        qInfo() << "[CameraController] 委托 AI 处理完毕，结果:" << predictedLabel << "耗时:" << elapsed << "ms";
+    // 5主摄 AI 推理 + 语音播报
+    // if (cameraIndex == 0 && m_aiService) {
+    //     // 调用 AI 类的预测接口
+    //     qint64 startTime = QDateTime::currentMSecsSinceEpoch();
+    //     predictedLabel = m_aiService->predict(pureImageForAI);
+    //     qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - startTime;
+    //     qInfo() << "[CameraController] 委托 AI 处理完毕，结果:" << predictedLabel << "耗时:" << elapsed << "ms";
 
-        // ===== AI 推理完成，立即触发语音播报（不等图片保存）=====
-        if (m_voiceSpeaker && predictedLabel != "--") {
-            QString speakText;
-            if (predictedLabel == "未知物品") {
-                speakText = QStringLiteral("未识别物品");
-            } else {
-                QString chineseName = FoodTranslator::instance()->translate(predictedLabel);
-                speakText = QString("识别到%1").arg(chineseName);
-            }
-            QMetaObject::invokeMethod(m_voiceSpeaker, "speak", Qt::QueuedConnection,
-                Q_ARG(QString, speakText));
-            qDebug() << "[CameraController] 已提交语音播报:" << speakText;
-        }
-        // ============================================================
+    //     // ===== AI 推理完成，立即触发语音播报（不等图片保存）=====
+    //     if (m_voiceSpeaker && predictedLabel != "--") {
+    //         QString speakText;
+    //         if (predictedLabel == "未知物品") {
+    //             speakText = QStringLiteral("未识别物品");
+    //         } else {
+    //             QString chineseName = FoodTranslator::instance()->translate(predictedLabel);
+    //             speakText = QString("识别到%1").arg(chineseName);
+    //         }
+    //         QMetaObject::invokeMethod(m_voiceSpeaker, "speak", Qt::QueuedConnection,
+    //             Q_ARG(QString, speakText));
+    //         qDebug() << "[CameraController] 已提交语音播报:" << speakText;
+    //     }
+    //     // ============================================================
 
-        Q_EMIT aiRecognitionCompleted(predictedLabel, savePath, elapsed);
-    }
-
-    // ⑥ 水印绘制（主摄时取副摄缓存作为员工照片）
-    QPainter painter(&watermarkedImg);
-    QImage empPhoto;
+    //     Q_EMIT aiRecognitionCompleted(predictedLabel, savePath, elapsed);
+    // }
+    //在线 AI 推理 ======
     if (cameraIndex == 0) {
-        QMutexLocker locker(&m_subImageMutex);
-        empPhoto = m_lastSubCaptureImage;
+        // ★ 必须投递到主线程执行：m_networkMgr 属于主线程，不能在工作线程中调用
+        QMetaObject::invokeMethod(this, "postAiRecognize", Qt::QueuedConnection,
+                                  Q_ARG(QImage, pureImageForAI),
+                                  Q_ARG(QString, savePath));
     }
-    drawWatermarkOverlay(painter, watermarkedImg.width(), watermarkedImg.height(), predictedLabel, empPhoto);
 
-    // ⑦ 保存图片（仅主摄保存最终图片 + ai_target.jpg）
+    // 6 缓存图像到 pending 队列（AI 返回后在 finalizeSavedImage 中统一画水印+保存）
     if (cameraIndex == 0 && !savePath.isEmpty()) {
         pureImageForAI.save("/home/sjwu/Pictures/ai_target.jpg", "JPG", 90);
-        if (watermarkedImg.save(savePath, "JPG", 90)) {
-            qDebug() << "[CameraController] 主摄画面保存完毕:" << savePath;
-            Q_EMIT photoSaved(cameraIndex, savePath);
-        } else {
-            qWarning() << "[CameraController] 图片保存失败!";
+
+        QImage empPhotoCopy;
+        {
+            QMutexLocker locker(&m_subImageMutex);
+            empPhotoCopy = m_lastSubCaptureImage;
         }
+
+        QMutexLocker pendingLocker(&m_pendingMutex);
+        m_pendingCaptures[savePath] = {watermarkedImg, empPhotoCopy};
+        qDebug() << "[CameraController] 图像已缓存至 pending 队列，等待 AI 返回后完成水印保存:" << savePath;
     }
 }
 
@@ -694,3 +705,154 @@ void CameraController::restartMainCamera()
     });
 }
 
+// ============================================================
+//  在线 AI 识别 — 公共请求/回复基础设施
+// ============================================================
+
+void CameraController::postAiRecognize(const QImage &image, const QString &savePath)
+{
+    if (!m_networkMgr || !m_authService) return;
+
+    // ① 用工具类创建请求（零样板）
+    QNetworkRequest request = NetworkUtils::createMultipartApiRequest(
+        NetworkUtils::Api::AI_RECOGNIZE_FILE,
+        m_authService->token(),
+        "image/jpeg"
+    );
+
+    // ② 构建 multipart body
+    QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+
+    QHttpPart imagePart;
+    imagePart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                        QVariant("form-data; name=\"File\"; filename=\"capture.jpg\""));
+    imagePart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant("image/jpeg"));
+
+    QByteArray imageData;
+    QBuffer buffer(&imageData);
+    buffer.open(QIODevice::WriteOnly);
+    image.save(&buffer, "JPG", 90);
+    buffer.close();
+    imagePart.setBody(imageData);
+    multiPart->append(imagePart);
+
+    // ③ 发送 + 附加上下文（用于回调时区分请求类型）
+    QNetworkReply *reply = m_networkMgr->post(request, multiPart);
+    multiPart->setParent(reply);  // reply 删除时自动清理 multiPart
+
+    reply->setProperty("_reqType", "ai_recognize");
+    reply->setProperty("_aiSavePath", savePath);
+    reply->setProperty("_aiStartTime", QDateTime::currentMSecsSinceEpoch());
+
+    qInfo() << "[CameraController] AI识别已发送," << imageData.size() << "bytes";
+}
+
+void CameraController::onNetworkReply(QNetworkReply *reply)
+{
+    QString reqType = reply->property("_reqType").toString();
+
+    if (reqType == "ai_recognize") {
+        handleAiRecognizeResponse(reply);
+    } else {
+        // 未来其他 API 类型在这里扩展:
+        // } else if (reqType == "xxx") { handleXxx(reply); }
+        reply->deleteLater();
+    }
+}
+
+void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
+{
+    QString savePath = reply->property("_aiSavePath").toString();
+    qint64 startTime = reply->property("_aiStartTime").toLongLong();
+    qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - startTime;
+
+    reply->deleteLater();
+
+    // ---- 网络错误 ----
+    if (reply->error() != QNetworkReply::NoError) {
+        qWarning() << "[在线AI] 请求失败:" << reply->errorString()
+                   << "HTTP状态:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        emitAiResult("未知物品", savePath, elapsed);
+        return;
+    }
+
+    // ---- 解析 JSON 响应 ----
+    QByteArray data = reply->readAll();
+    qInfo() << "[在线AI] 响应数据:" << data;
+
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (doc.isNull() || !doc.isObject()) {
+        qWarning() << "[在线AI] JSON 解析失败";
+        emitAiResult("未知物品", savePath, elapsed);
+        return;
+    }
+
+    QJsonObject obj = doc.object();
+    bool success = obj["success"].toBool(false);
+    QString label = obj["data"].toString("--");
+
+    if (!success || label == "--" || label.isEmpty()) {
+        qWarning() << "[在线AI] 识别失败, success=" << success
+                   << "message=" << obj["message"].toString();
+        label = "未知物品";
+    }
+
+    qInfo() << "[在线AI] 识别结果:" << label << "耗时:" << elapsed << "ms";
+
+    // ---- 语音播报 ----
+    speakPredictedLabel(label);
+
+    // ---- 用 AI 结果完成水印绘制 + 图片保存（修复异步时序问题）----
+    finalizeSavedImage(savePath, label);
+
+    // ---- 发射结果通知 QML 更新界面（此时 photoSaved 已携带完整信息）----
+    emitAiResult(label, savePath, elapsed);
+}
+
+void CameraController::emitAiResult(const QString &label, const QString &path, qint64 ms)
+{
+    Q_EMIT aiRecognitionCompleted(label, path, ms);
+}
+
+void CameraController::speakPredictedLabel(const QString &label)
+{
+    if (!m_voiceSpeaker || label == "--" || label == "未知物品") return;
+
+    QString chineseName = FoodTranslator::instance()->translate(label);
+    QString speakText = QString("识别到%1").arg(chineseName);
+    QMetaObject::invokeMethod(m_voiceSpeaker, "speak", Qt::QueuedConnection,
+                              Q_ARG(QString, speakText));
+}
+
+// ============================================================
+//  异步 AI → 水印管线: 取回缓存图像，用正确 AI 结果画水印并保存
+// ============================================================
+void CameraController::finalizeSavedImage(const QString &savePath, const QString &predictedLabel)
+{
+    // ① 从 pending 队列取回缓存的图像数据
+    PendingCapture capture;
+    {
+        QMutexLocker locker(&m_pendingMutex);
+        auto it = m_pendingCaptures.find(savePath);
+        if (it == m_pendingCaptures.end()) {
+            qWarning() << "[CameraController] finalizeSavedImage: 未找到 pending 缓存:" << savePath;
+            return;
+        }
+        capture = it.value();
+        m_pendingCaptures.erase(it);
+    }
+
+    // ② 用正确的 AI 识别结果绘制水印
+    QPainter painter(&capture.watermarkedImg);
+    drawWatermarkOverlay(painter, capture.watermarkedImg.width(),
+                         capture.watermarkedImg.height(), predictedLabel, capture.empPhoto);
+
+    // ③ 保存最终图片（此时水印已包含正确食材名和重量）
+    if (capture.watermarkedImg.save(savePath, "JPG", 90)) {
+        qDebug() << "[CameraController] 主摄画面保存完毕(含AI结果):" << savePath
+                 << "食材:" << predictedLabel;
+        Q_EMIT photoSaved(0, savePath);
+    } else {
+        qWarning() << "[CameraController] 图片保存失败!";
+    }
+}

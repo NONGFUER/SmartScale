@@ -19,6 +19,8 @@
 #include "ai/VisionAIService.h"
 #include "hardware/VoiceSpeaker.h"
 #include "services/AuthService.h"
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
 
 class CameraController : public QObject
 {
@@ -51,8 +53,16 @@ private Q_SLOTS:
     void onMainVideoFrameChanged();
     void onWatchdogTimeout();
     void restartMainCamera();
+    void onNetworkReply(QNetworkReply *reply);          // 统一网络回复分发入口
 
 private:
+    QNetworkAccessManager *m_networkMgr = nullptr;
+
+    // === 在线 AI 识别（公共请求/回复基础设施）===
+    Q_INVOKABLE void postAiRecognize(const QImage &image, const QString &savePath);
+    void handleAiRecognizeResponse(QNetworkReply *reply);   // 纯业务逻辑
+    void emitAiResult(const QString &label, const QString &path, qint64 ms);  // 发射结果信号
+    void speakPredictedLabel(const QString &label);         // 语音播报
     // === 公共工具方法（消除构造函数/重启函数重复代码）===
     QCameraDevice findUsbCamera();                          // 扫描USB摄像头设备
     void setupCameraFormat(QCameraDevice &device);          // 设置最佳分辨率格式
@@ -101,6 +111,15 @@ private:
     void _processCommon(int cameraIndex, QImage &img);
     void drawWatermarkOverlay(QPainter &painter, int imgW, int imgH,
                               const QString &label, const QImage &empPhoto = QImage());
+
+    // 异步 AI → 水印管线: 缓存待完成的拍照数据，AI 返回后统一绘制水印并保存
+    struct PendingCapture {
+        QImage watermarkedImg;
+        QImage empPhoto;
+    };
+    QMap<QString, PendingCapture> m_pendingCaptures;
+    mutable QMutex m_pendingMutex;
+    void finalizeSavedImage(const QString &savePath, const QString &predictedLabel);
 
     // 异步拍照任务
     class CaptureTask : public QRunnable {

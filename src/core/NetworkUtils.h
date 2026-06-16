@@ -21,6 +21,7 @@ namespace NetworkUtils {
         inline constexpr const char *REFRESH_TOKEN  = "/api/Auth/refresh-token";
         inline constexpr const char *WEIGHT_CREATE  = "/api/ems/WeightRecord/create";
         inline constexpr const char *CATEGORY_LIST  = "/api/ems/Ingr/paged";  // 品类列表
+        inline constexpr const char *AI_RECOGNIZE_FILE  = "/api/ems/AiDet/recognize-ingr/file";  // 识别食材
     }
 
     /**
@@ -41,6 +42,18 @@ namespace NetworkUtils {
     QNetworkRequest createApiRequest(const QString &baseUrl,
                                      const QString &apiPath,
                                      const QString &token = QString());
+
+    /**
+     * @brief 创建 multipart/form-data API 请求（文件上传专用）
+     * @param apiPath       API 路径，如 Api::AI_RECOGNIZE_FILE
+     * @param token         可选的 Bearer Token
+     * @param contentType   上传文件的 MIME 类型，默认 "image/jpeg"
+     *
+     * 注意：multipart 请求不手动设置 Content-Type（让 QHttpMultiPart 自动带 boundary）
+     */
+    QNetworkRequest createMultipartApiRequest(const char *apiPath,
+                                              const QString &token = QString(),
+                                              const QString &contentType = "image/jpeg");
 
 } // namespace NetworkUtils
 
