@@ -11,7 +11,7 @@
 #include <algorithm>
 
 // 副摄像头配置 (IMX708 CSI)
-#define SUB_TUNING_FILE "/usr/share/libcamera/ipa/rpi/pisp/imx708.json"
+#define SUB_TUNING_FILE "/usr/share/libcamera/ipa/rpi/pisp/imx519.json"
 // ============================================================
 //  公共工具方法
 // ============================================================
