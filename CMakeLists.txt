@@ -29,6 +29,7 @@ qt_add_qml_module(appSmartScale
         src/ui/components/FoodItemCard.qml
         src/ui/components/LoginDialog.qml      # 登录弹窗
         src/ui/pages/CategoryCorrectionDialog.qml  # 品类纠错弹窗
+        src/ui/components/SystemInfoDialog.qml     # [测试] 系统调试信息弹窗
 
         # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
@@ -50,6 +51,7 @@ qt_add_qml_module(appSmartScale
         SOURCES src/services/AuthService.h src/services/AuthService.cpp
         SOURCES src/services/WeightHistoryService.h src/services/WeightHistoryService.cpp
         SOURCES src/services/CategoryService.h src/services/CategoryService.cpp
+        SOURCES src/services/SystemInfoService.h src/services/SystemInfoService.cpp       # [测试] 系统信息服务
 
         # --- 数据层: Models ---
         SOURCES src/data/models/WeightRecord.h src/data/models/WeightRecord.cpp

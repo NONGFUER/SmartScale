@@ -18,6 +18,7 @@
 #include "services/AuthService.h"
 #include "services/WeightHistoryService.h"
 #include "services/CategoryService.h"
+#include "services/SystemInfoService.h"       // [测试] 系统调试信息服务
 
 // 数据层
 #include "data/DatabaseManager.h"
@@ -67,6 +68,9 @@ int main(int argc, char *argv[])
     CategoryService *categoryService = new CategoryService(&app);
     VoiceSpeaker *voiceSpeaker = new VoiceSpeaker(&app);
 
+    // [测试] 系统调试信息服务 — 记录重启次数、开机/关机时间
+    SystemInfoService *systemInfoService = new SystemInfoService(&app);
+
     // 语音播报注入 CameraController，AI推理完成后直接播报（省掉QML往返）
     cameraController->setVoiceSpeaker(voiceSpeaker);
     // 登录用户信息注入 CameraController（水印中显示操作员）
@@ -91,6 +95,7 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "WeightHistoryService", historyService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "CategoryService", categoryService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "VoiceSpeaker", voiceSpeaker);
+    qmlRegisterSingletonInstance("App.Backend", 1, 0, "SystemInfo", systemInfoService);  // [测试] 系统信息
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());
     qmlRegisterSingletonInstance<PState>("SmartScale.Tools", 1, 0, "PState", &PState::inst());
 
@@ -101,8 +106,9 @@ int main(int argc, char *argv[])
         []() { QCoreApplication::exit(-1); },
         Qt::QueuedConnection);
         
-    // 确保程序退出时安全关闭数据库
-    QObject::connect(&app, &QCoreApplication::aboutToQuit, [&dbMgr]() {
+    // 确保程序退出时安全关闭数据库 & 记录关机时间
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, [&dbMgr, systemInfoService]() {
+        systemInfoService->recordShutdown();
         dbMgr.close();
     });
     engine.loadFromModule("SmartScale", "Main");

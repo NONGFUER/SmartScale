@@ -120,4 +120,22 @@ ApplicationWindow {
         y: Math.min((parent.height - height) / 2,
                     parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
     }
+
+    // 系统调试信息弹窗（独立组件，与工作台解耦）
+    SystemInfoDialog {
+        id: systemInfoDialog
+        // 居中显示，考虑键盘避让
+        x: (parent.width - width) / 2
+        y: Math.min((parent.height - height) / 2,
+                    parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+    }
+
+    // 连接 StatusBar 调试信号 -> 弹窗打开
+    Connections {
+        target: statusBar
+        function onDebugRequested() {
+            console.log("[Main] 收到调试请求，打开系统信息弹窗")
+            systemInfoDialog.open()
+        }
+    }
 }

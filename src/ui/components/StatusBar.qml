@@ -9,6 +9,8 @@ Rectangle {
 
     // 点击设置图标发出的信号
     signal settingsRequested()
+    // 点击调试按钮发出的信号（测试阶段）
+    signal debugRequested()
 
     // 蓝色渐变背景（左深右浅）
     gradient: Gradient {
@@ -143,6 +145,59 @@ Rectangle {
                             ctx.beginPath(); ctx.arc(cx, by - 9, 8, 13 * Math.PI / 12, 23 * Math.PI / 12); ctx.stroke()
                         }
                         Component.onCompleted: requestPaint()
+                    }
+                }
+
+                // 调试按钮（测试阶段，放在设置齿轮左侧）
+                Item {
+                    width: 30; height: 30
+                    Layout.alignment: Qt.AlignVCenter
+
+                    Rectangle {
+                        id: debugBg
+                        anchors.fill: parent
+                        radius: 4
+                        color: "transparent"
+
+                        states: State {
+                            name: "hovered"; when: debugMouse.containsMouse
+                            PropertyChanges { target: debugBg; color: "#25FFFFFF" }
+                        }
+                    }
+
+                    // 调试图标 (bug / 终端风格)
+                    Canvas {
+                        anchors.centerIn: parent
+                        width: 18; height: 18
+                        onPaint: {
+                            var ctx = getContext("2d")
+                            ctx.strokeStyle = "#FFFFFF"
+                            ctx.lineWidth = 1.6
+                            ctx.lineCap = "round"
+                            ctx.lineJoin = "round"
+                            var cx = width / 2, cy = height / 2
+                            // 终端窗口外形
+                            ctx.strokeRect(cx - 7, cy - 5, 14, 10)
+                            // 提示符 "_"
+                            ctx.beginPath()
+                            ctx.moveTo(cx - 4, cy + 2)
+                            ctx.lineTo(cx, cy + 2)
+                            ctx.moveTo(cx + 3, cy)
+                            ctx.lineTo(cx + 3, cy + 4)
+                            ctx.stroke()
+                        }
+                        Component.onCompleted: requestPaint()
+                    }
+
+                    MouseArea {
+                        id: debugMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            console.log("[StatusBar] 调试按钮被点击")
+                            root.debugRequested()
+                        }
                     }
                 }
 
