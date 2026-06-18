@@ -1,145 +1,79 @@
 #include "SystemInfoService.h"
 
-#include <QCoreApplication>
-#include <QDateTime>
-#include <QDir>
 #include <QFile>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
+#include <QTextStream>
 #include <QDebug>
 
 // ============================================================================
-// 构造 — 记录开机事件
+// 构造 — 解析系统日志，一次性统计
 // ============================================================================
 
 SystemInfoService::SystemInfoService(QObject *parent)
     : QObject(parent)
 {
-    loadFromFile();
+    parseLog();
 
-    // ---- 检测异常关机：如果最后一条是 boot（无配对 shutdown），补录 shutdown ----
-    if (!m_events.isEmpty() && m_events.last()["type"].toString() == "boot") {
-        // 上次是非正常退出（kill/断电/reboot），用最后一条 boot 时间作为近似关机时间
-        QJsonObject emergencySd;
-        emergencySd["type"] = "shutdown";
-        emergencySd["time"] = m_events.last()["time"].toString();
-        emergencySd["abnormal"] = true;
-        m_events.append(emergencySd);
-        qDebug() << "[SystemInfo] 检测到异常关机，已补录 shutdown 记录";
+    qDebug() << "[SystemInfo] 日志解析完成:"
+             << "\n  开机次数:"   << m_bootCount
+             << "\n  关机次数:"   << m_shutdownCount
+             << "\n  本次开机:"   << m_currentBootTime
+             << "\n  上次开机:"   << m_lastBootTime
+             << "\n  上次关机:"   << m_lastShutdownTime;
+}
+
+// ============================================================================
+// 核心解析：逐行扫描 /var/log/power_monitor.log
+// ============================================================================
+
+void SystemInfoService::parseLog()
+{
+    QFile file(kLogFile);
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "[SystemInfo] 无法打开日志:" << file.errorString();
+        return;
     }
 
-    // ---- 本次开机：追加 boot 事件 ----
-    m_currentBootTime = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
-    QJsonObject bootEvent;
-    bootEvent["type"] = "boot";
-    bootEvent["time"] = m_currentBootTime;
-    m_events.append(bootEvent);
+    QStringList bootTimes;
+    QString lastShutdown;
 
-    // ---- 统计与回填 ----
-    int bootCount = 0;
-    for (const auto &ev : m_events) {
-        if (ev["type"].toString() == "boot") ++bootCount;
-    }
-    m_restartCount = bootCount;
-
-    // 从事件列表倒序找上次开机(倒数第2个boot)、上次关机(最后一个shutdown)
-    QString prevBoot, lastShutdown;
-    bool foundCurrentBoot = false;  // 跳过刚加入的当前开机
-    for (int i = m_events.size() - 1; i >= 0; --i) {
-        const auto &ev = m_events[i];
-        if (!foundCurrentBoot && ev["type"].toString() == "boot") {
-            foundCurrentBoot = true;  // 当前这次，跳过
+    QTextStream in(&file);
+    while (!in.atEnd()) {
+        QString line = in.readLine().trimmed();
+        if (line.isEmpty())
             continue;
+
+        if (line.startsWith("[BOOT]")) {
+            // 格式: [BOOT] System Started at: 2026-06-18 21:56:09
+            int colonIdx = line.lastIndexOf(':');
+            if (colonIdx > 0)
+                bootTimes.append(line.mid(colonIdx + 1).trimmed());
+
+        } else if (line.startsWith("[SHUTDOWN]")) {
+            // 格式: [SHUTDOWN] System Shutting down at: 2026-06-18 22:01:58
+            int colonIdx = line.lastIndexOf(':');
+            if (colonIdx > 0)
+                lastShutdown = line.mid(colonIdx + 1).trimmed();
         }
-        if (prevBoot.isEmpty() && ev["type"].toString() == "boot") {
-            prevBoot = ev["time"].toString();
-        }
-        if (lastShutdown.isEmpty() && ev["type"].toString() == "shutdown") {
-            lastShutdown = ev["time"].toString();
-        }
-        if (!prevBoot.isEmpty() && !lastShutdown.isEmpty()) break;
     }
-    m_lastBootTime     = prevBoot.isEmpty()     ? "--" : prevBoot;
+    file.close();
+
+    // ---- 统计 ----
+    m_bootCount = bootTimes.size();
+
+    // 连续两个 BOOT 之间没有 SHUTDOWN → 异常关机（断电/硬重启）
+    // 如果日志中存在 SHUTDOWN 记录，说明最后一次是正常关机，异常关机数为 0
+    // 否则异常关机数 = BOOT 数 - 1（第一次开机不算异常）
+    m_shutdownCount = lastShutdown.isEmpty() ? qMax(0, m_bootCount - 1) : 0;
+
+    // ---- 时间回填 ----
+    if (bootTimes.size() >= 2) {
+        m_currentBootTime = bootTimes.last();
+        m_lastBootTime    = bootTimes[bootTimes.size() - 2];
+    } else if (bootTimes.size() == 1) {
+        m_currentBootTime = bootTimes.first();
+    }
+
     m_lastShutdownTime = lastShutdown.isEmpty() ? "--" : lastShutdown;
-
-    saveToFile();
-
-    qDebug() << "[SystemInfo] 开机事件已记录:"
-             << "\n  累计开机:" << m_restartCount << "次"
-             << "\n  本次开机:" << m_currentBootTime
-             << "\n  上次开机:" << m_lastBootTime
-             << "\n  上次关机:" << m_lastShutdownTime;
-}
-
-// ============================================================================
-// 析构 — 记录关机事件
-// ============================================================================
-
-SystemInfoService::~SystemInfoService()
-{
-    recordShutdown();
-}
-
-// ============================================================================
-// 公共槽
-// ============================================================================
-
-void SystemInfoService::recordShutdown()
-{
-    QJsonObject sdEvent;
-    sdEvent["type"] = "shutdown";
-    sdEvent["time"] = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
-    m_events.append(sdEvent);
-    saveToFile();
-    qDebug() << "[SystemInfo] 关机事件已记录:" << sdEvent["time"];
-}
-
-// ============================================================================
-// 持久化
-// ============================================================================
-
-void SystemInfoService::loadFromFile()
-{
-    QFile file(kDataFile);
-    if (!file.exists()) {
-        qInfo() << "[SystemInfo] 首次运行，无历史数据";
-        return;
-    }
-    if (!file.open(QIODevice::ReadOnly)) {
-        qWarning() << "[SystemInfo] 无法读取:" << file.errorString();
-        return;
-    }
-    QJsonParseError err;
-    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &err);
-    file.close();
-    if (err.error != QJsonParseError::NoError || !doc.isArray()) {
-        qWarning() << "[SystemInfo] JSON 格式异常:" << err.errorString();
-        return;
-    }
-
-    QJsonArray arr = doc.array();
-    m_events.clear();
-    m_events.reserve(arr.size());
-    for (const QJsonValue &v : arr) {
-        if (v.isObject())
-            m_events.append(v.toObject());
-    }
-}
-
-void SystemInfoService::saveToFile()
-{
-    QDir dir(QFileInfo(kDataFile).absolutePath());
-    if (!dir.exists()) dir.mkpath(".");
-
-    QFile file(kDataFile);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        qCritical() << "[SystemInfo] 无法写入:" << file.errorString();
-        return;
-    }
-    QJsonArray arr;
-    for (const auto &ev : m_events)
-        arr.append(ev);
-    file.write(QJsonDocument(arr).toJson(QJsonDocument::Indented));
-    file.close();
+    if (m_lastBootTime.isEmpty())     m_lastBootTime     = "--";
+    if (m_currentBootTime.isEmpty())  m_currentBootTime  = "--";
 }

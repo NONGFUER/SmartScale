@@ -4,52 +4,40 @@
 #include <QString>
 
 /**
- * @brief 系统信息服务 — 记录主机开机关机次数与时间（测试阶段调试用）
+ * @brief 系统信息服务 — 纯读取 /var/log/power_monitor.log 统计开机关机
  *
- * 设计思路：
- *   - 每次"开机"（程序启动）追加一条 boot 事件到 JSON
- *   - 每次"关机"（aboutToQuit / 析构）追加一条 shutdown 事件
- *   - 重启次数 = 累计 boot 事件数
- *   - 上次开机/关机 = 从事件列表倒序取值
- *
- * 持久化：data/system_info.json
+ * 数据源：系统级 power-monitor.service 写入的日志文件
+ * 解析规则：
+ *   - [BOOT] 行数       = 开机次数
+ *   - 连续两个 [BOOT] 之间无 [SHUTDOWN] = 异常关机/断电次数
+ *   - 最后一条 [SHUTDOWN] = 最近正常关机时间
  */
 class SystemInfoService : public QObject
 {
     Q_OBJECT
-    // ---- QML 可读属性 ----
-    Q_PROPERTY(int    restartCount     READ restartCount     CONSTANT)
+    Q_PROPERTY(int    bootCount        READ bootCount        CONSTANT)
+    Q_PROPERTY(int    shutdownCount    READ shutdownCount    CONSTANT)
     Q_PROPERTY(QString lastBootTime     READ lastBootTime     CONSTANT)
     Q_PROPERTY(QString lastShutdownTime READ lastShutdownTime CONSTANT)
     Q_PROPERTY(QString currentBootTime  READ currentBootTime  CONSTANT)
 
 public:
     explicit SystemInfoService(QObject *parent = nullptr);
-    ~SystemInfoService() override;
 
-    SystemInfoService(const SystemInfoService &) = delete;
-    SystemInfoService &operator=(const SystemInfoService &) = delete;
-
-    int    restartCount()     const { return m_restartCount; }
+    int    bootCount()        const { return m_bootCount; }
+    int    shutdownCount()    const { return m_shutdownCount; }
     QString lastBootTime()     const { return m_lastBootTime; }
     QString lastShutdownTime() const { return m_lastShutdownTime; }
     QString currentBootTime()  const { return m_currentBootTime; }
 
-public Q_SLOTS:
-    /** 记录一次关机事件并写入文件 */
-    void recordShutdown();
-
 private:
-    static constexpr const char *kDataFile = "data/system_info.json";
+    static constexpr const char *kLogFile = "/var/log/power_monitor.log";
 
-    void loadFromFile();
-    void saveToFile();
+    void parseLog();
 
-    int     m_restartCount     = 0;
+    int     m_bootCount     = 0;
+    int     m_shutdownCount = 0;
     QString m_lastBootTime;
     QString m_lastShutdownTime;
     QString m_currentBootTime;
-
-    /** 内存中的事件列表: [{"type":"boot"/"shutdown","time":"2026-06-17 20:01:00"}, ...] */
-    QList<QJsonObject> m_events;
 };

@@ -135,9 +135,10 @@ Popup {
                 color: "#E2E8F0"
             }
 
-            InfoRow { label: "重启次数："; value: String(SystemInfo.restartCount) + " 次" }
+            InfoRow { label: "开机次数："; value: String(SystemInfo.bootCount) + " 次" }
+            //InfoRow { label: "关机次数："; value: String(SystemInfo.shutdownCount) + " 次" }
             InfoRow { label: "上次开机："; value: formatTime(SystemInfo.lastBootTime) }
-            InfoRow { label: "上次关机："; value: formatTime(SystemInfo.lastShutdownTime) }
+           // InfoRow { label: "上次关机："; value: formatTime(SystemInfo.lastShutdownTime) }
             InfoRow { label: "本次开机："; value: formatTime(SystemInfo.currentBootTime) }
 
             // 分隔线
