@@ -60,7 +60,7 @@ Rectangle {
 
         // ===== 中间：大标题 =====
         Text {
-            text: "AI称重系统"
+            text: "智能AI网络地磅"
             font.pixelSize: 28
             font.bold: true
             color: "#FFFFFF"
