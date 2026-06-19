@@ -2,6 +2,7 @@
 #include "data/repositories/WeightRecordRepo.h"
 #include "data/models/WeightRecord.h"
 #include "services/AuthService.h"
+#include "services/UserIngredientService.h"
 #include "core/NetworkUtils.h"
 
 #include <QDateTime>
@@ -11,6 +12,7 @@
 #include <QNetworkReply>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QUuid>
 
 WeightHistoryService::WeightHistoryService(WeightRecordRepo *repo, QObject *parent)
     : QObject(parent)
@@ -187,21 +189,14 @@ void WeightHistoryService::setAuthService(AuthService *authSvc)
 QByteArray WeightHistoryService::buildUploadJson(const WeightRecord &record)
 {
     QJsonObject json;
-    json["id"] = 0;                     // 云端自增，传0
-    json["ingrId"] = 5;
-    json["custId"] = 3;
-    json["devId"] = 54;                  // 设备ID 
-    json["val"] = (int)(record.weight * 1000);
-    json["aiDet"] = !record.categoryName.isEmpty(); // 有AI识别结果则为true
-    json["img"] = record.mainImagePath;
-    json["userId"] = 5;//m_authService ? m_authService->userId() : 0;
-    // json["crdAt"] = QDateTime::fromString(record.recordTime, "yyyy-MM-dd HH:mm:ss")
-    //                    .toString(Qt::ISODate);
-    // json["del"] = false;
-    // json["custNm"] = "";
-    // json["ingrNm"] = record.categoryName;
-    // json["userNm"] = record.operatorName;
-    // json["devNm"] = "";
+    json["ingrId"] = m_ingredientSvc ? m_ingredientSvc->getIngrId(record.categoryName).toInt() : 0;
+    json["custId"] = m_authService ? m_authService->custId() : 0;
+    json["devId"]  = 2;//m_authService ? m_authService->devId() : 0;
+    json["val"]    = static_cast<int>(record.weight * 1000);
+    json["aiDet"]  = !record.categoryName.isEmpty();
+    //json["img"]    = record.mainImagePath;
+    json["userId"] = m_authService ? m_authService->userId() : -1;
+    json["bill"]   = static_cast<int>(qHash(QUuid::createUuid()));
 
     return QJsonDocument(json).toJson(QJsonDocument::Compact);
 }
@@ -234,8 +229,8 @@ void WeightHistoryService::uploadSingleRecord(const WeightRecord &record)
         return;
     }
 
-    QNetworkRequest request = NetworkUtils::createApiRequest(
-        NetworkUtils::Api::WEIGHT_CREATE, token);
+    QNetworkRequest request = NetworkUtils::createUserApiRequest(
+        NetworkUtils::Api::USER_WEIGHT_CREATE, token);
 
     QByteArray payload = buildUploadJson(record);
 
@@ -292,6 +287,11 @@ void WeightHistoryService::syncAllToCloud()
 
 void WeightHistoryService::onCloudReply(QNetworkReply *reply)
 {
+    // 只处理云同步回复（带 localId 的），跳过用户记录创建等请求
+    if (!reply->property("localId").isValid()) {
+        return;
+    }
+
     int localId = reply->property("localId").toInt();
 
     if (reply->error() != QNetworkReply::NoError) {
@@ -351,4 +351,63 @@ void WeightHistoryService::onTokenReadyForUpload()
         WeightRecord r = m_pendingUploadQueue.dequeue();
         uploadSingleRecord(r);
     }
+}
+
+// ============================================================
+// USER 域接口
+// ============================================================
+
+void WeightHistoryService::setUserIngredientService(UserIngredientService *svc)
+{
+    m_ingredientSvc = svc;
+}
+
+void WeightHistoryService::createUserWeightRecord(const QString &ingrCd,
+                                                    double weightKg,
+                                                    bool aiDetected)
+{
+    if (!m_networkMgr || !m_authService || !m_ingredientSvc) {
+        qWarning() << "[WHS] 依赖服务未初始化";
+        Q_EMIT userRecordCreated(false, "依赖服务未初始化");
+        return;
+    }
+
+    QString token = m_authService->token();
+    if (token.isEmpty()) {
+        Q_EMIT userRecordCreated(false, "未登录");
+        return;
+    }
+
+    QJsonObject json;
+    json["ingrId"] = m_ingredientSvc->getIngrId(ingrCd).toInt();
+    json["custId"] = m_authService->custId();
+    json["devId"]  = m_authService->devId();
+    json["val"]    = static_cast<int>(weightKg * 1000);
+    json["aiDet"]  = aiDetected;
+    json["img"]    = QString();
+    json["userId"] = m_authService->userId();
+    json["bill"]   = static_cast<int>(qHash(QUuid::createUuid()));
+
+    QByteArray payload = QJsonDocument(json).toJson(QJsonDocument::Compact);
+
+    auto request = NetworkUtils::createUserApiRequest(
+        NetworkUtils::Api::USER_WEIGHT_CREATE, token);
+
+    qInfo() << "[WHS] 创建用户记录, payload:" << payload;
+
+    QNetworkReply *reply = m_networkMgr->post(request, payload);
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            qCritical() << "[WHS] 用户记录创建失败:" << reply->errorString();
+            Q_EMIT userRecordCreated(false, reply->errorString());
+            return;
+        }
+
+        QByteArray respData = reply->readAll();
+        qInfo() << "[WHS] 用户记录创建成功, response:" << respData;
+        Q_EMIT userRecordCreated(true, "成功");
+    });
 }

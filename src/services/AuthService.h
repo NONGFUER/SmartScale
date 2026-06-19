@@ -18,6 +18,8 @@ class AuthService : public QObject
     Q_PROPERTY(QString role READ role NOTIFY userInfoChanged)
     Q_PROPERTY(bool isOnlineMode READ isOnlineMode NOTIFY modeChanged)
     Q_PROPERTY(QString currentUser READ currentUser NOTIFY currentUserChanged)
+    Q_PROPERTY(int custId READ custId NOTIFY userInfoChanged)
+    Q_PROPERTY(int devId READ devId NOTIFY userInfoChanged)
 
 public:
     explicit AuthService(QObject *parent = nullptr);
@@ -48,6 +50,8 @@ public:
     QString role() const { return m_role; }
     bool isOnlineMode() const { return m_isOnlineMode; }
     QString currentUser() const { return m_currentUser; }
+    int custId() const { return m_custId; }
+    int devId() const { return m_devId; }
 
 Q_SIGNALS:
     void loginSuccess();
@@ -111,6 +115,8 @@ private:
     int m_userId = -1;
     QString m_role;
     bool m_isOnlineMode = false;
+    int m_custId = 0;
+    int m_devId = 0;
 };
 
 #endif // AUTHSERVICE_H

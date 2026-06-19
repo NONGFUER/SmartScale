@@ -18,6 +18,7 @@
 #include "services/AuthService.h"
 #include "services/WeightHistoryService.h"
 #include "services/CategoryService.h"
+#include "services/UserIngredientService.h"   // USER 域食材服务
 #include "services/SystemInfoService.h"       // [测试] 系统调试信息服务
 
 // 数据层
@@ -66,6 +67,7 @@ int main(int argc, char *argv[])
     CameraController *cameraController = new CameraController(&app);
     WeightHistoryService *historyService = new WeightHistoryService(weightRecordRepo, &app);
     CategoryService *categoryService = new CategoryService(&app);
+    UserIngredientService *userIngredientService = new UserIngredientService(&app);
     VoiceSpeaker *voiceSpeaker = new VoiceSpeaker(&app);
 
     // [测试] 系统调试信息服务 — 记录重启次数、开机/关机时间
@@ -82,6 +84,12 @@ int main(int argc, char *argv[])
     // 注入 AuthService 给 CategoryService（云端拉取品类需要 token）
     categoryService->setAuthService(authService);
 
+    // 注入 AuthService 给 UserIngredientService（USER 域食材拉取需要 token/custId）
+    userIngredientService->setAuthService(authService);
+
+    // 注入 UserIngredientService 给 WeightHistoryService（创建用户记录需要 ingrId 映射）
+    historyService->setUserIngredientService(userIngredientService);
+
     // 从 CameraController 中借出 AI 服务指针，准备注册给前端
     VisionAIService *aiService = cameraController->aiService();
 
@@ -94,6 +102,7 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "VisionAI", aiService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "WeightHistoryService", historyService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "CategoryService", categoryService);
+    qmlRegisterSingletonInstance("App.Backend", 1, 0, "UserIngredientService", userIngredientService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "VoiceSpeaker", voiceSpeaker);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "SystemInfo", systemInfoService);  // [测试] 系统信息
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());

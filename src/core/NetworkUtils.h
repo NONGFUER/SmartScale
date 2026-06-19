@@ -13,15 +13,20 @@
 namespace NetworkUtils {
 
     // === 全局常量 ===
-    inline constexpr const char *API_BASE_URL = "https://api.shxgs.cn:5196";
+    inline constexpr const char *API_BASE_URL  = "https://api.shxgs.cn:5196";
+    inline constexpr const char *USER_BASE_URL = "https://user.shxgs.cn:5196";
 
     // === API 路径（集中管理，新增接口在此处添加）===
     namespace Api {
         inline constexpr const char *LOGIN          = "/api/Auth/login";
         inline constexpr const char *REFRESH_TOKEN  = "/api/Auth/refresh-token";
-        inline constexpr const char *WEIGHT_CREATE  = "/api/ems/WeightRecord/create";
+        // inline constexpr const char *WEIGHT_CREATE  = "/api/ems/WeightRecord/create";  // 已废弃，统一走 USER 域
         inline constexpr const char *CATEGORY_LIST  = "/api/ems/Ingr/paged";  // 品类列表
         inline constexpr const char *AI_RECOGNIZE_FILE  = "/api/ems/AiDet/recognize-ingr/file";  // 识别食材
+
+        // === USER 域接口（user.shxgs.cn:5196）===
+        inline constexpr const char *USER_WEIGHT_CREATE = "/api/user/WeightRecord/create";
+        inline constexpr const char *USER_INGR_PAGED     = "/api/user/Ingr/paged";
     }
 
     /**
@@ -54,6 +59,12 @@ namespace NetworkUtils {
     QNetworkRequest createMultipartApiRequest(const char *apiPath,
                                               const QString &token = QString(),
                                               const QString &contentType = "image/jpeg");
+
+    /**
+     * @brief 创建 USER 域 API 请求（使用 USER_BASE_URL: user.shxgs.cn:5196）
+     */
+    QNetworkRequest createUserApiRequest(const char *apiPath,
+                                         const QString &token = QString());
 
 } // namespace NetworkUtils
 

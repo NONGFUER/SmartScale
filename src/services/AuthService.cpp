@@ -56,6 +56,8 @@ void AuthService::logout()
     m_userId = -1;
     m_role.clear();
     m_isOnlineMode = false;
+    m_custId = 0;
+    m_devId = 0;
 
     Q_EMIT currentUserChanged();
     Q_EMIT tokenChanged();
@@ -283,8 +285,16 @@ bool AuthService::parseAuthResponse(const QByteArray &data,
     outToken       = userData.value("accessToken").toString();
     outRefreshToken= userData.value("refreshToken").toString();
     outUserName    = userData.value("userName").toString();
-    outUserId      = userData.value("userId").toInt(-1);
+    QJsonValue uidVal = userData.value("userId");
+    outUserId = uidVal.isString() ? uidVal.toString().toInt() : uidVal.toInt(-1);
     QString expiresAtStr = userData.value("accessTokenExpiration").toString();
+    qDebug() << "[Auth] data keys:" << userData.keys();
+
+    // 解析 USER 域字段
+    QJsonValue custVal = userData.value("custId");
+    m_custId = custVal.isString() ? custVal.toString().toInt() : custVal.toInt(0);
+    m_devId  = userData.value("devId").toInt(0);
+    qDebug() << "[Auth] custId raw value:" << custVal << "type:" << custVal.type() << "parsed:" << m_custId;
 
     // UTC → 本地时间
     outExpiresAt = QDateTime::fromString(expiresAtStr, Qt::ISODate);

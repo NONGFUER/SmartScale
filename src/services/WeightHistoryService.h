@@ -8,6 +8,7 @@
 // 前向声明
 class WeightRecordRepo;
 class AuthService;
+class UserIngredientService;
 class QNetworkAccessManager;
 class QNetworkReply;
 
@@ -57,12 +58,22 @@ public:
     /** @brief 同步所有未同步记录到云端 */
     Q_INVOKABLE void syncAllToCloud();
 
+    // === USER 域接口 ===
+    /** @brief 注入 UserIngredientService（用于获取 ingrId） */
+    Q_INVOKABLE void setUserIngredientService(UserIngredientService *svc);
+
+    /** @brief 创建用户域称重记录 (POST /api/user/WeightRecord/create) */
+    Q_INVOKABLE void createUserWeightRecord(const QString &ingrCd,
+                                             double weightKg,
+                                             bool aiDetected);
+
 Q_SIGNALS:
     void historyChanged();
     void statsChanged();
     void cloudSyncSuccess(int localId);
     void cloudSyncFailed(int localId, const QString &errorMsg);
     void cloudSyncProgress(int done, int total);
+    void userRecordCreated(bool success, const QString &msg);
 
 private Q_SLOTS:
     void onCloudReply(QNetworkReply *reply);
@@ -83,6 +94,7 @@ private:
 
     // 云同步相关
     AuthService *m_authService = nullptr;
+    UserIngredientService *m_ingredientSvc = nullptr;
     QNetworkAccessManager *m_networkMgr = nullptr;
     int m_syncTotal = 0;      // 当前批次总待同步数
     int m_syncDone = 0;       // 当前批次已完成数

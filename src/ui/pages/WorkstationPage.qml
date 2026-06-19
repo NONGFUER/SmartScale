@@ -708,7 +708,10 @@ Item {
                                         let currentTime = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm")
                                         let chineseLabel = Translator.translate(root.currentPrediction)
                                         console.log(">> 手动提交称重记录:", chineseLabel, currentWeight.toFixed(2) + "kg", "时间:", currentTime, "图片路径:", root.currentImagePath)
+
+                                        // 本地保存 + 云端上传（addRecord 内部自动调用 uploadSingleRecord）
                                         WeightHistoryService.addRecord(currentWeight, chineseLabel, BackendAuth.currentUser, root.currentImagePath, "")
+
                                         root.currentPrediction = PState.IDLE
                                         root.currentImagePath = ""
                                     } else {

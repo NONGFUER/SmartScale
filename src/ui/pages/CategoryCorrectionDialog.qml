@@ -44,6 +44,10 @@ Dialog {
     property int activeCategoryIndex: 0
 
     function getActiveItems() {
+        if (categorySelectMode) {
+            // 手动选择模式：使用 UserIngredientService 扁平列表
+            return UserIngredientService.items
+        }
         var cats = CategoryService.categories
         if (activeCategoryIndex >= 0 && activeCategoryIndex < cats.length) {
             return cats[activeCategoryIndex].items || []
@@ -55,7 +59,7 @@ Dialog {
         var items = getActiveItems()
         for (var i = 0; i < items.length; i++) {
             if (items[i].en === selectedLabel)
-                return items[i].cn
+                return items[i].cn || items[i].cn
         }
         return selectedLabel
     }
@@ -134,13 +138,14 @@ Dialog {
             }
         }
 
-        // ===== 分类标签行 =====
+        // ===== 分类标签行（手动选择模式下隐藏）=====
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: 16
             Layout.leftMargin: 22
             Layout.bottomMargin: 10
             spacing: 26
+            visible: !dialogRoot.categorySelectMode
 
             Repeater {
                 model: CategoryService.categories
@@ -302,8 +307,13 @@ Dialog {
         activeCategoryIndex = 0
         catSearchInput.text = ""
 
-        // 触发云端数据刷新
-        CategoryService.fetchCategories()
+        if (categorySelectMode) {
+            // 手动选择模式：从 USER 域拉取食材列表
+            UserIngredientService.fetchIngredients()
+        } else {
+            // AI 纠错模式：拉取原有品类
+            CategoryService.fetchCategories()
+        }
     }
 
     onAccepted: {

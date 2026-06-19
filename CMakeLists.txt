@@ -65,6 +65,7 @@ qt_add_qml_module(appSmartScale
         SOURCES src/services/AuthService.h src/services/AuthService.cpp
         SOURCES src/services/WeightHistoryService.h src/services/WeightHistoryService.cpp
         SOURCES src/services/CategoryService.h src/services/CategoryService.cpp
+        SOURCES src/services/UserIngredientService.h src/services/UserIngredientService.cpp
         SOURCES src/services/SystemInfoService.h src/services/SystemInfoService.cpp       # [测试] 系统信息服务
 
         # --- 数据层: Models ---

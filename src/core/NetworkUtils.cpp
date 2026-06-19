@@ -81,3 +81,9 @@ QNetworkRequest NetworkUtils::createMultipartApiRequest(const char *apiPath,
 
     return request;
 }
+
+QNetworkRequest NetworkUtils::createUserApiRequest(const char *apiPath,
+                                                    const QString &token)
+{
+    return createApiRequest(USER_BASE_URL, apiPath, token);
+}
