@@ -50,140 +50,180 @@ Item {
                         border.width: 1
                         clip: true
 
-                        ColumnLayout {
+                        RowLayout {
                             anchors.fill: parent
                             anchors.margins: 16
-                            spacing: 10
+                            spacing: 16
 
-                            // 标题行：历史记录 + 更多>
-                            RowLayout {
-                                Layout.fillWidth: true
-
-                                Row {
-                                    spacing: 6
-                                    Text {
-                                        text: "\uD83D\uDCCB"
-                                        font.pixelSize: 18
-                                    }
-                                    Text {
-                                        text: "历史记录"
-                                        font.pixelSize: 18
-                                        font.bold: true
-                                        color: "#1E293B"
-                                    }
-                                }
-
-                                Item { Layout.fillWidth: true }
-
-                                Text {
-                                    text: "更多 >"
-                                    font.pixelSize: 14
-                                    color: "#3B82F6"
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: console.log("查看更多历史记录...")
-                                    }
-                                }
-                            }
-
-                            // 分隔线
-                            Rectangle {
-                                Layout.fillWidth: true
-                                height: 1
-                                color: "#E2E8F0"
-                            }
-
-                            // 历史记录列表（ListView 单列）
-                            ScrollView {
-                                Layout.fillWidth: true
+                            // ---- 左侧：历史记录列表 ----
+                            ColumnLayout {
                                 Layout.fillHeight: true
-                                clip: true
-                                ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 35
+                                spacing: 10
 
-                                ListView {
-                                    id: historyListView
-                                    width: parent.width
-                                    model: WeightHistoryService ? WeightHistoryService.historyEntries : []
-                                    spacing: 8
+                                // 标题行：历史记录 + 更多>
+                                RowLayout {
+                                    Layout.fillWidth: true
 
-                                    delegate: Rectangle {
-                                        width: historyListView.width
-                                        height: 48
-                                        radius: 8
-                                        color: index % 2 === 0 ? "#FFFFFF" : "#F1F5F9"
-                                        border.color: "#E2E8F0"
-                                        border.width: 1
-
-                                        RowLayout {
-                                            anchors.fill: parent
-                                            anchors.leftMargin: 12
-                                            anchors.rightMargin: 12
-                                            spacing: 12
-
-                                            Text {
-                                                text: modelData.categoryName || "未识别"
-                                                font.pixelSize: 24
-                                                font.bold: true
-                                                color: "#334155"
-                                                elide: Text.ElideRight
-                                                Layout.fillWidth: true
-                                            }
-
-                                            Text {
-                                                text: modelData.weight ? modelData.weight.toFixed(2) + "kg" : "0.00kg"
-                                                font.pixelSize: 24
-                                                color: "#16A34A"
-                                                font.bold: true
-                                            }
-
-                                            Text {
-                                                text: (modelData.recordTime || "").substring(5, 16)
-                                                font.pixelSize: 13
-                                                color: "#94A3B8"
-                                            }
+                                    Row {
+                                        spacing: 6
+                                        Text {
+                                            text: "历史记录"
+                                            font.pixelSize: 18
+                                            font.bold: true
+                                            color: "#1E293B"
                                         }
+                                    }
 
-                                        // 点击打开详情弹窗，显示水印图片
+                                    Item { Layout.fillWidth: true }
+
+                                    Text {
+                                        text: "更多 >"
+                                        font.pixelSize: 14
+                                        color: "#3B82F6"
                                         MouseArea {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
-                                            onClicked: {
-                                                root.currentDetailRecord = modelData
-                                                detailDialog.open()
+                                            onClicked: console.log("查看更多历史记录...")
+                                        }
+                                    }
+                                }
+
+                                // 分隔线
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    height: 1
+                                    color: "#E2E8F0"
+                                }
+
+                                // 历史记录列表（ListView 单列）
+                                ScrollView {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    clip: true
+                                    ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                                    ListView {
+                                        id: historyListView
+                                        width: parent.width
+                                        model: WeightHistoryService ? WeightHistoryService.historyEntries : []
+                                        spacing: 8
+
+                                        delegate: Rectangle {
+                                            width: historyListView.width
+                                            height: 48
+                                            radius: 8
+                                            color: index % 2 === 0 ? "#FFFFFF" : "#F1F5F9"
+                                            border.color: "#E2E8F0"
+                                            border.width: 1
+
+                                            RowLayout {
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 12
+                                                anchors.rightMargin: 12
+                                                spacing: 12
+
+                                                Text {
+                                                    text: modelData.categoryName || "未识别"
+                                                    font.pixelSize: 24
+                                                    font.bold: true
+                                                    color: "#334155"
+                                                    elide: Text.ElideRight
+                                                    Layout.fillWidth: true
+                                                }
+
+                                                Text {
+                                                    text: modelData.weight ? modelData.weight.toFixed(2) + "kg" : "0.00kg"
+                                                    font.pixelSize: 24
+                                                    color: "#16A34A"
+                                                    font.bold: true
+                                                }
+
+                                                Text {
+                                                    text: (modelData.recordTime || "").substring(5, 16)
+                                                    font.pixelSize: 13
+                                                    color: "#94A3B8"
+                                                }
+                                            }
+
+                                            // 点击打开详情弹窗，显示水印图片
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                cursorShape: Qt.PointingHandCursor
+                                                onClicked: {
+                                                    root.currentDetailRecord = modelData
+                                                    detailDialog.open()
+                                                }
+                                            }
+                                        }
+
+                                        // 空状态提示
+                                        Rectangle {
+                                            anchors.centerIn: parent
+                                            width: parent.width * 0.9
+                                            height: 120
+                                            visible: historyListView.count === 0
+                                            color: "transparent"
+
+                                            Column {
+                                                anchors.centerIn: parent
+                                                spacing: 10
+
+                                                Text {
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                    text: "暂无称重记录"
+                                                    font.pixelSize: 18
+                                                    font.bold: true
+                                                    color: "#94A3B8"
+                                                }
+
+                                                Text {
+                                                    anchors.horizontalCenter: parent.horizontalCenter
+                                                    text: "开始称重后，记录将显示在这里"
+                                                    font.pixelSize: 13
+                                                    color: "#CBD5E1"
+                                                }
                                             }
                                         }
                                     }
+                                }
+                            }
 
-                                    // 空状态提示
-                                    Rectangle {
+                            // ---- 垂直分隔线 ----
+                            Rectangle {
+                                Layout.fillHeight: true
+                                width: 1
+                                color: "#E2E8F0"
+                            }
+
+                            // ---- 右侧：水印图片预览 ----
+                            ColumnLayout {
+                                Layout.fillHeight: true
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 65
+                                spacing: 10
+
+                                Text {
+                                    text: "水印预览"
+                                    font.pixelSize: 18
+                                    font.bold: true
+                                    color: "#1E293B"
+                                }
+
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    color: "#E2E8F0"
+                                    radius: 8
+
+                                    Text {
                                         anchors.centerIn: parent
-                                        width: parent.width * 0.9
-                                        height: 120
-                                        visible: historyListView.count === 0
-                                        color: "transparent"
-
-                                        Column {
-                                            anchors.centerIn: parent
-                                            spacing: 10
-
-                                            Text {
-                                                anchors.horizontalCenter: parent.horizontalCenter
-                                                text: "暂无称重记录"
-                                                font.pixelSize: 18
-                                                font.bold: true
-                                                color: "#94A3B8"
-                                            }
-
-                                            Text {
-                                                anchors.horizontalCenter: parent.horizontalCenter
-                                                text: "开始称重后，记录将显示在这里"
-                                                font.pixelSize: 13
-                                                color: "#CBD5E1"
-                                            }
-                                        }
+                                        text: "选择记录查看水印"
+                                        font.pixelSize: 14
+                                        color: "#94A3B8"
                                     }
                                 }
                             }
