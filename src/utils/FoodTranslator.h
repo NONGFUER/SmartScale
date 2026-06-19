@@ -4,11 +4,12 @@
 #include <QObject>
 #include <QString>
 #include <QHash>
-#include <QVariantMap>
+#include <QVariantList>
 
 class FoodTranslator : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(bool ready READ isReady NOTIFY readyChanged)
 public:
     explicit FoodTranslator(QObject *parent = nullptr);
 
@@ -18,12 +19,21 @@ public:
     // 在 C++ 或 QML 中调用翻译函数
     Q_INVOKABLE QString translate(const QString &englishName) const;
 
-    // 如果以后想从外部 JSON 加载字典，可以调这个方法
-    bool loadDictionary(const QString &filePath);
+    // 翻译器是否已加载有效数据（登录后从 API 获取）
+    bool isReady() const { return m_ready; }
+
+    /** @brief 从 UserIngredientService 的 API 数据更新字典（ingrCd → ingrNm）并写入本地缓存 */
+    void updateFromApi(const QVariantList &items);
+
+Q_SIGNALS:
+    void readyChanged();
 
 private:
-    void initDefaultDictionary();
+    void loadFromCache();                     // 启动时从本地 JSON 加载
+    void saveToCache();                       // API 返回后写入本地 JSON
+
     QHash<QString, QString> m_dict;
+    bool m_ready = false;
 };
 
 #endif // FOODTRANSLATOR_H

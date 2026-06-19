@@ -696,6 +696,25 @@ Item {
                                     }
                             }
 
+                            // 识别按钮（手动触发 AI 拍照识别）
+                            Loader {
+                                sourceComponent: secondaryButton
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                onLoaded: {
+                                    item.text = "识别"; 
+                                    item.clicked.connect(function() {
+                                        if (WeightManager.netWeight > 0.01) {
+                                            console.log(">> 手动触发AI识别:", WeightManager.netWeight.toFixed(2) + "kg")
+                                            root.currentPrediction = PState.BUSY
+                                            CameraController.captureVegetable(WeightManager.netWeight, "")
+                                        } else {
+                                            console.warn("重量不足，无法识别")
+                                        }
+                                    })
+                                }
+                            }
+
                             // 保存按钮（蓝色渐变主按钮）
                             Button {
                                 text: "保存"
@@ -713,10 +732,8 @@ Item {
                                         root.pendingManualSave = true
                                         root.pendingSaveWeight = currentWeight
                                         root.pendingSaveLabel = chineseLabel
-                                        let savedPrediction = root.currentPrediction  // 保存原标签再改写 BUSY
-                                        root.currentPrediction = PState.BUSY
-                                        // 传入当前已知品类标签，水印立即绘制，不再等待 AI
-                                        CameraController.captureVegetable(currentWeight, savedPrediction)
+                                        // 传入当前已知品类标签，水印立即绘制，保存/上传独立执行
+                                        CameraController.captureVegetable(currentWeight, root.currentPrediction)
                                     } else {
                                         console.warn("重量不足，无法提交记录")
                                     }
@@ -756,14 +773,7 @@ Item {
     // ==========================================
     // 信号拦截区：处理后端事件
     // ==========================================
-    Connections {
-       target: WeightManager
-       function onStableTriggered() {
-           console.log("重量锁定！拍摄证据照片...")
-           root.currentPrediction = PState.BUSY
-           CameraController.captureVegetable(WeightManager.netWeight);  // 自动模式无标签
-       }
-    }
+    // 自动称重触发已移除，AI 识别改为手动按钮触发
 
     Connections {
         target: CameraController

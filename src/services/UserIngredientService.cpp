@@ -1,6 +1,7 @@
 #include "UserIngredientService.h"
 #include "AuthService.h"
 #include "core/NetworkUtils.h"
+#include "utils/FoodTranslator.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -125,6 +126,10 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
     Q_EMIT itemsChanged();
 
     qInfo() << "[UserIngr] 成功加载" << m_items.size() << "个食材";
+
+    // 更新翻译器缓存（ingrCd → ingrNm），并写入本地 JSON 文件
+    FoodTranslator::instance()->updateFromApi(m_items);
+
     Q_EMIT fetchSuccess();
 }
 
