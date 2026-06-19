@@ -33,6 +33,16 @@ ApplicationWindow {
         loginDialog.open()
     }
 
+    // ===== 全屏背景图 =====
+    Image {
+        id: globalBg
+        anchors.fill: parent
+        source: "qrc:/resources/img/workstation_bg.png"
+        fillMode: Image.PreserveAspectCrop
+        z: -1
+        onStatusChanged: console.log("[Main] bgImage status:", status, "source:", source)
+    }
+
     // 页面栈路由器
     ColumnLayout {
         id:mainLayout

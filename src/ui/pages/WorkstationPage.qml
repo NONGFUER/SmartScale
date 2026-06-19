@@ -19,19 +19,11 @@ Item {
     // 推理耗时相关属性
     property string lastInferenceTime: PState.NONE + " ms"
 
-    // ===== 外层：蓝色渐变底色 =====
-    Rectangle {
-        anchors.fill: parent
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: "#2B7DE9" }
-            GradientStop { position: 1.0; color: "#5BA8F5" }
-        }
-
-        // ===== 内层：白色圆角主卡片 =====
+        // ===== 白色圆角主卡片 =====
         Rectangle {
             id: mainCard
             anchors.fill: parent
-            anchors.margins: 16
+            anchors.margins: 24
             radius: 20
             color: "#FFFFFF"
 
@@ -488,43 +480,6 @@ Item {
                             width: parent.width
                             spacing: 12
 
-                            // "称重克数" 独立标签 — 在卡片外部上方
-                            Text {
-                                text: "称重克数"
-                                font.pixelSize:24
-                                color: "#64748B"
-                            }
-
-                            // 称重卡片 — 蓝色圆角色块，白色大字（只放数字），固定高度不撑满
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 240
-                                Layout.maximumHeight: 280
-                                radius: 16
-                                color: "#3B82F6"
-
-                                Row {
-                                    anchors.centerIn: parent
-                                    spacing: 6
-
-                                    Text {
-                                        text: WeightManager.netWeight.toFixed(2)
-                                        font.pixelSize: 192
-                                        font.bold: true
-                                        color: "#FFFFFF"
-                                        font.family: "Monospace"
-                                    }
-
-                                    Text {
-                                        text: "/kg"
-                                        font.pixelSize: 28
-                                        color: "#DBEAFE"
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
-                                }
-                            }
-
-                            // "物品名称" 独立标签 — 在名称卡片上方
                             Row {
                                 spacing: 8
                                 Text {
@@ -600,47 +555,47 @@ Item {
                                                ? "#1E40AF" : "#94A3B8"
                                     }
 
-                                    // 右侧：识别按钮（手动演示用）
-                                    // Rectangle {
-                                    //     width: 44; height: 44; radius: 22
-                                    //     color: captureMouseArea.containsMouse ? "#60A5FA" : "#3B82F6"
-                                    //     border.color: "#FFFFFF"
-                                    //     border.width: 2
-
-                                    //     Text {
-                                    //         anchors.centerIn: parent
-                                    //         text: "识别"
-                                    //         font.pixelSize: 18
-                                    //         color: "#FFFFFF"
-                                    //     }
-
-                                    //     MouseArea {
-                                    //         id: captureMouseArea
-                                    //         anchors.fill: parent
-                                    //         hoverEnabled: true
-                                    //         cursorShape: Qt.PointingHandCursor
-                                    //         onClicked: {
-                                    //             console.log("手动触发拍照...")
-                                    //             root.currentPrediction = PState.BUSY
-                                    //             CameraController.captureVegetable(WeightManager.netWeight);
-                                    //             captureBtnAnim.start();
-                                    //         }
-                                    //     }
-
-                                    //     NumberAnimation {
-                                    //         id: captureBtnAnim
-                                    //         target: parent
-                                    //         property: "scale"
-                                    //         from: 1.0
-                                    //         to: 0.9
-                                    //         duration: 100
-                                    //         loops: 1
-                                    //         easing.type: Easing.InOutQuad
-                                    //         onStopped: parent.scale = 1.0
-                                    //     }
-                                    // }                                
+                                                                 
                                     }
                             }
+                            // "称重克数" 独立标签 — 在卡片外部上方
+                            Text {
+                                text: "称重克数"
+                                font.pixelSize:24
+                                color: "#64748B"
+                            }
+
+                            // 称重卡片 — 蓝色圆角色块，白色大字（只放数字），固定高度不撑满
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 240
+                                Layout.maximumHeight: 280
+                                radius: 16
+                                color: "#3B82F6"
+
+                                Row {
+                                    anchors.centerIn: parent
+                                    spacing: 6
+
+                                    Text {
+                                        text: WeightManager.netWeight.toFixed(2)
+                                        font.pixelSize: 192
+                                        font.bold: true
+                                        color: "#FFFFFF"
+                                        font.family: "Monospace"
+                                    }
+
+                                    Text {
+                                        text: "/kg"
+                                        font.pixelSize: 28
+                                        color: "#DBEAFE"
+                                        anchors.verticalCenter: parent.verticalCenter
+                                    }
+                                }
+                            }
+
+                            // "物品名称" 独立标签 — 在名称卡片上方
+                            
                         }
                     }
 
@@ -740,7 +695,6 @@ Item {
                     }
                 }
             }
-        }
 
     // ===== 白屏闪光动画效果 =====
     Rectangle {

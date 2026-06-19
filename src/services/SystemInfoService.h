@@ -20,6 +20,7 @@ class SystemInfoService : public QObject
     Q_PROPERTY(QString lastBootTime     READ lastBootTime     CONSTANT)
     Q_PROPERTY(QString lastShutdownTime READ lastShutdownTime CONSTANT)
     Q_PROPERTY(QString currentBootTime  READ currentBootTime  CONSTANT)
+    Q_PROPERTY(QString appVersion       READ appVersion       CONSTANT)
 
 public:
     explicit SystemInfoService(QObject *parent = nullptr);
@@ -29,6 +30,7 @@ public:
     QString lastBootTime()     const { return m_lastBootTime; }
     QString lastShutdownTime() const { return m_lastShutdownTime; }
     QString currentBootTime()  const { return m_currentBootTime; }
+    QString appVersion()       const { return m_appVersion; }
 
 private:
     static constexpr const char *kLogFile = "/var/log/power_monitor.log";
@@ -40,4 +42,5 @@ private:
     QString m_lastBootTime;
     QString m_lastShutdownTime;
     QString m_currentBootTime;
+    QString m_appVersion;
 };

@@ -5,18 +5,13 @@ import App.Backend 1.0
 
 Rectangle {
     id: root
-    height: 70
+    height: 80
+    color: "transparent"
 
     // 点击设置图标发出的信号
     signal settingsRequested()
     // 点击调试按钮发出的信号（测试阶段）
     signal debugRequested()
-
-    // 蓝色渐变背景（左深右浅）
-    gradient: Gradient {
-        GradientStop { position: 0.0; color: "#1A5CB5" }
-        GradientStop { position: 1.0; color: "#4A90D9" }
-    }
 
     RowLayout {
         anchors.fill: parent
@@ -24,32 +19,14 @@ Rectangle {
         anchors.rightMargin: 24
         spacing: 0
 
-        // ===== 左侧：公司 logo + 名称 =====
+        // ===== 左侧：软件版本号 =====
         RowLayout {
-            spacing: 10
+            spacing: 20
             Layout.alignment: Qt.AlignVCenter
-
-            // Logo 圆形图标
-            Rectangle {
-                width: 36
-                height: 36
-                radius: 18
-                color: "#FFFFFF"
-                opacity: 0.95
-                Layout.alignment: Qt.AlignVCenter
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "A"
-                    font.pixelSize: 22
-                    font.bold: true
-                    color: "#1A5CB5"
-                }
-            }
-
+            Layout.preferredHeight: root.height
             Text {
-                text: "小管事机器人集团公司"
-                font.pixelSize: 18
+                text: "软件版本: " + SystemInfo.appVersion
+                font.pixelSize: 24
                 font.bold: true
                 color: "#FFFFFF"
                 Layout.alignment: Qt.AlignVCenter
@@ -59,12 +36,22 @@ Rectangle {
         Item { Layout.fillWidth: true }
 
         // ===== 中间：大标题 =====
-        Text {
-            text: "智能AI网络地磅"
-            font.pixelSize: 28
-            font.bold: true
-            color: "#FFFFFF"
+        Item {
+            Layout.preferredHeight: root.height
             Layout.alignment: Qt.AlignVCenter
+            // 外边距
+            Layout.topMargin: 20
+            Layout.leftMargin: 40
+            Layout.rightMargin: 40
+
+            Text {
+                anchors.centerIn: parent   // 相当于 padding: 均匀分布
+                text: "智 能 AI 网 络 地 磅"
+                font.family: "AlibabaPuHuiTi"
+                font.pixelSize: 36
+                font.bold: true
+                color: "#FFFFFF"
+            }
         }
 
         Item { Layout.fillWidth: true }
@@ -73,7 +60,7 @@ Rectangle {
         RowLayout {
             spacing: 16
             Layout.alignment: Qt.AlignVCenter
-
+            Layout.preferredHeight: root.height
             // 日期时间显示
             ColumnLayout {
                     spacing: 2
@@ -82,7 +69,7 @@ Rectangle {
                     Text {
                         id: dateText
                         text: ""
-                        font.pixelSize: 13
+                        font.pixelSize: 18
                         color: "#E8F0FE"
                         Layout.alignment: Qt.AlignHCenter
                     }
@@ -90,7 +77,7 @@ Rectangle {
                     Text {
                         id: timeText
                         text: "00:00:00"
-                        font.pixelSize: 18
+                        font.pixelSize: 24
                         font.family: "Monospace"
                         font.bold: true
                         color: "#FFFFFF"
@@ -124,33 +111,11 @@ Rectangle {
                     }
                 }
 
-                // WiFi 图标
-                Item {
-                    width: 18; height: 16
-                    Layout.alignment: Qt.AlignVCenter
-
-                    Canvas {
-                        anchors.fill: parent
-                        onPaint: {
-                            var ctx = getContext("2d")
-                            ctx.strokeStyle = "#FFFFFF"
-                            ctx.lineWidth = 1.5
-                            ctx.lineCap = "round"
-                            ctx.lineJoin = "round"
-                            var cx = width / 2, by = height - 1.5
-
-                            // 三层弧线 + 底部圆点
-                            ctx.beginPath(); ctx.arc(cx, by - 2, 2, Math.PI, 0); ctx.stroke()
-                            ctx.beginPath(); ctx.arc(cx, by - 6, 5, 7 * Math.PI / 6, 11 * Math.PI / 6); ctx.stroke()
-                            ctx.beginPath(); ctx.arc(cx, by - 9, 8, 13 * Math.PI / 12, 23 * Math.PI / 12); ctx.stroke()
-                        }
-                        Component.onCompleted: requestPaint()
-                    }
-                }
+            
 
                 // 调试按钮（测试阶段，放在设置齿轮左侧）
                 Item {
-                    width: 30; height: 30
+                    width: 40; height: 40
                     Layout.alignment: Qt.AlignVCenter
 
                     Rectangle {
@@ -203,7 +168,7 @@ Rectangle {
 
                 // 设置齿轮图标
                 Item {
-                    width: 30; height: 30
+                    width: 40; height: 40
                     Layout.alignment: Qt.AlignVCenter
 
                     // 悬停背景

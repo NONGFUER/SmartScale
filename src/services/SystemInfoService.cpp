@@ -1,4 +1,5 @@
 #include "SystemInfoService.h"
+#include "version.h"
 
 #include <QFile>
 #include <QTextStream>
@@ -11,6 +12,7 @@
 SystemInfoService::SystemInfoService(QObject *parent)
     : QObject(parent)
 {
+    m_appVersion = QString("v%1_%2").arg(APP_VERSION_FULL).arg(APP_BUILD_DATE);
     parseLog();
 
     qDebug() << "[SystemInfo] 日志解析完成:"

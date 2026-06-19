@@ -1,10 +1,24 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(SmartScale VERSION 0.1 LANGUAGES CXX)
+project(SmartScale VERSION 2.13.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(QT_QML_GENERATE_QMLLS_INI ON)
+
+# ============================================================
+# 版本号配置 (手动模式)
+#   编译时: cmake .. -DBUILD_NUMBER=10
+# ============================================================
+set(BUILD_NUMBER "9" CACHE STRING "Build number (手动递增)")
+string(TIMESTAMP APP_BUILD_DATE "%Y%m%d")
+set(APP_VERSION_FULL "${PROJECT_VERSION}.${BUILD_NUMBER}")
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/version.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/version.h"
+)
+message(STATUS "应用版本: ${APP_VERSION_FULL}_${APP_BUILD_DATE}")
 
 # Qt 组件
 find_package(Qt6 REQUIRED COMPONENTS Quick VirtualKeyboard Multimedia Sql Network SerialPort)
@@ -65,6 +79,13 @@ qt_add_qml_module(appSmartScale
         SOURCES src/data/repositories/WeightRecordRepo.h src/data/repositories/WeightRecordRepo.cpp
         SOURCES src/data/repositories/UserRepo.h src/data/repositories/UserRepo.cpp
         SOURCES src/data/repositories/HardwareConfigRepo.h src/data/repositories/HardwareConfigRepo.cpp
+
+)
+
+qt_add_resources(appSmartScale "app_assets"
+    PREFIX "/"
+    FILES
+        resources/img/workstation_bg.png
 )
 
 set(ONNXRUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/onnxruntime-linux-aarch64-1.24.4")
@@ -73,6 +94,7 @@ target_include_directories(appSmartScale
     PRIVATE
     "${ONNXRUNTIME_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
 
 set_target_properties(appSmartScale PROPERTIES
