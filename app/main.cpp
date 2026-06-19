@@ -106,9 +106,8 @@ int main(int argc, char *argv[])
         []() { QCoreApplication::exit(-1); },
         Qt::QueuedConnection);
         
-    // 确保程序退出时安全关闭数据库 & 记录关机时间
-    QObject::connect(&app, &QCoreApplication::aboutToQuit, [&dbMgr, systemInfoService]() {
-        systemInfoService->recordShutdown();
+    // 确保程序退出时安全关闭数据库
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, [&dbMgr]() {
         dbMgr.close();
     });
     engine.loadFromModule("SmartScale", "Main");
