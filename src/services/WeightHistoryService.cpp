@@ -13,6 +13,12 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QUuid>
+#include <QHttpMultiPart>
+#include <QHttpPart>
+#include <QFile>
+#include <QFileInfo>
+#include <QUrlQuery>
+#include <QSslSocket>
 
 WeightHistoryService::WeightHistoryService(WeightRecordRepo *repo, QObject *parent)
     : QObject(parent)
@@ -319,13 +325,33 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
     qDebug() << "[WHS] 上传成功 id=" << localId
              << "response:" << qUtf8Printable(doc.toJson(QJsonDocument::Indented));
 
-    // 更新数据库：标记为已同步
+    // 更新数据库：标记为已同步，保存云端记录 ID
     if (m_repo) {
         WeightRecord model = m_repo->findById(localId);
         if (model.id > 0) {
             model.synced = true;
+
+            // 解析服务器返回的 recordId 和 custId（用于后续图片上传）
+            QJsonValue dataVal = doc.object().value("data");
+            int remoteId = dataVal.isObject()
+                ? dataVal.toObject().value("recoId").toInt()
+                : dataVal.toInt();
+            QJsonValue cidVal = dataVal.toObject().value("custId");
+            int custId = cidVal.isString() ? cidVal.toString().toInt() : cidVal.toInt();
+
+            if (remoteId > 0) {
+                model.cloudId = QString::number(remoteId);
+            }
+
             m_repo->update(model);
-            qDebug() << "[WHS] 记录 id=" << localId << "已标记为已同步";
+            qDebug() << "[WHS] 记录 id=" << localId << "已标记为已同步, remoteId=" << remoteId << "custId=" << custId;
+
+            // 如果有图片，上传到服务器
+            if (remoteId > 0 && custId > 0
+                && !model.mainImagePath.isEmpty()
+                && QFileInfo::exists(model.mainImagePath)) {
+                updateRecordImage(custId, remoteId, model.mainImagePath);
+            }
         }
     }
 
@@ -409,5 +435,63 @@ void WeightHistoryService::createUserWeightRecord(const QString &ingrCd,
         QByteArray respData = reply->readAll();
         qInfo() << "[WHS] 用户记录创建成功, response:" << respData;
         Q_EMIT userRecordCreated(true, "成功");
+    });
+}
+
+// ============================================================
+// 图片上传 (multipart/form-data)
+// POST /api/user/WeightRecord/update-img?userId=X&id=Y  + 图片二进制
+// ============================================================
+
+void WeightHistoryService::updateRecordImage(int custId, int recordId, const QString &imagePath)
+{
+    if (!m_networkMgr || !m_authService) return;
+
+    QString token = m_authService->token();
+    if (token.isEmpty()) return;
+
+    QUrl url(QString("%1%2").arg(NetworkUtils::USER_BASE_URL,
+                                  NetworkUtils::Api::USER_WEIGHT_UPDATE_IMG));
+    QUrlQuery query;
+    query.addQueryItem("CustId", QString::number(custId));
+    query.addQueryItem("RecoId", QString::number(recordId));
+    url.setQuery(query);
+
+    QNetworkRequest request(url);
+    request.setRawHeader("Authorization", QByteArray("Bearer ") + token.toUtf8());
+    QSslConfiguration sslConf = request.sslConfiguration();
+    sslConf.setPeerVerifyMode(QSslSocket::VerifyNone);
+    request.setSslConfiguration(sslConf);
+    request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+
+    QFile *file = new QFile(imagePath);
+    if (!file->open(QIODevice::ReadOnly)) {
+        qWarning() << "[WHS] 无法打开图片:" << imagePath;
+        delete file;
+        return;
+    }
+
+    QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+    QHttpPart imagePart;
+    imagePart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                        QVariant("form-data; name=\"File\"; filename=\"record.jpg\""));
+    imagePart.setHeader(QNetworkRequest::ContentTypeHeader, QVariant("image/jpeg"));
+    imagePart.setBodyDevice(file);
+    file->setParent(multiPart);
+    multiPart->append(imagePart);
+
+    QNetworkReply *reply = m_networkMgr->post(request, multiPart);
+    multiPart->setParent(reply);
+
+    qDebug() << "[WHS] 上传图片 recordId=" << recordId
+             << "path=" << imagePath << "size=" << file->size();
+
+    connect(reply, &QNetworkReply::finished, this, [reply]() {
+        if (reply->error() != QNetworkReply::NoError) {
+            qWarning() << "[WHS] 图片上传失败:" << reply->errorString();
+        } else {
+            qDebug() << "[WHS] 图片上传成功";
+        }
+        reply->deleteLater();
     });
 }

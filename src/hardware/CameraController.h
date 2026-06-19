@@ -32,7 +32,8 @@ public:
 
     Q_INVOKABLE void setMainVideoSink(QVideoSink *sink);
     Q_INVOKABLE void setSubVideoSink(QVideoSink *sink);
-    Q_INVOKABLE void captureVegetable(double currentWeight);
+    Q_INVOKABLE void captureVegetable(double currentWeight, const QString &watermarkLabel = QString());
+    Q_INVOKABLE void recognizeLastCapture();                  // 独立 AI 入口，不阻塞拍照/保存
 
     VisionAIService* aiService() const { return m_aiService; }
     void setVoiceSpeaker(VoiceSpeaker *speaker) { m_voiceSpeaker = speaker; }
@@ -64,7 +65,7 @@ private:
     void emitAiResult(const QString &label, const QString &path, qint64 ms);  // 发射结果信号
     void speakPredictedLabel(const QString &label);         // 语音播报
     // === 公共工具方法（消除构造函数/重启函数重复代码）===
-    QCameraDevice findUsbCamera();                          // 扫描USB摄像头设备
+    QCameraDevice findUsbCamera();                          // 获取默认摄像头设备
     void setupCameraFormat(QCameraDevice &device);          // 设置最佳分辨率格式
 
     QPointer<QVideoSink> m_mainSink;
@@ -112,14 +113,10 @@ private:
     void drawWatermarkOverlay(QPainter &painter, int imgW, int imgH,
                               const QString &label, const QImage &empPhoto = QImage());
 
-    // 异步 AI → 水印管线: 缓存待完成的拍照数据，AI 返回后统一绘制水印并保存
-    struct PendingCapture {
-        QImage watermarkedImg;
-        QImage empPhoto;
-    };
-    QMap<QString, PendingCapture> m_pendingCaptures;
-    mutable QMutex m_pendingMutex;
-    void finalizeSavedImage(const QString &savePath, const QString &predictedLabel);
+    // 线程安全：工作线程读取水印标签和保存路径
+    mutable QMutex m_captureMetaMutex;
+    QString m_watermarkLabel;      // captureVegetable 传入的标签（英文，用于水印）
+    QString m_lastSavePath;        // 最后一次主摄保存路径（供独立 AI 识别上下文）
 
     // 异步拍照任务
     class CaptureTask : public QRunnable {

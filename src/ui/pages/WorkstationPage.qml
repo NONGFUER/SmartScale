@@ -15,6 +15,9 @@ Item {
     property string currentImagePath: ""
     property var currentDetailRecord: null
     property bool categorySelectMode: false  // 是否为手动品类选择模式
+    property bool pendingManualSave: false    // 手动保存等待拍照完成
+    property double pendingSaveWeight: 0
+    property string pendingSaveLabel: ""
     
     // 推理耗时相关属性
     property string lastInferenceTime: PState.NONE + " ms"
@@ -705,15 +708,15 @@ Item {
                                 onClicked: {
                                     let currentWeight = WeightManager.netWeight
                                     if (currentWeight > 0.01) {
-                                        let currentTime = Qt.formatDateTime(new Date(), "yyyy-MM-dd HH:mm")
                                         let chineseLabel = Translator.translate(root.currentPrediction)
-                                        console.log(">> 手动提交称重记录:", chineseLabel, currentWeight.toFixed(2) + "kg", "时间:", currentTime, "图片路径:", root.currentImagePath)
-
-                                        // 本地保存 + 云端上传（addRecord 内部自动调用 uploadSingleRecord）
-                                        WeightHistoryService.addRecord(currentWeight, chineseLabel, BackendAuth.currentUser, root.currentImagePath, "")
-
-                                        root.currentPrediction = PState.IDLE
-                                        root.currentImagePath = ""
+                                        console.log(">> 手动保存，触发拍照:", chineseLabel, currentWeight.toFixed(2) + "kg")
+                                        root.pendingManualSave = true
+                                        root.pendingSaveWeight = currentWeight
+                                        root.pendingSaveLabel = chineseLabel
+                                        let savedPrediction = root.currentPrediction  // 保存原标签再改写 BUSY
+                                        root.currentPrediction = PState.BUSY
+                                        // 传入当前已知品类标签，水印立即绘制，不再等待 AI
+                                        CameraController.captureVegetable(currentWeight, savedPrediction)
                                     } else {
                                         console.warn("重量不足，无法提交记录")
                                     }
@@ -758,7 +761,7 @@ Item {
        function onStableTriggered() {
            console.log("重量锁定！拍摄证据照片...")
            root.currentPrediction = PState.BUSY
-           CameraController.captureVegetable(WeightManager.netWeight);
+           CameraController.captureVegetable(WeightManager.netWeight);  // 自动模式无标签
        }
     }
 
@@ -770,6 +773,20 @@ Item {
                 fadeTimer.start()
                 console.log("照片落盘:", filePath)
                 root.currentImagePath = filePath
+
+                // 手动保存：图片已落盘，立即写记录 + 上传（不等 AI）
+                if (root.pendingManualSave) {
+                    root.pendingManualSave = false
+                    let w = root.pendingSaveWeight
+                    let label = root.pendingSaveLabel
+                    console.log(">> 图片保存完成，立即执行记录:", label, w.toFixed(2) + "kg")
+                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "")
+                    root.currentPrediction = PState.IDLE
+                    root.currentImagePath = ""
+                } else {
+                    // 自动模式：照片已保存，独立触发 AI 识别（不阻塞保存管线）
+                    CameraController.recognizeLastCapture()
+                }
             }
         }
     }
@@ -786,6 +803,8 @@ Item {
             } else {
                 root.lastInferenceTime = PState.NONE + " ms"
             }
+            // 注意：手动保存的 addRecord 已在 onPhotoSaved 中立即执行
+            // 此处仅更新 UI 品类显示，不再绑定保存/上传逻辑
         }
     }
 

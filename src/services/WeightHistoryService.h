@@ -84,6 +84,7 @@ private:
     void recalcStats();
     QByteArray buildUploadJson(const WeightRecord &record);
     void uploadSingleRecord(const WeightRecord &record);
+    void updateRecordImage(int custId, int recordId, const QString &imagePath);
 
     WeightRecordRepo *m_repo;
     QVariantList m_historyEntries;

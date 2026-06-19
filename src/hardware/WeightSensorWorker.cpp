@@ -194,7 +194,7 @@ int WeightSensorWorker::modbusWriteCmd(uint16_t regAddr, uint16_t value)
     // 打印 TX
     QByteArray txHex;
     for (int i = 0; i < 8; i++) txHex.append(QString("%1 ").arg(tx[i], 2, 16, QChar('0')).toUpper().toUtf8());
-    qDebug().nospace() << "[Modbus] TX WRITE: " << txHex.trimmed();
+    //qDebug().nospace() << "[Modbus] TX WRITE: " << txHex.trimmed();
 
     // 发送前清空接收缓冲区
     m_serial->clear(QSerialPort::Input);
@@ -278,7 +278,7 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
     // 打印 TX
     QByteArray txHex;
     for (int i = 0; i < 8; i++) txHex.append(QString("%1 ").arg(tx[i], 2, 16, QChar('0')).toUpper().toUtf8());
-    qDebug().nospace() << "[Modbus] TX(8B): " << txHex.trimmed();
+    //qDebug().nospace() << "[Modbus] TX(8B): " << txHex.trimmed();
 
     // 发送前清空接收缓冲区
     m_serial->clear(QSerialPort::Input);
@@ -326,7 +326,7 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
     // 打印完整 RX 帧
     QByteArray rxFullHex;
     for (int i = 0; i < rxBuf.size(); i++) rxFullHex.append(QString("%1 ").arg((uint8_t)rxBuf[i], 2, 16, QChar('0')).toUpper().toUtf8());
-    qDebug().nospace() << "[Modbus] RX(" << rxBuf.size() << "B): " << rxFullHex.trimmed();
+    //qDebug().nospace() << "[Modbus] RX(" << rxBuf.size() << "B): " << rxFullHex.trimmed();
 
     // CRC 校验
     uint16_t calcCrc = crc16Modbus((const uint8_t *)rxBuf.data(), FRAME_LEN - 2);
@@ -355,7 +355,7 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
     // 打印原始数据区
     QByteArray dataHex;
     for (int i = 0; i < 18; i++) dataHex.append(QString("%1 ").arg(d[i], 2, 16, QChar('0')).toUpper().toUtf8());
-    qDebug().nospace() << "[Modbus] 原始数据(18B): " << dataHex.trimmed();
+    //qDebug().nospace() << "[Modbus] 原始数据(18B): " << dataHex.trimmed();
 
     *adc_raw   = leToInt32(d + 0);
     int32_t emptyLoad = leToInt32(d + 4);

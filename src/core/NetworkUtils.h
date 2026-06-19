@@ -25,8 +25,9 @@ namespace NetworkUtils {
         inline constexpr const char *AI_RECOGNIZE_FILE  = "/api/ems/AiDet/recognize-ingr/file";  // 识别食材
 
         // === USER 域接口（user.shxgs.cn:5196）===
-        inline constexpr const char *USER_WEIGHT_CREATE = "/api/user/WeightRecord/create";
-        inline constexpr const char *USER_INGR_PAGED     = "/api/user/Ingr/paged";
+        inline constexpr const char *USER_WEIGHT_CREATE     = "/api/user/WeightRecord/create";
+        inline constexpr const char *USER_WEIGHT_UPDATE_IMG = "/api/user/WeightRecord/update-img";
+        inline constexpr const char *USER_INGR_PAGED        = "/api/user/Ingr/paged";
     }
 
     /**
