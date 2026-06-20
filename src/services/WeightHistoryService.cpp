@@ -202,7 +202,7 @@ QByteArray WeightHistoryService::buildUploadJson(const WeightRecord &record)
     json["aiDet"]  = !record.categoryName.isEmpty();
     //json["img"]    = record.mainImagePath;
     json["userId"] = m_authService ? m_authService->userId() : -1;
-    json["bill"]   = static_cast<int>(qHash(QUuid::createUuid()));
+    json["bill"]   = static_cast<int>((qHash(QUuid::createUuid()) & 0x7FFFFFFFu) + 1);
 
     return QJsonDocument(json).toJson(QJsonDocument::Compact);
 }
@@ -333,11 +333,20 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
 
             // 解析服务器返回的 recordId 和 custId（用于后续图片上传）
             QJsonValue dataVal = doc.object().value("data");
-            int remoteId = dataVal.isObject()
-                ? dataVal.toObject().value("recoId").toInt()
-                : dataVal.toInt();
-            QJsonValue cidVal = dataVal.toObject().value("custId");
-            int custId = cidVal.isString() ? cidVal.toString().toInt() : cidVal.toInt();
+            qDebug() << "[WHS] 服务器返回 data:" << dataVal;
+
+            int remoteId = 0;
+            int custId   = 0;
+
+            if (dataVal.isObject()) {
+                QJsonObject dataObj = dataVal.toObject();
+                qDebug() << "[WHS] data keys:" << dataObj.keys();
+                remoteId = dataObj.value("recoId").toInt();
+                QJsonValue c = dataObj.value("custId");
+                custId = c.isString() ? c.toString().toInt() : c.toInt();
+            } else if (dataVal.isDouble()) {
+                remoteId = dataVal.toInt();
+            }
 
             if (remoteId > 0) {
                 model.cloudId = QString::number(remoteId);
@@ -347,10 +356,18 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
             qDebug() << "[WHS] 记录 id=" << localId << "已标记为已同步, remoteId=" << remoteId << "custId=" << custId;
 
             // 如果有图片，上传到服务器
+            qDebug() << "[WHS] 图片上传条件检查:"
+                     << "remoteId=" << remoteId
+                     << "custId=" << custId
+                     << "mainImagePath=" << model.mainImagePath
+                     << "mainImagePath.isEmpty=" << model.mainImagePath.isEmpty()
+                     << "exists=" << QFileInfo::exists(model.mainImagePath);
             if (remoteId > 0 && custId > 0
                 && !model.mainImagePath.isEmpty()
                 && QFileInfo::exists(model.mainImagePath)) {
                 updateRecordImage(custId, remoteId, model.mainImagePath);
+            } else {
+                qWarning() << "[WHS] 跳过图片上传，条件不满足";
             }
         }
     }
@@ -412,7 +429,7 @@ void WeightHistoryService::createUserWeightRecord(const QString &ingrCd,
     json["aiDet"]  = aiDetected;
     json["img"]    = QString();
     json["userId"] = m_authService->userId();
-    json["bill"]   = static_cast<int>(qHash(QUuid::createUuid()));
+    json["bill"]   = static_cast<int>((qHash(QUuid::createUuid()) & 0x7FFFFFFFu) + 1);
 
     QByteArray payload = QJsonDocument(json).toJson(QJsonDocument::Compact);
 

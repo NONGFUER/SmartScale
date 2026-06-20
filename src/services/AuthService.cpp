@@ -68,8 +68,10 @@ void AuthService::logout()
 
 void AuthService::refreshToken()
 {
-    if (m_refreshToken.isEmpty()) {
-        qWarning() << "[Auth] 刷新 Token 失败: 当前无 RefreshToken";
+    // 防御：空或纯空白字符串都不允许发请求（避免后端报 "refreshToken field is required"）
+    if (m_refreshToken.trimmed().isEmpty()) {
+        qWarning() << "[Auth] 刷新 Token 失败: RefreshToken 为空或纯空白"
+                   << "len=" << m_refreshToken.length();
         Q_EMIT tokenRefreshFailed("未登录或无刷新令牌");
         return;
     }
@@ -111,6 +113,14 @@ void AuthService::tryOnlineLogin(const QString &userCode, const QString &passwor
 
 void AuthService::tryRefreshToken()
 {
+    // 二次防御：即使 refreshToken() 放行，也确保不会发出空 token 请求
+    if (m_refreshToken.trimmed().isEmpty()) {
+        qWarning() << "[Auth] tryRefreshToken 拦截: m_refreshToken 为空/纯空白"
+                   << "len=" << m_refreshToken.length();
+        Q_EMIT tokenRefreshFailed("未登录或无刷新令牌");
+        return;
+    }
+
     QNetworkRequest request = createApiRequest(NetworkUtils::Api::REFRESH_TOKEN);
 
     // Body 为 RefreshToken（JSON 字符串）
@@ -119,7 +129,13 @@ void AuthService::tryRefreshToken()
     QJsonDocument bodyDoc(bodyObj);
     QByteArray bodyData = bodyDoc.toJson(QJsonDocument::Compact);
 
-    qDebug() << "[Auth] 刷新 Token 请求...";
+    // 完整诊断日志：与登录请求保持一致，便于定位后端 "refreshToken field is required"
+    qDebug() << "[Auth] 刷新 Token 请求:"
+             << "m_refreshToken.len=" << m_refreshToken.length()
+             << "prefix=" << (m_refreshToken.length() > 20
+                              ? m_refreshToken.left(20) + "..."
+                              : m_refreshToken);
+    qInfo() << "[HTTP] Body:" << bodyData;
 
     // 记录请求开始时间
     QElapsedTimer timer;
@@ -284,6 +300,17 @@ bool AuthService::parseAuthResponse(const QByteArray &data,
     QJsonObject userData = root.value("data").toObject();
     outToken       = userData.value("accessToken").toString();
     outRefreshToken= userData.value("refreshToken").toString();
+    // 诊断：检测后端是否返回 refreshToken 字段（原因 A: 字段缺失/大小写不一致）
+    if (outRefreshToken.isEmpty()) {
+        qWarning() << "[Auth] 后端返回的 refreshToken 为空!"
+                   << "data keys=" << userData.keys()
+                   << "是否含 refreshToken 字段="
+                   << userData.contains("refreshToken")
+                   << "是否含 RefreshToken 字段="
+                   << userData.contains("RefreshToken");
+    } else {
+        qDebug() << "[Auth] 解析到 refreshToken: len=" << outRefreshToken.length();
+    }
     outUserName    = userData.value("userName").toString();
     QJsonValue uidVal = userData.value("userId");
     outUserId = uidVal.isString() ? uidVal.toString().toInt() : uidVal.toInt(-1);
