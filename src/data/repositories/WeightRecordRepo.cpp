@@ -16,14 +16,15 @@ int WeightRecordRepo::insert(const WeightRecord &record)
     QSqlQuery q(m_db.database());
     q.prepare(R"(
         INSERT INTO weight_records (
-            weight, category_name, record_time, operator_name,
+            weight, category_name, ingr_id, record_time, operator_name,
             has_main_image, main_image_path,
             has_sub_image, sub_image_path,
             synced, cloud_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )");
     q.addBindValue(record.weight);
     q.addBindValue(record.categoryName);
+    q.addBindValue(record.ingrId);
     q.addBindValue(record.recordTime);
     q.addBindValue(record.operatorName);
     q.addBindValue(record.hasMainImage ? 1 : 0);
@@ -55,6 +56,7 @@ bool WeightRecordRepo::update(const WeightRecord &record)
         UPDATE weight_records SET
             weight = ?,
             category_name = ?,
+            ingr_id = ?,
             record_time = ?,
             operator_name = ?,
             has_main_image = ?,
@@ -68,6 +70,7 @@ bool WeightRecordRepo::update(const WeightRecord &record)
     )");
     q.addBindValue(record.weight);
     q.addBindValue(record.categoryName);
+    q.addBindValue(record.ingrId);
     q.addBindValue(record.recordTime);
     q.addBindValue(record.operatorName);
     q.addBindValue(record.hasMainImage ? 1 : 0);
@@ -108,6 +111,12 @@ WeightRecord WeightRecordRepo::findById(int id)
     q.prepare("SELECT * FROM weight_records WHERE id = ?");
     q.addBindValue(id);
 
+    if (!q.exec()) {
+        qCritical() << "[WeightRecordRepo] findById 查询失败:" << q.lastError().text()
+                    << "id=" << id;
+        return WeightRecord();
+    }
+
     if (q.next()) {
         return fromQuery(q);
     }
@@ -138,6 +147,12 @@ QList<WeightRecord> WeightRecordRepo::queryByDateRange(const QDate &from, const 
     q.addBindValue(from.toString("yyyy-MM-dd"));
     q.addBindValue(to.toString("yyyy-MM-dd"));
 
+    if (!q.exec()) {
+        qCritical() << "[WeightRecordRepo] queryByDateRange 查询失败:" << q.lastError().text()
+                    << "from=" << from << "to=" << to;
+        return list;
+    }
+
     while (q.next()) {
         list.append(fromQuery(q));
     }
@@ -150,6 +165,12 @@ QList<WeightRecord> WeightRecordRepo::queryByCategory(const QString &categoryNam
     QSqlQuery q(m_db.database());
     q.prepare("SELECT * FROM weight_records WHERE category_name = ? ORDER BY record_time DESC");
     q.addBindValue(categoryName);
+
+    if (!q.exec()) {
+        qCritical() << "[WeightRecordRepo] queryByCategory 查询失败:" << q.lastError().text()
+                    << "category=" << categoryName;
+        return list;
+    }
 
     while (q.next()) {
         list.append(fromQuery(q));
@@ -183,6 +204,12 @@ QVariantMap WeightRecordRepo::queryStatsForDate(const QDate &date)
     stats["count"] = 0;
     stats["totalWeight"] = 0.0;
 
+    if (!q.exec()) {
+        qCritical() << "[WeightRecordRepo] queryStatsForDate 查询失败:" << q.lastError().text()
+                    << "date=" << date;
+        return stats;
+    }
+
     if (q.next()) {
         stats["count"] = q.value("cnt").toInt();
         stats["totalWeight"] = q.value("total").toDouble();
@@ -210,6 +237,7 @@ WeightRecord WeightRecordRepo::fromQuery(QSqlQuery &q)
     r.id           = q.value("id").toInt();
     r.weight       = q.value("weight").toDouble();
     r.categoryName = q.value("category_name").toString();
+    r.ingrId       = q.value("ingr_id").toString();
     r.recordTime   = q.value("record_time").toString();
     r.operatorName = q.value("operator_name").toString();
     r.hasMainImage = q.value("has_main_image").toInt() != 0;

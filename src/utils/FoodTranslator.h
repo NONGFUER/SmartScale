@@ -22,15 +22,14 @@ public:
     // 翻译器是否已加载有效数据（登录后从 API 获取）
     bool isReady() const { return m_ready; }
 
-    /** @brief 从 UserIngredientService 的 API 数据更新字典（ingrCd → ingrNm）并写入本地缓存 */
+    /** @brief 从 UserIngredientService 的 API 数据更新内存字典（ingrCd/emsCd → ingrNm），不再写缓存 */
     void updateFromApi(const QVariantList &items);
 
 Q_SIGNALS:
     void readyChanged();
 
 private:
-    void loadFromCache();                     // 启动时从本地 JSON 加载
-    void saveToCache();                       // API 返回后写入本地 JSON
+    void loadFromCache();                     // 启动时从本地 JSON (新结构) 加载
 
     QHash<QString, QString> m_dict;
     bool m_ready = false;

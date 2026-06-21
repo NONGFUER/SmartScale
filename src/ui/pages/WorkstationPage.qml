@@ -18,6 +18,8 @@ Item {
     property bool pendingManualSave: false    // 手动保存等待拍照完成
     property double pendingSaveWeight: 0
     property string pendingSaveLabel: ""
+    property string currentIngrId: ""        // 当前选中食材的 ingrId (上传用)
+    property string pendingSaveIngrId: ""    // 手动保存待写入的 ingrId
     
     // 推理耗时相关属性
     property string lastInferenceTime: PState.NONE + " ms"
@@ -732,6 +734,7 @@ Item {
                                         root.pendingManualSave = true
                                         root.pendingSaveWeight = currentWeight
                                         root.pendingSaveLabel = chineseLabel
+                                        root.pendingSaveIngrId = root.currentIngrId
                                         // 传入当前已知品类标签，水印立即绘制，保存/上传独立执行
                                         CameraController.captureVegetable(currentWeight, root.currentPrediction)
                                     } else {
@@ -790,9 +793,11 @@ Item {
                     let w = root.pendingSaveWeight
                     let label = root.pendingSaveLabel
                     console.log(">> 图片保存完成，立即执行记录:", label, w.toFixed(2) + "kg")
-                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "")
+                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId)
                     root.currentPrediction = PState.IDLE
                     root.currentImagePath = ""
+                    root.currentIngrId = ""
+                    root.pendingSaveIngrId = ""
                 } else {
                     // 自动模式：照片已保存，独立触发 AI 识别（不阻塞保存管线）
                     CameraController.recognizeLastCapture()
@@ -807,6 +812,10 @@ Item {
             console.log(">> QML收到AI分类结果:", predictedLabel)
             root.currentPrediction = predictedLabel
             root.currentImagePath = imagePath
+
+            // AI 返回 emsCd，查 ingredients 缓存取 ingrId (上传用)
+            var aiItem = UserIngredientService.findByEmsCd(predictedLabel)
+            root.currentIngrId = (aiItem && aiItem["id"]) ? aiItem["id"] : ""
             
             if (inferenceTimeMs !== undefined) {
                 root.lastInferenceTime = inferenceTimeMs + " ms"
@@ -836,8 +845,15 @@ Item {
         categorySelectMode: root.categorySelectMode
 
         // 监听组件发出的信号，更新 root
-        onLabelConfirmed: function(newPred) {
+        onLabelConfirmed: function(newPred, ingrId) {
             root.currentPrediction = newPred
+            if (ingrId) {
+                root.currentIngrId = ingrId
+            } else {
+                // 纠错模式无 ingrId，按 emsCd/ingrCd 反查
+                var item = UserIngredientService.findByEmsCd(newPred)
+                root.currentIngrId = (item && item["id"]) ? item["id"] : ""
+            }
         }
         onSelectModeToggled: function(mode) {
             root.categorySelectMode = mode

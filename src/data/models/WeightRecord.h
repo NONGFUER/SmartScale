@@ -13,7 +13,8 @@ public:
 
     // === 核心业务字段 ===
     double weight = 0.0;             // 物品重量, 单位: kg
-    QString categoryName;            // 物品类别名称 (如 "Apple", "Banana", "Potato")
+    QString categoryName;            // 物品类别名称 (中文显示名, 如 "大白菜")
+    QString ingrId;                  // 食材 ID (上传云端用, 登录拉取食材时选中保存)
     QString recordTime;              // 物品称重时间, 格式: "2026-04-26 14:30"
     QString operatorName;            // 操作人员名称
 

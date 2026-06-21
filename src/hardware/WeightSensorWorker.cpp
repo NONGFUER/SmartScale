@@ -363,11 +363,11 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
     *weight_g = leToInt32(d + 12);
     *status   = beToUint16(d + 16);
 
-    qDebug().nospace() << "[Modbus] 解析: ADC=" << *adc_raw
-                       << " EmptyLoad=" << emptyLoad
-                       << " SCALE1=" << scale1
-                       << " WEIGHT=" << *weight_g << "g"
-                       << QString(" Status=0x%1").arg(*status, 4, 16, QChar('0'));
+    //qDebug().nospace() << "[Modbus] 解析: ADC=" << *adc_raw
+                      // << " EmptyLoad=" << emptyLoad
+                      // << " SCALE1=" << scale1
+                      // << " WEIGHT=" << *weight_g << "g"
+                      // << QString(" Status=0x%1").arg(*status, 4, 16, QChar('0'));
 
     return 0;
 }

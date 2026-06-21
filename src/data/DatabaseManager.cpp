@@ -130,8 +130,25 @@ void DatabaseManager::migrate()
         setVersion(1);
     }
 
+    // v2: weight_records 新增 ingr_id 列 (上传云端用食材 ID)
+    if (version < 2) {
+        qDebug() << "[DB] 执行迁移 v2: weight_records 增加 ingr_id 列";
+        QSqlQuery v2q(m_db);
+        // SQLite 不支持 ADD COLUMN IF NOT EXISTS，先查列是否存在
+        v2q.exec("PRAGMA table_info(weight_records)");
+        QStringList cols;
+        while (v2q.next()) cols << v2q.value(1).toString();
+        if (!cols.contains("ingr_id")) {
+            if (!v2q.exec("ALTER TABLE weight_records ADD COLUMN ingr_id TEXT DEFAULT ''")) {
+                qCritical() << "[DB] v2 ALTER TABLE 失败:" << v2q.lastError().text();
+            } else {
+                qDebug() << "[DB] v2 完成: weight_records.ingr_id 已添加";
+            }
+        }
+        setVersion(2);
+    }
+
     // 未来新增迁移在此追加:
-    // if (version < 2) { ... setVersion(2); }
     // if (version < 3) { ... setVersion(3); }
 }
 

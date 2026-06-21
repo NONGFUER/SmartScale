@@ -14,7 +14,7 @@ Dialog {
 
     // ====== 对外暴露的信号（通知父组件状态变化）======
     // 注意：不能命名为 xxxChanged，会与 property 自动生成的属性变更信号冲突！
-    signal labelConfirmed(string confirmedLabel)
+    signal labelConfirmed(string confirmedLabel, string ingrId)
     signal selectModeToggled(bool isActive)
 
     x: (parent.width - width) / 2
@@ -41,14 +41,19 @@ Dialog {
     }
 
     property string selectedLabel: ""
+    property string selectedIngrId: ""
     property int activeCategoryIndex: 0
 
-    function getActiveItems() {
+    function getActiveCategories() {
         if (categorySelectMode) {
-            // 手动选择模式：使用 UserIngredientService 扁平列表
-            return UserIngredientService.items
+            // 手动选择模式：使用 UserIngredientService 按分类分组的食材
+            return UserIngredientService.categories
         }
-        var cats = CategoryService.categories
+        return CategoryService.categories
+    }
+
+    function getActiveItems() {
+        var cats = getActiveCategories()
         if (activeCategoryIndex >= 0 && activeCategoryIndex < cats.length) {
             return cats[activeCategoryIndex].items || []
         }
@@ -138,17 +143,16 @@ Dialog {
             }
         }
 
-        // ===== 分类标签行（手动选择模式下隐藏）=====
+        // ===== 分类标签行 =====
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: 16
             Layout.leftMargin: 22
             Layout.bottomMargin: 10
             spacing: 26
-            visible: !dialogRoot.categorySelectMode
 
             Repeater {
-                model: CategoryService.categories
+                model: dialogRoot.getActiveCategories()
 
                 Item {
                     width: catLabelText.implicitWidth + (dialogRoot.activeCategoryIndex === index ? 0 : 2)
@@ -157,7 +161,7 @@ Dialog {
 
                     Text {
                         id: catLabelText
-                        text: modelData.name
+                        text: modelData.cateNm || modelData.name
                         font.pixelSize: 15
                         font.bold: (dialogRoot.activeCategoryIndex === index)
                         color: (dialogRoot.activeCategoryIndex === index) ? "#4C72F9" : "#666666"
@@ -232,9 +236,10 @@ Dialog {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                dialogRoot.selectedLabel = modelData.en
-                            }
+                        onClicked: {
+                            dialogRoot.selectedLabel = modelData.en
+                            dialogRoot.selectedIngrId = (modelData.id !== undefined) ? String(modelData.id) : ""
+                        }
                         }
                     }
                 }
@@ -304,6 +309,7 @@ Dialog {
 
     onOpened: {
         selectedLabel = ""
+        selectedIngrId = ""
         activeCategoryIndex = 0
         catSearchInput.text = ""
 
@@ -317,13 +323,30 @@ Dialog {
     }
 
     onAccepted: {
+        // 打印选中项的全部业务字段
+        var selItems = getActiveItems()
+        for (var i = 0; i < selItems.length; i++) {
+            if (selItems[i].en === selectedLabel) {
+                var m = selItems[i]
+                console.log("[CategoryDialog] 选中食材 ▶"
+                            + " ingrId=" + (m.id !== undefined ? m.id : "")
+                            + " ingrCd=" + (m.en !== undefined ? m.en : "")
+                            + " ingrNm=" + (m.cn !== undefined ? m.cn : "")
+                            + " cateId=" + (m.cateId !== undefined ? m.cateId : "")
+                            + " emsId="  + (m.emsId !== undefined ? m.emsId : "")
+                            + " emsCd="  + (m.emsCd !== undefined ? m.emsCd : "")
+                            + " cateNm=" + (m.cateNm !== undefined ? m.cateNm : ""))
+                break
+            }
+        }
+
         let correctLabel = selectedLabel
         if (categorySelectMode) {
-            labelConfirmed(correctLabel)
+            labelConfirmed(correctLabel, selectedIngrId)
             selectModeToggled(false)
         } else {
             VisionAI.submitCorrection(currentImagePath, currentPrediction, correctLabel)
-            labelConfirmed(correctLabel)
+            labelConfirmed(correctLabel, selectedIngrId)
         }
     }
 

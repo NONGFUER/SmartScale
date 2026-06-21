@@ -93,7 +93,8 @@ void WeightHistoryService::addRecord(double weight,
                                      const QString &categoryName,
                                      const QString &operatorName,
                                      const QString &mainImagePath,
-                                     const QString &subImagePath)
+                                     const QString &subImagePath,
+                                     const QString &ingrId)
 {
     if (!m_repo) {
         qWarning() << "[WHS] Repository 未设置，无法添加记录";
@@ -103,6 +104,7 @@ void WeightHistoryService::addRecord(double weight,
     // 构建模型对象
     WeightRecord model(weight, categoryName, operatorName,
                        QString(), mainImagePath, subImagePath);
+    model.ingrId = ingrId;
 
     // 1. 写入数据库
     int newId = m_repo->insert(model);
@@ -195,7 +197,10 @@ void WeightHistoryService::setAuthService(AuthService *authSvc)
 QByteArray WeightHistoryService::buildUploadJson(const WeightRecord &record)
 {
     QJsonObject json;
-    json["ingrId"] = m_ingredientSvc ? m_ingredientSvc->getIngrId(record.categoryName).toInt() : 0;
+    // ingrId 为雪花 ID（64-bit），用 toLongLong 避免 int(32-bit) 溢出
+    bool ok;
+    qint64 ingrIdVal = record.ingrId.toLongLong(&ok);
+    json["ingrId"] = ok ? QJsonValue(qlonglong(ingrIdVal)) : 0;
     json["custId"] = m_authService ? m_authService->custId() : 0;
     json["devId"]  = 2;//m_authService ? m_authService->devId() : 0;
     json["val"]    = static_cast<int>(record.weight * 1000);
@@ -239,6 +244,19 @@ void WeightHistoryService::uploadSingleRecord(const WeightRecord &record)
         NetworkUtils::Api::USER_WEIGHT_CREATE, token);
 
     QByteArray payload = buildUploadJson(record);
+
+    // === 诊断打印：排查 403 Forbidden ===
+    qDebug() << "[WHS-DIAG] ========== 上传诊断开始 id=" << record.id << "==========";
+    qDebug() << "[WHS-DIAG] URL   :" << request.url().toString();
+    qDebug() << "[WHS-DIAG] Token长度:" << token.length()
+             << " 前10字符:" << (token.length() > 10 ? token.left(10) : token)
+             << " 后6字符:" << (token.length() > 6 ? token.right(6) : token);
+    qDebug() << "[WHS-DIAG] Auth头:" << request.rawHeader("Authorization");
+    qDebug() << "[WHS-DIAG] ContentType:" << request.rawHeader("Content-Type");
+    qDebug() << "[WHS-DIAG] Payload:" << payload;
+    qDebug() << "[WHS-DIAG] Token是否即将过期:" << m_authService->isTokenExpiringSoon();
+    qDebug() << "[WHS-DIAG] ==========================================";
+    // === 诊断结束 ===
 
     qDebug() << "[WHS] 请求体 id=" << record.id << "payload:" << payload;
 
@@ -303,9 +321,19 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
     if (reply->error() != QNetworkReply::NoError) {
         QByteArray errData = reply->readAll();
         QString errMsg = reply->errorString();
-        qCritical() << "[WHS] 上传失败 id=" << localId
-                    << "error:" << errMsg
-                    << "body:" << errData;
+
+        // === 诊断打印：403 详情 ===
+        qCritical() << "[WHS-DIAG-ERR] ========== 上传失败诊断 id=" << localId << "==========";
+        qCritical() << "[WHS-DIAG-ERR] HTTP状态码:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        qCritical() << "[WHS-DIAG-ERR] 错误枚举:" << reply->error() << errMsg;
+        qCritical() << "[WHS-DIAG-ERR] 响应Body:" << errData;
+        // 打印所有响应头
+        for (const auto &h : reply->rawHeaderList()) {
+            qCritical() << "[WHS-DIAG-ERR] RespHeader:" << h << "=" << reply->rawHeader(h);
+        }
+        qCritical() << "[WHS-DIAG-ERR] ==========================================";
+        // === 诊断结束 ===
+
         Q_EMIT cloudSyncFailed(localId, errMsg);
         reply->deleteLater();
         return;
@@ -335,37 +363,56 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
             QJsonValue dataVal = doc.object().value("data");
             qDebug() << "[WHS] 服务器返回 data:" << dataVal;
 
-            int remoteId = 0;
             int custId   = 0;
+            QString remoteRecoId;  // 雪花 ID，全程保持 QString
 
             if (dataVal.isObject()) {
                 QJsonObject dataObj = dataVal.toObject();
                 qDebug() << "[WHS] data keys:" << dataObj.keys();
-                remoteId = dataObj.value("recoId").toInt();
+
+                // recoId 是雪花 ID（17位），保持 QString，禁止转 int
+                QJsonValue r = dataObj.value("recoId");
+                if (r.isString()) {
+                    remoteRecoId = r.toString();
+                } else {
+                    remoteRecoId = r.toVariant().toString();
+                }
+                qDebug() << "[WHS] 解析 recoId 原始值:" << r << "→ 转换后:" << remoteRecoId;
+
                 QJsonValue c = dataObj.value("custId");
                 custId = c.isString() ? c.toString().toInt() : c.toInt();
+
+                // fallback: custId 为空时尝试 userId
+                if (custId <= 0) {
+                    QJsonValue u = dataObj.value("userId");
+                    int uid = u.isString() ? u.toString().toInt() : u.toInt();
+                    if (uid > 0) {
+                        qDebug() << "[WHS] custId为空，fallback到userId=" << uid;
+                        custId = uid;
+                    }
+                }
             } else if (dataVal.isDouble()) {
-                remoteId = dataVal.toInt();
+                remoteRecoId = dataVal.toVariant().toString();
             }
 
-            if (remoteId > 0) {
-                model.cloudId = QString::number(remoteId);
+            if (!remoteRecoId.isEmpty()) {
+                model.cloudId = remoteRecoId;
             }
 
             m_repo->update(model);
-            qDebug() << "[WHS] 记录 id=" << localId << "已标记为已同步, remoteId=" << remoteId << "custId=" << custId;
+            qDebug() << "[WHS] 记录 id=" << localId << "已标记为已同步, remoteRecoId=" << remoteRecoId << "custId=" << custId;
 
             // 如果有图片，上传到服务器
             qDebug() << "[WHS] 图片上传条件检查:"
-                     << "remoteId=" << remoteId
+                     << "remoteRecoId=" << remoteRecoId
                      << "custId=" << custId
                      << "mainImagePath=" << model.mainImagePath
                      << "mainImagePath.isEmpty=" << model.mainImagePath.isEmpty()
                      << "exists=" << QFileInfo::exists(model.mainImagePath);
-            if (remoteId > 0 && custId > 0
+            if (!remoteRecoId.isEmpty() && custId > 0
                 && !model.mainImagePath.isEmpty()
                 && QFileInfo::exists(model.mainImagePath)) {
-                updateRecordImage(custId, remoteId, model.mainImagePath);
+                updateRecordImage(custId, remoteRecoId, model.mainImagePath);
             } else {
                 qWarning() << "[WHS] 跳过图片上传，条件不满足";
             }
@@ -422,7 +469,10 @@ void WeightHistoryService::createUserWeightRecord(const QString &ingrCd,
     }
 
     QJsonObject json;
-    json["ingrId"] = m_ingredientSvc->getIngrId(ingrCd).toInt();
+    // ingrId 为雪花 ID（64-bit），用 toLongLong 避免 int 溢出
+    bool ok;
+    qint64 ingrIdVal = m_ingredientSvc->getIngrId(ingrCd).toLongLong(&ok);
+    json["ingrId"] = ok ? QJsonValue(qlonglong(ingrIdVal)) : 0;
     json["custId"] = m_authService->custId();
     json["devId"]  = m_authService->devId();
     json["val"]    = static_cast<int>(weightKg * 1000);
@@ -460,7 +510,7 @@ void WeightHistoryService::createUserWeightRecord(const QString &ingrCd,
 // POST /api/user/WeightRecord/update-img?userId=X&id=Y  + 图片二进制
 // ============================================================
 
-void WeightHistoryService::updateRecordImage(int custId, int recordId, const QString &imagePath)
+void WeightHistoryService::updateRecordImage(int custId, const QString &recordId, const QString &imagePath)
 {
     if (!m_networkMgr || !m_authService) return;
 
@@ -471,7 +521,7 @@ void WeightHistoryService::updateRecordImage(int custId, int recordId, const QSt
                                   NetworkUtils::Api::USER_WEIGHT_UPDATE_IMG));
     QUrlQuery query;
     query.addQueryItem("CustId", QString::number(custId));
-    query.addQueryItem("RecoId", QString::number(recordId));
+    query.addQueryItem("RecoId", recordId);  // 雪花 ID，直接用字符串
     url.setQuery(query);
 
     QNetworkRequest request(url);
@@ -500,14 +550,39 @@ void WeightHistoryService::updateRecordImage(int custId, int recordId, const QSt
     QNetworkReply *reply = m_networkMgr->post(request, multiPart);
     multiPart->setParent(reply);
 
-    qDebug() << "[WHS] 上传图片 recordId=" << recordId
-             << "path=" << imagePath << "size=" << file->size();
+    qDebug() << "[WHS-IMG-DIAG] ========== 图片上传诊断开始 ==========";
+    qDebug() << "[WHS-IMG-DIAG] URL     :" << request.url().toString();
+    qDebug() << "[WHS-IMG-DIAG] CustId  :" << custId;
+    qDebug() << "[WHS-IMG-DIAG] RecoId  :" << recordId;
+    qDebug() << "[WHS-IMG-DIAG] Token长度:" << token.length()
+             << " 前10字符:" << (token.length() > 10 ? token.left(10) : token)
+             << " 后6字符:" << (token.length() > 6 ? token.right(6) : token);
+    qDebug() << "[WHS-IMG-DIAG] Auth头  :" << request.rawHeader("Authorization");
+    qDebug() << "[WHS-IMG-DIAG] 文件路径:" << imagePath;
+    qDebug() << "[WHS-IMG-DIAG] 文件大小:" << file->size() << "bytes";
+    qDebug() << "[WHS-IMG-DIAG] Token即将过期:" << m_authService->isTokenExpiringSoon();
+    qDebug() << "[WHS-IMG-DIAG] ======================================";
 
-    connect(reply, &QNetworkReply::finished, this, [reply]() {
+    connect(reply, &QNetworkReply::finished, this, [reply, recordId, custId]() {
+        int httpCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QByteArray respBody = reply->readAll();
+
         if (reply->error() != QNetworkReply::NoError) {
-            qWarning() << "[WHS] 图片上传失败:" << reply->errorString();
+            qCritical() << "[WHS-IMG-DIAG-ERR] ========== 图片上传失败诊断 ==========";
+            qCritical() << "[WHS-IMG-DIAG-ERR] RecoId     :" << recordId;
+            qCritical() << "[WHS-IMG-DIAG-ERR] HTTP状态码 :" << httpCode;
+            qCritical() << "[WHS-IMG-DIAG-ERR] 错误枚举   :" << reply->error() << reply->errorString();
+            qCritical() << "[WHS-IMG-DIAG-ERR] 响应Body   :" << respBody;
+            for (const auto &h : reply->rawHeaderList()) {
+                qCritical() << "[WHS-IMG-DIAG-ERR] RespHeader :" << h << "=" << reply->rawHeader(h);
+            }
+            qCritical() << "[WHS-IMG-DIAG-ERR] ===========================================";
         } else {
-            qDebug() << "[WHS] 图片上传成功";
+            qDebug() << "[WHS-IMG-DIAG] ========== 图片上传成功 ==========";
+            qDebug() << "[WHS-IMG-DIAG] RecoId    :" << recordId;
+            qDebug() << "[WHS-IMG-DIAG] HTTP状态码:" << httpCode;
+            qDebug() << "[WHS-IMG-DIAG] 响应Body  :" << respBody;
+            qDebug() << "[WHS-IMG-DIAG] =====================================";
         }
         reply->deleteLater();
     });

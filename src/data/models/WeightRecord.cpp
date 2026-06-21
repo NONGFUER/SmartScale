@@ -6,6 +6,7 @@ QVariantMap WeightRecord::toMap() const
     map["id"] = id;
     map["weight"] = weight;
     map["categoryName"] = categoryName;
+    map["ingrId"] = ingrId;
     map["recordTime"] = recordTime;
     map["operatorName"] = operatorName;
     map["hasMainImage"] = hasMainImage;
@@ -25,6 +26,7 @@ WeightRecord WeightRecord::fromMap(const QVariantMap &map)
     record.id = map.value("id", -1).toInt();
     record.weight = map.value("weight", 0.0).toDouble();
     record.categoryName = map.value("categoryName").toString();
+    record.ingrId = map.value("ingrId").toString();
     record.recordTime = map.value("recordTime").toString();
     record.operatorName = map.value("operatorName").toString();
     record.hasMainImage = map.value("hasMainImage", false).toBool();

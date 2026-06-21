@@ -131,12 +131,12 @@ void WeightSensor::consumeBuffer()
     bool hwStable = (statusWord & 0x02);
     bool hwTared  = (statusWord & 0x01);
 
-    qDebug().nospace() << "[Scale] raw=" << rawWeightKg << "kg"
-                       << " ADC=" << adcRaw
-                       << QString(" status=0x%1").arg(statusWord, 4, 16, QChar('0'))
-                       << (hwStable ? " [HW:稳定]" : " [HW:波动]")
-                       << (hwTared  ? " [去皮]" : "")
-                       << ((statusWord & 0x04) ? " 负重" : "");
+    //qDebug().nospace() << "[Scale] raw=" << rawWeightKg << "kg"
+                      // << " ADC=" << adcRaw
+                       //<< QString(" status=0x%1").arg(statusWord, 4, 16, QChar('0'))
+                       //<< (hwStable ? " [HW:稳定]" : " [HW:波动]")
+                       //<< (hwTared  ? " [去皮]" : "")
+                       //<< ((statusWord & 0x04) ? " 负重" : "");
 
     double newNetWeight = rawWeightKg - m_zeroOffset - m_tareWeight;
 

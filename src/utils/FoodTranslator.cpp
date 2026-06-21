@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QDebug>
 
 static QString cacheFilePath()
@@ -38,7 +39,8 @@ QString FoodTranslator::translate(const QString &englishName) const
 }
 
 // ============================================================
-//  从 API 数据更新字典并写入本地缓存
+//  从 API 数据更新内存字典 (ingrCd/emsCd → ingrNm)
+//  缓存文件由 UserIngredientService 负责写入，翻译器只读不写
 // ============================================================
 void FoodTranslator::updateFromApi(const QVariantList &items)
 {
@@ -52,16 +54,18 @@ void FoodTranslator::updateFromApi(const QVariantList &items)
     for (const QVariant &v : items) {
         QVariantMap map = v.toMap();
         QString en = map.value("en").toString().trimmed().toLower();
+        QString emsCd = map.value("emsCd").toString().trimmed().toLower();
         QString cn = map.value("cn").toString().trimmed();
 
         if (!en.isEmpty() && !cn.isEmpty()) {
             m_dict.insert(en, cn);
         }
+        if (!emsCd.isEmpty() && !cn.isEmpty() && emsCd != en) {
+            m_dict.insert(emsCd, cn);
+        }
     }
 
     qInfo() << "[Translator] 从 API 加载了" << m_dict.size() << "条翻译记录";
-
-    saveToCache();
 
     if (!m_ready) {
         m_ready = true;
@@ -70,7 +74,7 @@ void FoodTranslator::updateFromApi(const QVariantList &items)
 }
 
 // ============================================================
-//  本地 JSON 缓存读写
+//  本地 JSON 缓存读取 (新结构: categories[].items[])
 // ============================================================
 void FoodTranslator::loadFromCache()
 {
@@ -90,10 +94,29 @@ void FoodTranslator::loadFromCache()
         return;
     }
 
-    QJsonObject obj = doc.object();
+    QJsonObject root = doc.object();
+
+    // 旧结构 (扁平字典) 不再处理，UserIngredientService 会删除并重建
+    if (!root.contains("categories")) {
+        qInfo() << "[Translator] 缓存为旧格式，等待 UserIngredientService 重建";
+        return;
+    }
+
     m_dict.clear();
-    for (auto it = obj.begin(); it != obj.end(); ++it) {
-        m_dict.insert(it.key().toLower(), it.value().toString());
+    QJsonArray cats = root.value("categories").toArray();
+    for (const QJsonValue &cv : cats) {
+        QJsonArray items = cv.toObject().value("items").toArray();
+        for (const QJsonValue &iv : items) {
+            QJsonObject obj = iv.toObject();
+            QString en = obj.value("ingrCd").toString().trimmed().toLower();
+            QString emsCd = obj.value("emsCd").toString().trimmed().toLower();
+            QString cn = obj.value("ingrNm").toString().trimmed();
+
+            if (!en.isEmpty() && !cn.isEmpty())
+                m_dict.insert(en, cn);
+            if (!emsCd.isEmpty() && !cn.isEmpty() && emsCd != en)
+                m_dict.insert(emsCd, cn);
+        }
     }
 
     if (!m_dict.isEmpty()) {
@@ -102,24 +125,4 @@ void FoodTranslator::loadFromCache()
     }
 
     qInfo() << "[Translator] 从缓存加载了" << m_dict.size() << "条翻译记录:" << path;
-}
-
-void FoodTranslator::saveToCache()
-{
-    QJsonObject obj;
-    for (auto it = m_dict.constBegin(); it != m_dict.constEnd(); ++it) {
-        obj.insert(it.key(), it.value());
-    }
-
-    QString path = cacheFilePath();
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        qWarning() << "[Translator] 无法写入缓存文件:" << path;
-        return;
-    }
-
-    file.write(QJsonDocument(obj).toJson(QJsonDocument::Compact));
-    file.close();
-
-    qInfo() << "[Translator] 缓存已写入:" << path << "(" << m_dict.size() << "条)";
 }

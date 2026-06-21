@@ -9,6 +9,9 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QDebug>
+#include <QFile>
+#include <QDir>
+#include <QDateTime>
 
 UserIngredientService::UserIngredientService(QObject *parent)
     : QObject(parent)
@@ -16,6 +19,9 @@ UserIngredientService::UserIngredientService(QObject *parent)
 {
     connect(m_networkMgr, &QNetworkAccessManager::finished,
             this, &UserIngredientService::onNetworkReply);
+
+    // 启动时从本地缓存加载，使选择弹窗在登录前也能渲染
+    loadFromCache();
 }
 
 void UserIngredientService::setAuthService(AuthService *auth)
@@ -100,6 +106,7 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
     m_items.clear();
     m_ingrMap.clear();
     m_ingrNameMap.clear();
+    m_emsMap.clear();
 
     for (const QJsonValue &val : items) {
         QJsonObject obj = val.toObject();
@@ -107,10 +114,24 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         QString ingrCd = obj.value("ingrCd").toString().toLower();
         QString ingrNm = obj.value("ingrNm").toString();
 
+        // 分类与电子秤绑定信息
+        QString cateId  = obj.value("cateId").toVariant().toString();
+        QString cateNm  = obj.value("cateNm").toString();
+        QString emsId   = obj.value("emsId").toVariant().toString();
+        QString emsCd   = obj.value("emsCd").toString().toLower();
+        // enable: 后端为 boolean，统一转成 "true"/"false" 字符串便于 QML 比较
+        bool enableBool = obj.value("enable").toBool(false);
+        QString enable  = enableBool ? QStringLiteral("true") : QStringLiteral("false");
+
         QVariantMap item;
-        item["en"] = ingrCd;
-        item["cn"] = ingrNm;
-        item["id"] = ingrId;
+        item["en"]     = ingrCd;
+        item["cn"]     = ingrNm;
+        item["id"]     = ingrId;
+        item["cateId"] = cateId;
+        item["cateNm"] = cateNm;
+        item["emsId"]  = emsId;
+        item["emsCd"]  = emsCd;
+        item["enable"] = enable;
         m_items.append(item);
 
         if (!ingrId.isEmpty() && !ingrCd.isEmpty()) {
@@ -119,7 +140,12 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         if (!ingrId.isEmpty() && !ingrNm.isEmpty()) {
             m_ingrNameMap[ingrNm] = ingrId;
         }
+        if (!ingrId.isEmpty() && !emsCd.isEmpty()) {
+            m_emsMap[emsCd] = ingrId;
+        }
     }
+
+    rebuildCategories();
 
     m_loading = false;
     Q_EMIT loadingChanged();
@@ -127,7 +153,10 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
 
     qInfo() << "[UserIngr] 成功加载" << m_items.size() << "个食材";
 
-    // 更新翻译器缓存（ingrCd → ingrNm），并写入本地 JSON 文件
+    // 写入本地缓存 (新结构: 分类 + 食材)
+    saveToCache();
+
+    // 更新翻译器内存字典 (ingrCd/emsCd → ingrNm)，翻译器不再自行写缓存
     FoodTranslator::instance()->updateFromApi(m_items);
 
     Q_EMIT fetchSuccess();
@@ -138,6 +167,171 @@ QString UserIngredientService::getIngrId(const QString &ingrCd) const
     // 先按英文编码查
     QString id = m_ingrMap.value(ingrCd.toLower());
     if (!id.isEmpty()) return id;
+    // 再按电子秤编码查
+    id = m_emsMap.value(ingrCd.toLower());
+    if (!id.isEmpty()) return id;
     // fallback: 按中文名查
     return m_ingrNameMap.value(ingrCd, QStringLiteral("0"));
+}
+
+QVariantMap UserIngredientService::findByEmsCd(const QString &emsCd) const
+{
+    QString key = emsCd.trimmed().toLower();
+    for (const QVariant &v : m_items) {
+        QVariantMap m = v.toMap();
+        if (m.value("emsCd").toString().toLower() == key)
+            return m;
+    }
+    return QVariantMap();
+}
+
+void UserIngredientService::rebuildCategories()
+{
+    m_categories.clear();
+    // 按 cateId 分组，保持首次出现顺序
+    QMap<QString, QVariantMap> catMap;       // cateId → {cateId,cateNm,items}
+    QStringList order;
+    for (const QVariant &v : m_items) {
+        QVariantMap item = v.toMap();
+        QString cateId = item.value("cateId").toString();
+        if (cateId.isEmpty()) cateId = QStringLiteral("0");
+        if (!catMap.contains(cateId)) {
+            QVariantMap cat;
+            cat["cateId"] = cateId;
+            cat["cateNm"] = item.value("cateNm").toString();
+            cat["items"]  = QVariantList();
+            catMap.insert(cateId, cat);
+            order.append(cateId);
+        }
+        QVariantMap cat = catMap.value(cateId);
+        QVariantList itemList = cat.value("items").toList();
+        itemList.append(item);
+        cat["items"] = itemList;
+        catMap.insert(cateId, cat);
+    }
+    for (const QString &cid : order)
+        m_categories.append(catMap.value(cid));
+}
+
+// ============================================================
+//  本地 JSON 缓存 (新结构: 分类 + 食材)
+// ============================================================
+QString UserIngredientService::cacheFilePath()
+{
+    QString dir = QDir::homePath() + "/.cache/smartscale";
+    QDir().mkpath(dir);
+    return dir + "/ingredients.json";
+}
+
+void UserIngredientService::loadFromCache()
+{
+    QString path = cacheFilePath();
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qInfo() << "[UserIngr] 无本地缓存，等待登录后拉取";
+        return;
+    }
+
+    QByteArray data = file.readAll();
+    file.close();
+
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) {
+        qWarning() << "[UserIngr] 缓存 JSON 格式错误，忽略";
+        return;
+    }
+
+    QJsonObject root = doc.object();
+
+    // 旧结构 (扁平字典 en→cn) 直接删除，登录后重建为新结构
+    if (!root.contains("categories")) {
+        qInfo() << "[UserIngr] 检测到旧格式缓存，删除后等待重新拉取:" << path;
+        QFile::remove(path);
+        return;
+    }
+
+    QJsonArray cats = root.value("categories").toArray();
+    m_items.clear();
+    m_ingrMap.clear();
+    m_ingrNameMap.clear();
+    m_emsMap.clear();
+
+    for (const QJsonValue &cv : cats) {
+        QJsonObject cat = cv.toObject();
+        QJsonArray items = cat.value("items").toArray();
+        for (const QJsonValue &iv : items) {
+            QJsonObject obj = iv.toObject();
+            QVariantMap item;
+            item["en"]     = obj.value("ingrCd").toString().toLower();
+            item["cn"]     = obj.value("ingrNm").toString();
+            item["id"]     = obj.value("ingrId").toVariant().toString();
+            item["cateId"] = obj.value("cateId").toVariant().toString();
+            item["cateNm"] = obj.value("cateNm").toString();
+            item["emsId"]  = obj.value("emsId").toVariant().toString();
+            item["emsCd"]  = obj.value("emsCd").toString().toLower();
+            item["enable"] = obj.value("enable").toString();
+            m_items.append(item);
+
+            QString ingrId = item["id"].toString();
+            if (!ingrId.isEmpty()) {
+                if (!item["en"].toString().isEmpty())
+                    m_ingrMap[item["en"].toString()] = ingrId;
+                if (!item["cn"].toString().isEmpty())
+                    m_ingrNameMap[item["cn"].toString()] = ingrId;
+                if (!item["emsCd"].toString().isEmpty())
+                    m_emsMap[item["emsCd"].toString()] = ingrId;
+            }
+        }
+    }
+
+    rebuildCategories();
+
+    if (!m_items.isEmpty())
+        Q_EMIT itemsChanged();
+
+    qInfo() << "[UserIngr] 从缓存加载了" << m_items.size() << "个食材:" << path;
+}
+
+void UserIngredientService::saveToCache()
+{
+    QJsonObject root;
+    root["version"] = 1;
+    root["fetchedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
+
+    QJsonArray cats;
+    for (const QVariant &cv : m_categories) {
+        QVariantMap cat = cv.toMap();
+        QJsonObject catObj;
+        catObj["cateId"] = cat.value("cateId").toString();
+        catObj["cateNm"] = cat.value("cateNm").toString();
+        QJsonArray itemArr;
+        for (const QVariant &iv : cat.value("items").toList()) {
+            QVariantMap m = iv.toMap();
+            QJsonObject itemObj;
+            itemObj["ingrId"] = m.value("id").toString();
+            itemObj["ingrCd"] = m.value("en").toString();
+            itemObj["ingrNm"] = m.value("cn").toString();
+            itemObj["cateId"] = m.value("cateId").toString();
+            itemObj["cateNm"] = m.value("cateNm").toString();
+            itemObj["emsId"]  = m.value("emsId").toString();
+            itemObj["emsCd"]  = m.value("emsCd").toString();
+            itemObj["enable"] = m.value("enable").toString();
+            itemArr.append(itemObj);
+        }
+        catObj["items"] = itemArr;
+        cats.append(catObj);
+    }
+    root["categories"] = cats;
+
+    QString path = cacheFilePath();
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "[UserIngr] 无法写入缓存文件:" << path;
+        return;
+    }
+    file.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+    file.close();
+
+    qInfo() << "[UserIngr] 缓存已写入:" << path
+            << "(" << m_items.size() << "个食材," << m_categories.size() << "个分类)";
 }

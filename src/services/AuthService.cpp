@@ -7,6 +7,8 @@
 #include <QNetworkRequest>
 #include <QDebug>
 #include <QElapsedTimer>
+#include <QFile>
+#include <QDir>
 
 // ==========================================================================
 //  构造 / 析构
@@ -18,6 +20,7 @@ AuthService::AuthService(QObject *parent)
 {
     connect(m_networkMgr, &QNetworkAccessManager::finished,
             this, &AuthService::onNetworkReply);
+    loadProductFromCache();
 }
 
 AuthService::~AuthService()
@@ -35,14 +38,14 @@ void AuthService::login(const QString &userCode, const QString &password)
     m_pendingUserCode = userCode;
     m_pendingPassword = password;
 
-    // admin 账号优先使用离线登录，隐患
+    // admin 账号保留原有特殊处理流程：直接走离线登录（不经过在线流程）
     if (userCode.toLower() == "admin") {
-        qDebug() << "[Auth] admin 账号，优先走离线验证";
+        qDebug() << "[Auth] admin 账号，走离线验证（特殊处理流程）";
         tryOfflineLogin(userCode, password);
         return;
     }
 
-    // 其他账号先尝试在线，失败后自动降级
+    // 其他账号仅尝试在线登录；服务端请求失败时直接报错，不再降级到离线模式
     tryOnlineLogin(userCode, password);
 }
 
@@ -123,11 +126,9 @@ void AuthService::tryRefreshToken()
 
     QNetworkRequest request = createApiRequest(NetworkUtils::Api::REFRESH_TOKEN);
 
-    // Body 为 RefreshToken（JSON 字符串）
-    QJsonObject bodyObj;
-    bodyObj["refreshToken"] = m_refreshToken;
-    QJsonDocument bodyDoc(bodyObj);
-    QByteArray bodyData = bodyDoc.toJson(QJsonDocument::Compact);
+    // 后端 [FromBody] string refreshToken 期望的是 JSON 字符串值（带引号），
+    // 而非 JSON 对象 {"refreshToken": "..."}
+    QByteArray bodyData = "\"" + m_refreshToken.toUtf8() + "\"";
 
     // 完整诊断日志：与登录请求保持一致，便于定位后端 "refreshToken field is required"
     qDebug() << "[Auth] 刷新 Token 请求:"
@@ -146,44 +147,116 @@ void AuthService::tryRefreshToken()
     reply->setProperty("_startTime", QVariant::fromValue(timer));
 }
 
+void AuthService::tryFetchProductBySn()
+{
+    // 在线模式且 token 有效时才调用，离线模式跳过
+    if (!m_isOnlineMode || m_token.isEmpty()) {
+        qDebug() << "[Auth] 跳过 Product/by-sn 请求: 非在线模式或无 token";
+        return;
+    }
+
+    QNetworkRequest request = createApiRequest(NetworkUtils::Api::PRODUCT_BY_SN, m_token);
+
+    // 后端 [FromBody] string sn 期望 JSON 字符串值（带引号），与 refresh-token 接口同模式
+    // 序列号先写死，后续接入设备读取时再替换
+    static const QString kFixedSn = QStringLiteral("1234567891122312");
+    QByteArray bodyData = "\"" + kFixedSn.toUtf8() + "\"";
+
+    qInfo() << "[Auth] 请求 Product/by-sn, sn=" << kFixedSn;
+    qInfo() << "[HTTP] Body:" << bodyData;
+
+    QElapsedTimer timer;
+    timer.start();
+
+    QNetworkReply *reply = m_networkMgr->post(request, bodyData);
+    reply->setProperty("_isProductBySn", true);
+    reply->setProperty("_startTime", QVariant::fromValue(timer));
+}
+
 // ==========================================================================
 //  网络回调处理
 // ==========================================================================
 
 void AuthService::onNetworkReply(QNetworkReply *reply)
 {
-    bool isRefresh = reply->property("_isRefreshToken").isValid()
-                     && reply->property("_isRefreshToken").toBool();
-    bool isLogin   = reply->property("_pendingUserCode").isValid();
+    bool isRefresh    = reply->property("_isRefreshToken").isValid()
+                        && reply->property("_isRefreshToken").toBool();
+    bool isLogin      = reply->property("_pendingUserCode").isValid();
+    bool isProductBySn = reply->property("_isProductBySn").isValid()
+                        && reply->property("_isProductBySn").toBool();
 
-    if (!isRefresh && !isLogin) {
+    if (!isRefresh && !isLogin && !isProductBySn) {
         reply->deleteLater();
         return;
     }
 
     reply->deleteLater();
 
+    // --- 打印请求耗时 ---
+    if (reply->property("_startTime").isValid()) {
+        QElapsedTimer timer = reply->property("_startTime").value<QElapsedTimer>();
+        qInfo() << "[HTTP] 请求耗时:" << timer.elapsed() << "ms";
+    }
+
+    // --- Product/by-sn 分支：解析 productId 并缓存，失败不影响登录态 ---
+    if (isProductBySn) {
+        if (reply->error() != QNetworkReply::NoError) {
+            qWarning() << "[Auth] Product/by-sn 网络错误:" << reply->errorString();
+            return;
+        }
+        QByteArray data = reply->readAll();
+        qDebug() << "[Auth] Product/by-sn 响应:" << data;
+
+        QJsonParseError parseErr;
+        QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
+        if (parseErr.error != QJsonParseError::NoError) {
+            qWarning() << "[Auth] Product/by-sn JSON 解析失败:" << parseErr.errorString();
+            return;
+        }
+
+        QJsonObject root = doc.object();
+        // 后端标准包装: { success, data: { productId, ... } }；兼容直接返回产品对象
+        QJsonObject dataObj = root.value("data").toObject();
+        QJsonObject src     = dataObj.isEmpty() ? root : dataObj;
+
+        // productId 可能是字符串或数字
+        QJsonValue pidVal = src.value("productId");
+        QString productId;
+        if (pidVal.isString()) {
+            productId = pidVal.toString();
+        } else if (pidVal.isDouble()) {
+            productId = QString::number(pidVal.toInt());
+        }
+
+        if (productId.isEmpty()) {
+            qWarning() << "[Auth] Product/by-sn 响应中未找到 productId, keys=" << src.keys();
+            return;
+        }
+
+        m_productId = productId;
+        saveProductToCache();
+        Q_EMIT productIdChanged();
+        qInfo() << "[Auth] Product/by-sn 成功: productId=" << m_productId << "（已缓存）";
+        return;
+    }
+
     // --- 检查网络错误 ---
+    // 设计原则：服务端请求失败（网络层或业务层）时直接中断流程并返回错误，
+    // 不再降级到离线模式。仅 admin 账号经由 login() 中的特殊处理流程走离线登录。
     if (reply->error() != QNetworkReply::NoError) {
         qWarning() << "[Auth] 网络错误:" << reply->errorString();
         if (isRefresh) {
             Q_EMIT tokenRefreshFailed("网络连接失败");
         } else {
-            // 在线失败，尝试离线降级
-            qDebug() << "[Auth] 在线不可用，降级到离线登录";
-            tryOfflineLogin(m_pendingUserCode, m_pendingPassword);
+            // 在线登录网络请求失败：直接报错，不再降级到离线
+            qWarning() << "[Auth] 在线登录网络请求失败，直接返回错误";
+            Q_EMIT loginFailed(QStringLiteral("网络连接失败：%1").arg(reply->errorString()));
         }
         return;
     }
 
     // --- 解析响应 JSON（登录 / 刷新共用） ---
     QByteArray data = reply->readAll();
-
-    // 打印请求耗时
-    if (reply->property("_startTime").isValid()) {
-        QElapsedTimer timer = reply->property("_startTime").value<QElapsedTimer>();
-        qInfo() << "[HTTP] 请求耗时:" << timer.elapsed() << "ms";
-    }
 
     qDebug() << "[Auth] 响应数据:" << data;
 
@@ -195,9 +268,16 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
                           userId, userName, errMsg)) {
         // 刷新时用户名沿用当前用户；登录时使用服务端返回的
         QString finalUser = isRefresh ? m_currentUser : userName;
+        // 在线登录成功必然为在线模式（online=true）；
+        // 刷新时沿用当前 m_isOnlineMode（仅在线登录会持有可刷新的 token）。
+        // 注意：PRODUCT_BY_SN 的触发条件逻辑（handleAuthSuccess 内 if(online) 守卫
+        // 及 tryFetchProductBySn 内部防御检查）保持现状，此处仅修正 online 参数传值，
+        // 修复原 m_isOnlineMode 在登录前恒为 false 导致在线登录被误判为 OFFLINE 的 Bug。
+        const bool online = isRefresh ? m_isOnlineMode : true;
         handleAuthSuccess(finalUser, userId,
                           newToken, newRefreshToken,
-                          expiresAt, m_role, m_isOnlineMode);
+                          expiresAt, m_role, online,
+                          !isRefresh); // Token 刷新不触发 loginSuccess/拉取产品
         if (isRefresh) {
             Q_EMIT tokenRefreshed(newToken);
         }
@@ -205,9 +285,9 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
         if (isRefresh) {
             Q_EMIT tokenRefreshFailed(errMsg);
         } else {
-            // 在线认证失败（服务器返回错误），降级到离线
-            qDebug() << "[Auth] 在线认证失败，降级到离线登录:" << errMsg;
-            tryOfflineLogin(m_pendingUserCode, m_pendingPassword);
+            // 在线认证业务失败（服务端返回 success=false）：直接报错，不再降级到离线
+            qWarning() << "[Auth] 在线认证业务失败，直接返回错误:" << errMsg;
+            Q_EMIT loginFailed(errMsg);
         }
     }
 }
@@ -345,7 +425,8 @@ void AuthService::handleAuthSuccess(const QString &username,
                                     const QString &refreshToken,
                                     const QDateTime &expiresAt,
                                     const QString &role,
-                                    bool online)
+                                    bool online,
+                                    bool isInitialLogin)
 {
     m_currentUser     = username;
     m_token           = token;
@@ -365,7 +446,15 @@ void AuthService::handleAuthSuccess(const QString &username,
     Q_EMIT tokenChanged();
     Q_EMIT userInfoChanged();
     Q_EMIT modeChanged();
-    Q_EMIT loginSuccess();
+
+    // 仅在首次登录时 emit loginSuccess 并拉取产品/食材；
+    // Token 刷新跳过，避免上传过程中触发多余网络请求
+    if (isInitialLogin) {
+        Q_EMIT loginSuccess();
+        if (online) {
+            tryFetchProductBySn();
+        }
+    }
 }
 
 // ==========================================================================
@@ -385,4 +474,55 @@ bool AuthService::isTokenValid() const
     if (m_token.isEmpty()) return false;
     if (!m_tokenExpiresAt.isValid()) return true;  // 有 Token 但无过期信息，视为有效
     return QDateTime::currentDateTime() < m_tokenExpiresAt;
+}
+
+// ==========================================================================
+//  productId 本地缓存读写
+//  路径: ~/.cache/smartscale/product.json
+// ==========================================================================
+
+void AuthService::loadProductFromCache()
+{
+    QString path = QDir::homePath() + "/.cache/smartscale/product.json";
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        qInfo() << "[Auth] 无本地 productId 缓存，等待登录后从 API 拉取";
+        return;
+    }
+
+    QJsonParseError parseErr;
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseErr);
+    file.close();
+
+    if (parseErr.error != QJsonParseError::NoError) {
+        qWarning() << "[Auth] productId 缓存 JSON 解析失败:" << parseErr.errorString();
+        return;
+    }
+
+    QString pid = doc.object().value("productId").toString();
+    if (!pid.isEmpty()) {
+        m_productId = pid;
+        qInfo() << "[Auth] 从缓存加载 productId=" << m_productId;
+    }
+}
+
+void AuthService::saveProductToCache() const
+{
+    if (m_productId.isEmpty()) return;
+
+    QString dir = QDir::homePath() + "/.cache/smartscale";
+    QDir().mkpath(dir);
+    QString path = dir + "/product.json";
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "[Auth] 写入 productId 缓存失败:" << file.errorString();
+        return;
+    }
+
+    QJsonObject obj;
+    obj["productId"] = m_productId;
+    file.write(QJsonDocument(obj).toJson(QJsonDocument::Compact));
+    file.close();
+    qDebug() << "[Auth] productId 已写入缓存:" << path;
 }

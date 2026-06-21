@@ -23,11 +23,12 @@ namespace NetworkUtils {
         // inline constexpr const char *WEIGHT_CREATE  = "/api/ems/WeightRecord/create";  // 已废弃，统一走 USER 域
         inline constexpr const char *CATEGORY_LIST  = "/api/ems/Ingr/paged";  // 品类列表
         inline constexpr const char *AI_RECOGNIZE_FILE  = "/api/ems/AiDet/recognize-ingr/file";  // 识别食材
+        inline constexpr const char *PRODUCT_BY_SN      = "/api/ems/Product/by-sn";  // 根据 SN 获取产品
 
         // === USER 域接口（user.shxgs.cn:5196）===
         inline constexpr const char *USER_WEIGHT_CREATE     = "/api/user/WeightRecord/create";
         inline constexpr const char *USER_WEIGHT_UPDATE_IMG = "/api/user/WeightRecord/update-img";
-        inline constexpr const char *USER_INGR_PAGED        = "/api/user/Ingr/paged";
+        inline constexpr const char *USER_INGR_PAGED        = "/api/user/UserIngr/paged";
     }
 
     /**

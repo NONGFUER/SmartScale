@@ -40,7 +40,8 @@ public:
                                const QString &categoryName,
                                const QString &operatorName = QString(),
                                const QString &mainImagePath = QString(),
-                               const QString &subImagePath = QString());
+                               const QString &subImagePath = QString(),
+                               const QString &ingrId = QString());
 
     /** @brief 删除记录 (按列表索引) */
     Q_INVOKABLE void removeRecord(int index);
@@ -84,7 +85,7 @@ private:
     void recalcStats();
     QByteArray buildUploadJson(const WeightRecord &record);
     void uploadSingleRecord(const WeightRecord &record);
-    void updateRecordImage(int custId, int recordId, const QString &imagePath);
+    void updateRecordImage(int custId, const QString &recordId, const QString &imagePath);
 
     WeightRecordRepo *m_repo;
     QVariantList m_historyEntries;

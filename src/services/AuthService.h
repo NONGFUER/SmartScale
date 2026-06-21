@@ -20,6 +20,7 @@ class AuthService : public QObject
     Q_PROPERTY(QString currentUser READ currentUser NOTIFY currentUserChanged)
     Q_PROPERTY(int custId READ custId NOTIFY userInfoChanged)
     Q_PROPERTY(int devId READ devId NOTIFY userInfoChanged)
+    Q_PROPERTY(QString productId READ productId NOTIFY productIdChanged)
 
 public:
     explicit AuthService(QObject *parent = nullptr);
@@ -52,6 +53,8 @@ public:
     QString currentUser() const { return m_currentUser; }
     int custId() const { return m_custId; }
     int devId() const { return m_devId; }
+    /** @brief 产品 ID（登录后由 /api/ems/Product/by-sn 返回，缓存到本地） */
+    QString productId() const { return m_productId; }
 
 Q_SIGNALS:
     void loginSuccess();
@@ -63,6 +66,7 @@ Q_SIGNALS:
     void tokenChanged();
     void userInfoChanged();
     void modeChanged();
+    void productIdChanged();
 
 private Q_SLOTS:
     /** @brief 处理网络回复 */
@@ -78,6 +82,9 @@ private:
     // === 刷新 Token ===
     void tryRefreshToken();
 
+    // === 根据 SN 获取产品（登录后调用，提取 productId 缓存） ===
+    void tryFetchProductBySn();
+
     // === 统一处理登录/刷新成功 ===
     void handleAuthSuccess(const QString &username,
                            int userId,
@@ -85,7 +92,8 @@ private:
                            const QString &refreshToken,
                            const QDateTime &expiresAt,
                            const QString &role,
-                           bool online);
+                           bool online,
+                           bool isInitialLogin = true);
 
     // === 网络请求辅助（消除 SSL/Header 样板重复） ===
     QNetworkRequest createApiRequest(const QString &apiPath,
@@ -100,6 +108,10 @@ private:
                            int &outUserId,
                            QString &outUserName,
                            QString &outErrMsg);
+
+    // === productId 本地缓存读写 ===
+    void loadProductFromCache();
+    void saveProductToCache() const;
 
     // === 成员变量 ===
     QNetworkAccessManager *m_networkMgr;
@@ -117,6 +129,7 @@ private:
     bool m_isOnlineMode = false;
     int m_custId = 0;
     int m_devId = 0;
+    QString m_productId;          // 产品 ID（来自 /api/ems/Product/by-sn）
 };
 
 #endif // AUTHSERVICE_H
