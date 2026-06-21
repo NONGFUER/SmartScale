@@ -208,7 +208,7 @@ Item {
                             ColumnLayout {
                                 Layout.fillHeight: true
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 65
+                                Layout.preferredWidth: 35
                                 spacing: 10
 
                                 Text {
@@ -257,7 +257,7 @@ Item {
                                     anchors.verticalCenter: parent.verticalCenter
                                     anchors.leftMargin: 14
                                     spacing: 6
-                                    Text { text: "\uD83D\uDCF7"; font.pixelSize: 24; color: "#475569" }
+                                    
                                     Text { text: "实时监控"; font.pixelSize: 24; font.bold: true; color: "#334155" }
                                 }
 
@@ -271,174 +271,175 @@ Item {
                                 }
                             }
 
-                            // ========== 单视频主区域 + 画中画 ==========
                             Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
 
-                                // ========== 主摄像头 — 全屏底图 ==========
-                                Rectangle {
+                                RowLayout {
                                     anchors.fill: parent
-                                    radius: 12
-                                    color: "#DBEAFE"
-                                    border.color: "#93C5FD"
-                                    border.width: 2
+                                    anchors.margins: 10
+                                    anchors.topMargin: 6
+                                    spacing: 10
+
+                            // ========== 主摄像头 — 蓝调主题（核心工作区） ==========
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                radius: 12
+                                color: "#DBEAFE"       // 浅蓝背景，暗示主要区域
+                                border.color: "#93C5FD" // 柔和蓝边框
+                                border.width: 2
+                                clip: true
+
+                                VideoOutput {
+                                    id: mainVideo
+                                    anchors.fill: parent
+                                    fillMode: VideoOutput.PreserveAspectCrop
+                                    Component.onCompleted: {
+                                        CameraController.setMainVideoSink(mainVideo.videoSink)
+                                    }
+                                }
+
+                                // ========== 取景引导框 — 对齐 AI 裁剪区域 ==========
+                                // C++ 裁剪参数 (CameraController._processCommon):
+                                //   边长: min(w,h) * 0.35, 中心: 水平45%, 垂直53%
+                                Item {
+                                    anchors.fill: parent
                                     clip: true
-
-                                    VideoOutput {
-                                        id: mainVideo
-                                        anchors.fill: parent
-                                        fillMode: VideoOutput.PreserveAspectCrop
-                                        Component.onCompleted: {
-                                            CameraController.setMainVideoSink(mainVideo.videoSink)
-                                        }
-                                    }
-
-                                    // ========== 取景引导框 — 对齐 AI 裁剪区域 ==========
-                                    // C++ 裁剪参数 (CameraController._processCommon):
-                                    //   边长: min(w,h) * 0.35, 中心: 水平45%, 垂直53%
-                                    Item {
-                                        anchors.fill: parent
-                                        clip: true
-                                        Rectangle {
-                                            id: guideBox
-                                            width: Math.min(parent.width, parent.height) * 0.35
-                                            height: width
-                                            x: parent.width * 0.45 - width / 2
-                                            y: parent.height * 0.53 - height / 2
-                                            color: "transparent"
-                                            radius: 8
-                                            border.width: 2
-                                            border.color: "#3B82F6"
-                                            Rectangle {
-                                                anchors.fill: parent
-                                                anchors.margins: parent.border.width
-                                                radius: 6
-                                                color: "#3B82F6"
-                                                opacity: 0.08
-                                            }
-                                            property real cLen: Math.min(width, height) * 0.2
-                                            Canvas {
-                                                anchors.fill: parent
-                                                onPaint: {
-                                                    var ctx = getContext("2d")
-                                                    var cl = parent.cLen
-                                                    ctx.clearRect(0, 0, width, height)
-                                                    ctx.strokeStyle = "#2563EB"
-                                                    ctx.lineWidth = 3
-                                                    ctx.lineCap = "square"
-                                                    ctx.beginPath(); ctx.moveTo(0, cl); ctx.lineTo(0, 0); ctx.lineTo(cl, 0); ctx.stroke()
-                                                    ctx.beginPath(); ctx.moveTo(width - cl, 0); ctx.lineTo(width, 0); ctx.lineTo(width, cl); ctx.stroke()
-                                                    ctx.beginPath(); ctx.moveTo(0, height - cl); ctx.lineTo(0, height); ctx.lineTo(cl, height); ctx.stroke()
-                                                    ctx.beginPath(); ctx.moveTo(width - cl, height); ctx.lineTo(width, height); ctx.lineTo(width - cl, height - cl); ctx.stroke()
-                                                }
-                                                Component.onCompleted: requestPaint()
-                                            }
-                                        }
-                                        Rectangle {
-                                            x: guideBox.x + (guideBox.width - width) / 2
-                                            y: guideBox.y - 28
-                                            width: guideTextLabel.width + 16
-                                            height: 24
-                                            radius: 4
-                                            color: "#2563EB"
-                                            visible: guideBox.y > 30
-                                            Text {
-                                                id: guideTextLabel
-                                                anchors.centerIn: parent
-                                                text: "\u8BF7\u5C06\u83DC\u83D0\u653E\u7F6E\u4E8E\u6B64\u533A\u57DF"
-                                                font.pixelSize: 12
-                                                color: "#FFFFFF"
-                                            }
-                                        }
-                                    }
-
-                                    // 左上角标签 — 蓝色调，醒目
                                     Rectangle {
-                                        anchors.left: parent.left
-                                        anchors.top: parent.top
-                                        anchors.margins: 10
-                                        width: auto_width.width + 24
-                                        height: 30
-                                        radius: 6
-                                        color: "#2563EB"        // 蓝色实心底
-
-                                        Row {
-                                            id: auto_width
-                                            spacing: 5
-                                            anchors.centerIn: parent
-                                            Text { text: "\uD83D\uDDCF"; font.pixelSize: 13; color: "#FFFFFF" }
-                                            Text { text: "蔬菜拍摄"; font.pixelSize: 13; font.bold: true; color: "#FFFFFF" }
-                                        }
-                                    }
-
-                                    // 右下角实时状态指示
-                                    Row {
-                                        anchors.right: parent.right
-                                        anchors.bottom: parent.bottom
-                                        anchors.margins: 8
-                                        spacing: 5
-                                        Rectangle { width: 8; height: 8; radius: 4; color: "#22C55E" }  // 绿点=在线
-                                        Text { text: "LIVE"; font.pixelSize: 10; font.bold: true; color: "#22C55E" }
-                                    }
-
-                                    // ============================================================
-                                    //  副摄像头 — 画中画（PiP，右下角浮动小窗）
-                                    // ============================================================
-                                    Rectangle {
-                                        id: pipContainer
-                                        anchors.right: parent.right
-                                        anchors.bottom: parent.bottom
-                                        anchors.margins: 14
-                                        width: Math.min(parent.width * 0.26, 220)
-                                        height: width * 1.1
-                                        radius: 10
-                                        color: "#1C1917"           // 深色底，与主摄形成对比
-                                        border.color: "#FFFFFF"
+                                        id: guideBox
+                                        width: Math.min(parent.width, parent.height) * 0.35
+                                        height: width
+                                        x: parent.width * 0.45 - width / 2
+                                        y: parent.height * 0.53 - height / 2
+                                        color: "transparent"
+                                        radius: 8
                                         border.width: 2
-                                        clip: true
-
-                                        VideoOutput {
-                                            id: subVideo
-                                            anchors.fill: parent
-                                            anchors.margins: 2
-                                            fillMode: VideoOutput.PreserveAspectFit  //裁剪模式PreserveAspectCrop
-                                            Component.onCompleted: {
-                                                CameraController.setSubVideoSink(subVideo.videoSink)
-                                            }
-                                        }
-
-                                        // 左上角胶囊标签 — 暖色
+                                        border.color: "#3B82F6"
                                         Rectangle {
-                                            anchors.left: parent.left
-                                            anchors.top: parent.top
-                                            anchors.margins: 6
-                                            width: pip_label_w.width + 14
-                                            height: 22
-                                            radius: 4
-                                            color: "#CC5500"
-
-                                            Row {
-                                                id: pip_label_w
-                                                spacing: 4
-                                                anchors.centerIn: parent
-                                                Text { text: "\uD83D\uDC64"; font.pixelSize: 11; color: "#FFFFFF" }
-                                                Text { text: "操作员"; font.pixelSize: 10; font.bold: true; color: "#FFFFFF" }
+                                            anchors.fill: parent
+                                            anchors.margins: parent.border.width
+                                            radius: 6
+                                            color: "#3B82F6"
+                                            opacity: 0.08
+                                        }
+                                        property real cLen: Math.min(width, height) * 0.2
+                                        Canvas {
+                                            anchors.fill: parent
+                                            onPaint: {
+                                                var ctx = getContext("2d")
+                                                var cl = parent.cLen
+                                                ctx.clearRect(0, 0, width, height)
+                                                ctx.strokeStyle = "#2563EB"
+                                                ctx.lineWidth = 3
+                                                ctx.lineCap = "square"
+                                                ctx.beginPath(); ctx.moveTo(0, cl); ctx.lineTo(0, 0); ctx.lineTo(cl, 0); ctx.stroke()
+                                                ctx.beginPath(); ctx.moveTo(width - cl, 0); ctx.lineTo(width, 0); ctx.lineTo(width, cl); ctx.stroke()
+                                                ctx.beginPath(); ctx.moveTo(0, height - cl); ctx.lineTo(0, height); ctx.lineTo(cl, height); ctx.stroke()
+                                                ctx.beginPath(); ctx.moveTo(width - cl, height); ctx.lineTo(width, height); ctx.lineTo(width - cl, height - cl); ctx.stroke()
                                             }
+                                            Component.onCompleted: requestPaint()
                                         }
+                                    }
+                                    Rectangle {
+                                        x: guideBox.x + (guideBox.width - width) / 2
+                                        y: guideBox.y - 28
+                                        width: guideTextLabel.width + 16
+                                        height: 24
+                                        radius: 4
+                                        color: "#2563EB"
+                                        visible: guideBox.y > 30
+                                        Text {
+                                            id: guideTextLabel
+                                            anchors.centerIn: parent
+                                            text: "\u8BF7\u5C06\u83DC\u83D0\u653E\u7F6E\u4E8E\u6B64\u533A\u57DF"
+                                            font.pixelSize: 12
+                                            color: "#FFFFFF"
+                                        }
+                                    }
+                                }
 
-                                        // 右下角状态点
-                                        Row {
-                                            anchors.right: parent.right
-                                            anchors.bottom: parent.bottom
-                                            anchors.margins: 5
-                                            spacing: 4
-                                            Rectangle { width: 6; height: 6; radius: 3; color: "#F97316" }
-                                            Text { text: "AUX"; font.pixelSize: 8; font.bold: true; color: "#A8A29E" }
-                                        }
-                                    } // end PiP container
-                                } // end main camera rectangle
-                            } // end single video area Item
+                                // 左上角标签 — 蓝色调，醒目
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.margins: 10
+                                    width: auto_width.width + 24
+                                    height: 30
+                                    radius: 6
+                                    color: "#2563EB"        // 蓝色实心底
+
+                                    Row {
+                                        id: auto_width
+                                        spacing: 5
+                                        anchors.centerIn: parent
+                                        Text { text: "\uD83D\uDDCF"; font.pixelSize: 13; color: "#FFFFFF" }
+                                        Text { text: "蔬菜拍摄"; font.pixelSize: 13; font.bold: true; color: "#FFFFFF" }
+                                    }
+                                }
+
+                                // 右下角实时状态指示
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    anchors.margins: 8
+                                    spacing: 5
+                                    Rectangle { width: 8; height: 8; radius: 4; color: "#22C55E" }  // 绿点=在线
+                                    Text { text: "LIVE"; font.pixelSize: 10; font.bold: true; color: "#22C55E" }
+                                }
+                            }
+
+                            // ========== 副摄像头 — 暖灰主题（辅助观察区） ==========
+                            Rectangle {
+                                Layout.preferredWidth: Math.min(parent.width * 0.38, 280)
+                                Layout.fillHeight: true
+                                Layout.minimumWidth: 160
+                                radius: 12
+                                color: "#F1F0EF"        // 暖灰背景，与主摄形成冷暖对比
+                                border.color: "#D6D3D1" // 柔和暖边框
+                                border.width: 2
+                                clip: true
+
+                                VideoOutput {
+                                    id: subVideo
+                                    anchors.fill: parent
+                                    fillMode: VideoOutput.PreserveAspectCrop
+                                    Component.onCompleted: {
+                                        CameraController.setSubVideoSink(subVideo.videoSink)
+                                    }
+                                }
+
+                                // 左上角胶囊标签 — 暖色调
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.margins: 10
+                                    width: aux_label_w.width + 24
+                                    height: 30
+                                    radius: 6
+                                    color: "#78716C"        // 暖灰实心底
+
+                                    Row {
+                                        id: aux_label_w
+                                        spacing: 5
+                                        anchors.centerIn: parent
+                                        Text { text: "\uD83D\uDC64"; font.pixelSize: 13; color: "#FFFFFF" }  // 👤
+                                        Text { text: "操作员视角"; font.pixelSize: 12; font.bold: true; color: "#FFFFFF" }
+                                    }
+                                }
+
+                                // 右下角状态指示
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    anchors.margins: 8
+                                    spacing: 5
+                                    Rectangle { width: 7; height: 7; radius: 3; color: "#F97316" }
+                                    Text { text: "AUX"; font.pixelSize: 9; font.bold: true; color: "#78716C" }
+                                }
+                            }
+                            } // RowLayout
+                        } // Item (双视频区)// end single video area Item
                     } // ColumnLayout
                     } // 蔬菜拍摄区块 Rectangle
                     } // 左侧区域 ColumnLayout
@@ -521,29 +522,15 @@ Item {
                         Layout.fillHeight: true
 
                         ColumnLayout {
-                            anchors.centerIn: parent
-                            width: parent.width
+                            anchors.fill: parent
                             spacing: 12
 
                             Row {
                                 spacing: 8
                                 Text {
-                                    text: "物品名称"
+                                    text: "食材名称"
                                     font.pixelSize: 24
                                     color: "#64748B"
-                                }
-
-                                Rectangle {
-                                    width: 78; height: 20; radius: 4
-                                    color: "#DBEAFE"
-                                   
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "AI辅助识别"
-                                        font.pixelSize: 18
-                                        color: "#2563EB"
-                                    }
                                 }
                             }
 
@@ -603,6 +590,13 @@ Item {
                                                                  
                                     }
                             }
+
+                            // 弹性占位 — 把称重标签+卡片挤到列底
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                            }
+
                             // "称重克数" 独立标签 — 在卡片外部上方
                             Text {
                                 text: "称重克数"
@@ -624,7 +618,7 @@ Item {
 
                                     Text {
                                         text: WeightManager.netWeight.toFixed(2)
-                                        font.pixelSize: 192
+                                        font.pixelSize: 148
                                         font.bold: true
                                         color: "#FFFFFF"
                                         font.family: "Monospace"
@@ -639,7 +633,7 @@ Item {
                                 }
                             }
 
-                            // "物品名称" 独立标签 — 在名称卡片上方
+                           
                             
                         }
                     }
@@ -696,25 +690,6 @@ Item {
                                     item.text = "去皮"; 
                                     item.clicked.connect(function() { WeightManager.tare() })
                                     }
-                            }
-
-                            // 识别按钮（手动触发 AI 拍照识别）
-                            Loader {
-                                sourceComponent: secondaryButton
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                onLoaded: {
-                                    item.text = "识别"; 
-                                    item.clicked.connect(function() {
-                                        if (WeightManager.netWeight > 0.01) {
-                                            console.log(">> 手动触发AI识别:", WeightManager.netWeight.toFixed(2) + "kg")
-                                            root.currentPrediction = PState.BUSY
-                                            CameraController.captureVegetable(WeightManager.netWeight, "")
-                                        } else {
-                                            console.warn("重量不足，无法识别")
-                                        }
-                                    })
-                                }
                             }
 
                             // 保存按钮（蓝色渐变主按钮）

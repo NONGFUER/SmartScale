@@ -31,7 +31,7 @@ public:
     // ---- 方法 ----
     Q_INVOKABLE QString label(const QString &s) const {
         if (s == IDLE || s == NOT_READY || s == UNKNOWN || s == NONE)
-            return QStringLiteral("点击选择品类");
+            return QStringLiteral("点击选择食材");
         if (s == BUSY)                  return QStringLiteral("识别中...");
         return s;
     }

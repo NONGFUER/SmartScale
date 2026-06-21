@@ -5,7 +5,7 @@ import App.Backend 1.0
 
 Rectangle {
     id: root
-    height: 80
+    height: 60
     color: "transparent"
 
     // 点击设置图标发出的信号
@@ -46,7 +46,7 @@ Rectangle {
 
             Text {
                 anchors.centerIn: parent   // 相当于 padding: 均匀分布
-                text: "智 能 AI 网 络 地 磅"
+                text: "AI 视 觉 识 别 智 能 网 络 称"
                 font.family: "AlibabaPuHuiTi"
                 font.pixelSize: 36
                 font.bold: true
