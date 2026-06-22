@@ -45,7 +45,7 @@ void UserIngredientService::fetchIngredients()
 
     QJsonObject body;
     body["page"]      = 1;
-    body["pageSize"]  = 100;
+    body["pageSize"]  = 200;
     body["keyword"]   = "";
     body["custId"]    = m_authService->custId();
     body["cateId"]    = 0;

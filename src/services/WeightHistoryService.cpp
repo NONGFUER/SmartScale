@@ -507,7 +507,8 @@ void WeightHistoryService::createUserWeightRecord(const QString &ingrCd,
 
 // ============================================================
 // 图片上传 (multipart/form-data)
-// POST /api/user/WeightRecord/update-img?userId=X&id=Y  + 图片二进制
+// POST /api/user/WeightRecord/update-img
+// Body: CustId(int64) + RecoId(int64) + File(binary) 均为 form-data 字段
 // ============================================================
 
 void WeightHistoryService::updateRecordImage(int custId, const QString &recordId, const QString &imagePath)
@@ -517,12 +518,10 @@ void WeightHistoryService::updateRecordImage(int custId, const QString &recordId
     QString token = m_authService->token();
     if (token.isEmpty()) return;
 
+    // 注意: CustId 和 RecoId 是 form-data body 字段（非 URL query）,
+    // 与 Swagger 定义一致: CustId($int64), RecoId($int64), File($binary)
     QUrl url(QString("%1%2").arg(NetworkUtils::USER_BASE_URL,
                                   NetworkUtils::Api::USER_WEIGHT_UPDATE_IMG));
-    QUrlQuery query;
-    query.addQueryItem("CustId", QString::number(custId));
-    query.addQueryItem("RecoId", recordId);  // 雪花 ID，直接用字符串
-    url.setQuery(query);
 
     QNetworkRequest request(url);
     request.setRawHeader("Authorization", QByteArray("Bearer ") + token.toUtf8());
@@ -539,6 +538,22 @@ void WeightHistoryService::updateRecordImage(int custId, const QString &recordId
     }
 
     QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+
+    // CustId: form-data 文本字段 ($int64)
+    QHttpPart custIdPart;
+    custIdPart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                         QVariant("form-data; name=\"CustId\""));
+    custIdPart.setBody(QString::number(custId).toUtf8());
+    multiPart->append(custIdPart);
+
+    // RecoId: form-data 文本字段 ($int64), 雪花 ID
+    QHttpPart recoIdPart;
+    recoIdPart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                         QVariant("form-data; name=\"RecoId\""));
+    recoIdPart.setBody(recordId.toUtf8());
+    multiPart->append(recoIdPart);
+
+    // File: form-data 二进制字段 ($binary)
     QHttpPart imagePart;
     imagePart.setHeader(QNetworkRequest::ContentDispositionHeader,
                         QVariant("form-data; name=\"File\"; filename=\"record.jpg\""));
