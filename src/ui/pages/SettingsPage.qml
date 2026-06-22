@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
+import App.Backend 1.0
 
 Item {
     id: root
@@ -218,6 +219,13 @@ Item {
                 SettingItem {
                     label: "电池电量(预留接口):"
                     value: "--"
+                    editable: false
+                }
+
+                // --- 软件版本（只读，从 SystemInfo 读取）---
+                SettingItem {
+                    label: "软件版本:"
+                    value: SystemInfo.appVersion
                     editable: false
                 }
             }

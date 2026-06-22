@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import App.Backend 1.0
 
 Rectangle {
     id: root
@@ -18,21 +17,19 @@ Rectangle {
         anchors.leftMargin: 24
         anchors.rightMargin: 24
         spacing: 0
-
-        // ===== 左侧：软件版本号 =====
         RowLayout {
             spacing: 20
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: root.height
             Text {
-                text: "软件版本: " + SystemInfo.appVersion
+                text: "© 2026 小管事集团 Inc."
                 font.pixelSize: 24
                 font.bold: true
                 color: "#FFFFFF"
                 Layout.alignment: Qt.AlignVCenter
             }
         }
-
+        // 左侧空占位（版本号已移至设置页，这里保留让中间标题居中）
         Item { Layout.fillWidth: true }
 
         // ===== 中间：大标题 =====
