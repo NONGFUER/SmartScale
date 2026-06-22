@@ -362,7 +362,6 @@ Item {
                     anchors.fill: parent
                     onClicked: doAutoSkip()
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
                 }
             }
         }

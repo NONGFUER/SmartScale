@@ -108,7 +108,6 @@ Item {
                                         MouseArea {
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
                                             onClicked: console.log("查看更多历史记录...")
                                         }
                                     }
@@ -135,50 +134,81 @@ Item {
                                         spacing: 8
 
                                         delegate: Rectangle {
+                                            id: historyDelegate
                                             width: historyListView.width
-                                            height: 48
-                                            radius: 8
-                                            color: index % 2 === 0 ? "#FFFFFF" : "#F1F5F9"
-                                            border.color: "#E2E8F0"
-                                            border.width: 1
+                                            height: 60
+                                            radius: 10
+
+                                            // 通过 recordTime 唯一标识比较，避免数组刷新后引用失效
+                                            property bool isSelected: root.currentDetailRecord
+                                                                     && root.currentDetailRecord.recordTime === modelData.recordTime
+                                            property bool isHovered: delegateMouseArea.containsMouse && !isSelected
+
+                                            // 背景：选中=品牌色淡填充，悬停=极浅灰，默认=纯白
+                                            color: isSelected ? "#E0E7FF"
+                                                              : (isHovered ? "#F5F7FB" : "#FFFFFF")
+                                            border.color: isSelected ? "#4361EE"
+                                                                     : (isHovered ? "#C7D2FE" : "#E5E7EB")
+                                            border.width: isSelected ? 2 : 1
+
+                                            Behavior on color { ColorAnimation { duration: 150 } }
+                                            Behavior on border.color { ColorAnimation { duration: 150 } }
+                                            Behavior on border.width { NumberAnimation { duration: 120 } }
+
+                                            // 左侧选中指示条（4px 品牌色实心条，强对比）
+                                            Rectangle {
+                                                x: 0
+                                                y: 4
+                                                width: 4
+                                                height: parent.height - 8
+                                                color: "#4361EE"
+                                                visible: historyDelegate.isSelected
+                                                radius: 2
+                                            }
 
                                             RowLayout {
                                                 anchors.fill: parent
-                                                anchors.leftMargin: 12
+                                                anchors.leftMargin: 16
                                                 anchors.rightMargin: 12
-                                                spacing: 12
+                                                spacing: 10
 
+                                                // 品类名（选中=品牌色，否则=深灰）
                                                 Text {
                                                     text: modelData.categoryName || "未识别"
                                                     font.pixelSize: 24
                                                     font.bold: true
-                                                    color: "#334155"
+                                                    color: historyDelegate.isSelected ? "#4361EE" : "#334155"
                                                     elide: Text.ElideRight
                                                     Layout.fillWidth: true
+                                                    Behavior on color { ColorAnimation { duration: 150 } }
                                                 }
 
+                                                // 重量（选中=品牌色，否则=绿色）
                                                 Text {
-                                                    text: modelData.weight ? modelData.weight.toFixed(2) + "kg" : "0.00kg"
+                                                    text: modelData.weight ? modelData.weight.toFixed(2) + " kg" : "0.00 kg"
                                                     font.pixelSize: 24
-                                                    color: "#16A34A"
                                                     font.bold: true
+                                                    color: historyDelegate.isSelected ? "#4361EE" : "#16A34A"
+                                                    Behavior on color { ColorAnimation { duration: 150 } }
                                                 }
 
+                                                // 时间（选中=品牌色辅助色，否则=浅灰）
                                                 Text {
                                                     text: (modelData.recordTime || "").substring(5, 16)
-                                                    font.pixelSize: 13
-                                                    color: "#94A3B8"
+                                                    font.pixelSize: 12
+                                                    color: historyDelegate.isSelected ? "#6B82D9" : "#94A3B8"
+                                                    Behavior on color { ColorAnimation { duration: 150 } }
                                                 }
                                             }
 
-                                            // 点击打开详情弹窗，显示水印图片
+                                            // 点击切换水印预览（不再直接弹窗，弹窗改为点水印预览图片触发）
                                             MouseArea {
+                                                id: delegateMouseArea
                                                 anchors.fill: parent
                                                 hoverEnabled: true
                                                 cursorShape: Qt.PointingHandCursor
                                                 onClicked: {
                                                     root.currentDetailRecord = modelData
-                                                    detailDialog.open()
                                                 }
                                             }
                                         }
@@ -237,6 +267,7 @@ Item {
                                 }
 
                                 Rectangle {
+                                    id: watermarkPreview
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
                                     color: "#E2E8F0"
@@ -244,10 +275,13 @@ Item {
                                     clip: true
 
                                     // 优先显示当前选中记录，否则回退到最新一条记录
-                                    property var _displayRecord: root.currentDetailRecord
-                                        || (WeightHistoryService && WeightHistoryService.historyEntries.length > 0
-                                            ? WeightHistoryService.historyEntries[0]
-                                            : null)
+                                    // 用显式条件而非 || 短路，确保 currentDetailRecord 变化时绑定一定重新求值
+                                    property var _displayRecord: {
+                                        if (root.currentDetailRecord) return root.currentDetailRecord
+                                        if (WeightHistoryService && WeightHistoryService.historyEntries.length > 0)
+                                            return WeightHistoryService.historyEntries[0]
+                                        return null
+                                    }
                                     property string _imgPath: _displayRecord && _displayRecord.mainImagePath
                                         ? (_displayRecord.mainImagePath.startsWith("file://")
                                            ? _displayRecord.mainImagePath
@@ -259,6 +293,18 @@ Item {
                                         source: parent._imgPath
                                         fillMode: Image.PreserveAspectCrop
                                         cache: false
+                                    }
+
+                                    // 点击水印预览图片打开详情弹窗
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: parent._imgPath !== ""
+                                        onClicked: {
+                                            if (parent._displayRecord) {
+                                                root.currentDetailRecord = parent._displayRecord
+                                                detailDialog.open()
+                                            }
+                                        }
                                     }
 
                                     // 无图时显示占位文字
@@ -412,7 +458,7 @@ Item {
                                         id: auto_width
                                         spacing: 5
                                         anchors.centerIn: parent
-                                        Text { text: "\uD83D\uDDCF"; font.pixelSize: 13; color: "#FFFFFF" }
+                                       
                                         Text { text: "蔬菜拍摄"; font.pixelSize: 13; font.bold: true; color: "#FFFFFF" }
                                     }
                                 }
@@ -434,8 +480,8 @@ Item {
                                 Layout.fillHeight: true
                                 Layout.minimumWidth: 160
                                 radius: 12
-                                color: "#F1F0EF"        // 暖灰背景，与主摄形成冷暖对比
-                                border.color: "#D6D3D1" // 柔和暖边框
+                                color: "#F1F0EF"        
+                                border.color: "#D6D3D1" 
                                 border.width: 2
                                 clip: true
 
@@ -462,7 +508,7 @@ Item {
                                         id: aux_label_w
                                         spacing: 5
                                         anchors.centerIn: parent
-                                        Text { text: "\uD83D\uDC64"; font.pixelSize: 13; color: "#FFFFFF" }  // 👤
+                                        
                                         Text { text: "操作员视角"; font.pixelSize: 12; font.bold: true; color: "#FFFFFF" }
                                     }
                                 }
@@ -477,11 +523,11 @@ Item {
                                     Text { text: "AUX"; font.pixelSize: 9; font.bold: true; color: "#78716C" }
                                 }
                             }
-                            } // RowLayout
-                        } // Item (双视频区)// end single video area Item
-                    } // ColumnLayout
-                    } // 蔬菜拍摄区块 Rectangle
-                    } // 左侧区域 ColumnLayout
+                        } 
+                        } 
+                    } 
+                    } 
+                    } 
 
                 // ================================================================
                 // 右侧区域 (40%) — 自然流式布局（顶部紧凑/中部弹性/底部固定）
@@ -519,7 +565,6 @@ Item {
                             MouseArea {
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     if (BackendAuth.currentUser) {
                                         logoutConfirmDialog.open()
@@ -588,7 +633,6 @@ Item {
                                 MouseArea {
                                     anchors.fill: parent
                                     hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
                                     onClicked: {
                                         console.log("打开品类选择...")
                                         root.categorySelectMode = true
@@ -982,7 +1026,6 @@ Item {
                     id: closeBtnArea
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
                     onClicked: detailDialog.close()
                 }
             }
@@ -1229,7 +1272,6 @@ Item {
 
                     MouseArea {
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
                         onClicked: detailDialog.close()
                     }
                 }
@@ -1282,7 +1324,6 @@ Item {
                         id: cancelLogoutMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
                         onClicked: logoutConfirmDialog.close()
                     }
                 }
@@ -1298,7 +1339,6 @@ Item {
                     MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             logoutConfirmDialog.close()
                             window.appLogout()

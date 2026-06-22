@@ -1,4 +1,5 @@
 #include <QGuiApplication>
+#include <QCursor>
 #include <QQmlApplicationEngine>
 #include <Qt>
 #include <QQmlContext>
@@ -40,6 +41,9 @@ int main(int argc, char *argv[])
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");
 
     QGuiApplication app(argc, argv);
+
+    // 触摸屏环境：全局隐藏鼠标光标
+    QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
 
     QQmlApplicationEngine engine;
 

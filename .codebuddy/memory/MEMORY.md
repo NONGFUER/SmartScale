@@ -2,6 +2,13 @@
 
 > 跨会话稳定约定与硬性规则。冲突时直接更新本文档，不另起条目。
 
+## 触摸屏环境（强制）
+
+**目标设备是触摸屏，没有鼠标光标。**
+
+1. **全局隐藏系统光标**：`main.cpp` 中 `QGuiApplication` 创建后立即调用 `QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor))`（需 `#include <QCursor>`）
+2. **QML 层禁止设置 cursorShape**：所有 `MouseArea` 不要写 `cursorShape` 这一行（包括 `Qt.PointingHandCursor`、`Qt.ArrowCursor`、`Qt.BlankCursor` 等）。已有代码中所有 `cursorShape` 已批量清理
+
 ## QML 浮层提示规则（强制）
 
 **全局 Toast / 通知 / 临时提示组件的根节点必须用 Qt Quick Controls 的 `Popup`（或 `Dialog`），禁止用裸 `Item` + `anchors` + `z:9999`。**

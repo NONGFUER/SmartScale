@@ -22,7 +22,7 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: root.height
             Text {
-                text: "© 2026 小管事集团 Inc."
+                text: "© 2026 小管事机器人集团公司 Inc."
                 font.pixelSize: 24
                 font.bold: true
                 color: "#FFFFFF"
@@ -155,7 +155,6 @@ Rectangle {
                         id: debugMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             console.log("[StatusBar] 调试按钮被点击")
                             root.debugRequested()
@@ -221,7 +220,6 @@ Rectangle {
                         id: setGearMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             console.log("[StatusBar] 设置图标被点击")
                             root.settingsRequested()

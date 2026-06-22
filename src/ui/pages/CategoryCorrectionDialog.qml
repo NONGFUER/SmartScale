@@ -96,7 +96,6 @@ Dialog {
                     id: closeMouse
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
                     onClicked: dialogRoot.reject()
                 }
             }
@@ -137,7 +136,6 @@ Dialog {
                 MouseArea {
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
                     onClicked: console.log("[CategoryDialog] 搜索:", catSearchInput.text)
                 }
             }
@@ -180,7 +178,6 @@ Dialog {
                     MouseArea {
                         anchors.fill: parent
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             dialogRoot.activeCategoryIndex = index
                             dialogRoot.selectedLabel = ""
@@ -235,7 +232,6 @@ Dialog {
                             id: cardArea
                             anchors.fill: parent
                             hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             dialogRoot.selectedLabel = modelData.en
                             dialogRoot.selectedIngrId = (modelData.id !== undefined) ? String(modelData.id) : ""
@@ -274,7 +270,6 @@ Dialog {
                         id: cancelBtnMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
                         onClicked: dialogRoot.reject()
                     }
                 }
@@ -299,7 +294,6 @@ Dialog {
                         id: confirmBtnMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
                         enabled: dialogRoot.selectedLabel !== ""
                         onClicked: dialogRoot.accept()
                     }

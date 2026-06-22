@@ -26,7 +26,6 @@ Rectangle {
         id: cardMouse
         anchors.fill: parent
         hoverEnabled: true
-        cursorShape: Qt.PointingHandCursor
         onClicked: cardRoot.clicked()
     }
 }

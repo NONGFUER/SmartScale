@@ -57,7 +57,6 @@ Item {
                         id: backMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
                         onClicked: stackView.pop()
                     }
                 }
@@ -314,7 +313,6 @@ Item {
         MouseArea {
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
             onClicked: parent.clicked()
         }
     }
