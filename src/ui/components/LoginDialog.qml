@@ -42,7 +42,7 @@ Dialog {
         anchors.top: parent.bottom
         anchors.topMargin: 8
         font.family: "Microsoft YaHei"
-        font.pixelSize: 14
+        font.pixelSize: 20
         color: "#F59E0B"
         opacity: 0
 
@@ -114,7 +114,7 @@ Dialog {
             leftPadding: 24
             placeholderText: "请输入账号"
             font.family: "PingFang SC"
-            font.pixelSize: 16
+            font.pixelSize: 24
             color: "#1B263B"
             verticalAlignment: TextInput.AlignVCenter
             inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhPreferLowercase
@@ -134,7 +134,7 @@ Dialog {
             leftPadding: 24
             placeholderText: "请输入登录密码"
             font.family: "PingFang SC"
-            font.pixelSize: 16
+            font.pixelSize: 24
             color: "#1B263B"
             echoMode: TextInput.Password
             verticalAlignment: TextInput.AlignVCenter

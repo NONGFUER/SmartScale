@@ -30,3 +30,19 @@
 
 - SmartScale 项目 `CMakeLists.txt` 用 `qt_add_qml_module` **显式列出** `QML_FILES`（非自动扫描）
 - 新建 QML 文件后**必须**手动追加到 `QML_FILES` 列表，否则运行时报 "xxx is not a type" 导致 Main.qml 白屏
+
+## QML Singleton 创建方式
+
+- **纯 QML singleton**（如 Theme.qml）需要**三步**（缺一不可，Qt 6.8 实测）：
+  1. QML 文件顶部 `pragma Singleton`
+  2. CMake 中 `set_source_files_properties(xxx.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)`，**必须在 `qt_add_qml_module` 之前**
+  3. 加入 `qt_add_qml_module` 的 `QML_FILES` 列表
+- **诊断 singleton 是否真生效**：检查 `build/<URI>/qmldir`，singleton 行必须以 `singleton` 关键字开头（如 `singleton Theme 254.0 src/ui/Theme.qml`）。若缺 `singleton` 关键字，运行时 Theme 被当普通类型，`Theme.xxx` 引用全部静默失效但无报错
+- **C++ singleton**（如 SystemInfo、WeightManager）：main.cpp 中 `qmlRegisterSingletonInstance("App.Backend", 1, 0, "XXX", ptr)` 注册。访问：`import App.Backend 1.0`
+- 项目中两套模块并存：UI 主题常量用 `SmartScale`，业务服务用 `App.Backend`
+
+## 全局主题常量（Theme.qml）
+
+- 文件位置：`src/ui/Theme.qml`，singleton
+- 集中管理字体族（`fontFamilyUi`/`fontFamilyTitle`/`fontFamilyMono`）、字号（按用途语义命名：`fontSizeTitleLg`=24、`fontSizeBody`=16 等）、颜色（`colorTextPrimary` 等）
+- **新增 QML 字体/颜色一律走 Theme 引用，禁止硬编码**。已有文件按需逐步迁移

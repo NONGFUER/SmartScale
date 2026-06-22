@@ -31,9 +31,16 @@ qt_add_executable(appSmartScale
 
 add_definitions(-DQT_NO_KEYWORDS)
 
+# 声明 Theme.qml 为 QML singleton（pragma Singleton 需配合此源文件属性）
+# 必须在 qt_add_qml_module 之前设置
+set_source_files_properties(src/ui/Theme.qml PROPERTIES
+    QT_QML_SINGLETON_TYPE TRUE
+)
+
 qt_add_qml_module(appSmartScale
     URI SmartScale
     QML_FILES
+        src/ui/Theme.qml                       # 全局主题 singleton（字体/颜色常量）
         src/ui/Main.qml
         src/ui/pages/LoginPage.qml             # 登录页面
         src/ui/pages/WorkstationPage.qml       # 主操作台页面
@@ -46,7 +53,7 @@ qt_add_qml_module(appSmartScale
         src/ui/components/SystemInfoDialog.qml     # [测试] 系统调试信息弹窗
         src/ui/components/Toast.qml                # 全局 Toast 提示组件
 
-        # --- 核心基础设施 ---
+    # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
         SOURCES src/core/PState.h src/core/PState.cpp
 

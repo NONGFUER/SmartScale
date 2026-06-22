@@ -24,6 +24,24 @@ Item {
     // 推理耗时相关属性
     property string lastInferenceTime: PState.NONE + " ms"
 
+    // 默认选中最新一条记录（页面加载时 + 历史记录刷新后）
+    function _selectLatestRecord() {
+        if (!root.currentDetailRecord
+            && WeightHistoryService
+            && WeightHistoryService.historyEntries.length > 0) {
+            root.currentDetailRecord = WeightHistoryService.historyEntries[0]
+            console.log("[WSP] 默认选中最新记录:", JSON.stringify(root.currentDetailRecord).substring(0, 100))
+        }
+    }
+
+    Component.onCompleted: _selectLatestRecord()
+
+    // 历史记录变化时（首次加载/新增/刷新）若未选中任何记录，自动选中最新一条
+    Connections {
+        target: WeightHistoryService
+        function onHistoryChanged() { _selectLatestRecord() }
+    }
+
         // ===== 白色圆角主卡片 =====
         Rectangle {
             id: mainCard
@@ -223,12 +241,33 @@ Item {
                                     Layout.fillHeight: true
                                     color: "#E2E8F0"
                                     radius: 8
+                                    clip: true
 
+                                    // 优先显示当前选中记录，否则回退到最新一条记录
+                                    property var _displayRecord: root.currentDetailRecord
+                                        || (WeightHistoryService && WeightHistoryService.historyEntries.length > 0
+                                            ? WeightHistoryService.historyEntries[0]
+                                            : null)
+                                    property string _imgPath: _displayRecord && _displayRecord.mainImagePath
+                                        ? (_displayRecord.mainImagePath.startsWith("file://")
+                                           ? _displayRecord.mainImagePath
+                                           : "file://" + _displayRecord.mainImagePath)
+                                        : ""
+
+                                    Image {
+                                        anchors.fill: parent
+                                        source: parent._imgPath
+                                        fillMode: Image.PreserveAspectCrop
+                                        cache: false
+                                    }
+
+                                    // 无图时显示占位文字
                                     Text {
                                         anchors.centerIn: parent
-                                        text: "选择记录查看水印"
+                                        text: "暂无图片"
                                         font.pixelSize: 14
                                         color: "#94A3B8"
+                                        visible: parent._imgPath === ""
                                     }
                                 }
                             }

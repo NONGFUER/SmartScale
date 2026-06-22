@@ -3,19 +3,11 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
 import App.Backend 1.0
+import SmartScale
 
 Item {
     id: root
     anchors.fill: parent
-
-    // 蓝色渐变背景（与整体风格一致）
-    Rectangle {
-        anchors.fill: parent
-        gradient: Gradient {
-            GradientStop { position: 0.0; color: "#1A5CB5" }
-            GradientStop { position: 1.0; color: "#4A90D9" }
-        }
-    }
 
     // 主内容卡片（白色圆角）
     Rectangle {
@@ -48,15 +40,17 @@ Item {
 
                 // 返回按钮
                 Rectangle {
-                    width: 36; height: 36; radius: 8
+                    width: 72; height: 72; radius: 8
                     color: backMouse.containsMouse ? "#F0F4F8" : "transparent"
 
                     Text {
                         anchors.centerIn: parent
+                        width: 72
+                         height: 72
                         text: "\u2039"
-                        font.pixelSize: 28
+                        font.pixelSize: Theme.fontSizeIconBack
                         font.bold: true
-                        color: "#333333"
+                        color: Theme.colorTextPrimary
                     }
 
                     MouseArea {
@@ -72,10 +66,10 @@ Item {
 
                 Text {
                     text: "设置"
-                    font.family: "Microsoft YaHei"
-                    font.pixelSize: 24
+                    font.family: Theme.fontFamilyUi
+                    font.pixelSize: Theme.fontSizeTitleLg
                     font.bold: true
-                    color: "#1B263B"
+                    color: Theme.colorTextPrimary
                 }
 
                 Item { Layout.fillWidth: true }
@@ -87,7 +81,7 @@ Item {
                 Layout.fillWidth: true
                 Layout.bottomMargin: 28
                 height: 1
-                color: "#E5E7EB"
+                color: Theme.colorDivider
             }
 
             // ===== 设置项列表 =====
@@ -99,7 +93,7 @@ Item {
                 // --- 秤型号 ---
                 SettingItem {
                     label: "秤型号:"
-                    value: "V-XXXXXX"
+                    value: "WLC200A-13C"
                     editable: false
                 }
 
@@ -113,7 +107,7 @@ Item {
                 // --- 量程范围及精度 ---
                 SettingItem {
                     label: "量程范围及精度:"
-                    value: "150kg"
+                    value: "200kg"
                     editable: false
                 }
 
@@ -127,7 +121,7 @@ Item {
                 // --- 秤尺寸 ---
                 SettingItem {
                     label: "秤尺寸:"
-                    value: "100*20"
+                    value: "  * "
                     editable: false
                 }
 
@@ -139,9 +133,9 @@ Item {
 
                     Text {
                         text: "WiFi名称:"
-                        font.family: "Microsoft YaHei"
-                        font.pixelSize: 16
-                        color: "#666666"
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: Theme.fontSizeBody
+                        color: Theme.colorTextSecondary
                         Layout.preferredWidth: 140
                         Layout.alignment: Qt.AlignVCenter
                     }
@@ -152,21 +146,21 @@ Item {
                         Layout.preferredHeight: 44
                         leftPadding: 16
                         text: "CMCC-*****-5G"
-                        font.pixelSize: 15
-                        color: "#1B263B"
+                        font.pixelSize: Theme.fontSizeBodySm
+                        color: Theme.colorTextPrimary
                         verticalAlignment: TextInput.AlignVCenter
                         background: Rectangle {
                             radius: 8
-                            border.color: wifiNameInput.activeFocus ? "#4361EE" : "#D1D5DB"
-                            color: "#FAFAFA"
+                            border.color: wifiNameInput.activeFocus ? Theme.colorAccent : Theme.colorInputBorder
+                            color: Theme.colorInputBg
                         }
                     }
 
                     Button {
                         id: wifiConnectBtn
                         text: "连接"
-                        font.family: "Microsoft YaHei"
-                        font.pixelSize: 15
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: Theme.fontSizeBodySm
                         font.bold: true
                         Layout.preferredWidth: 80
                         Layout.preferredHeight: 44
@@ -209,18 +203,6 @@ Item {
                     isPassword: true
                 }
 
-                // --- 管理员管理（可点击行）===
-                ClickableSettingItem {
-                    label: "管理员管理"
-                    onClicked: console.log("[Settings] 打开管理员管理")
-                }
-
-                // --- 电池电量（预留接口）---
-                SettingItem {
-                    label: "电池电量(预留接口):"
-                    value: "--"
-                    editable: false
-                }
 
                 // --- 软件版本（只读，从 SystemInfo 读取）---
                 SettingItem {
@@ -250,18 +232,18 @@ Item {
 
         Text {
             text: label
-            font.family: "Microsoft YaHei"
-            font.pixelSize: 16
-            color: "#666666"
+            font.family: Theme.fontFamilyUi
+            font.pixelSize: Theme.fontSizeBody
+            color: Theme.colorTextSecondary
             Layout.preferredWidth: 160
             Layout.alignment: Qt.AlignVCenter
         }
 
         Text {
             text: value
-            font.family: "Microsoft YaHei"
-            font.pixelSize: 16
-            color: "#1B263B"
+            font.family: Theme.fontFamilyUi
+            font.pixelSize: Theme.fontSizeBody
+            color: Theme.colorTextPrimary
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
             horizontalAlignment: Text.AlignRight
@@ -279,9 +261,9 @@ Item {
 
         Text {
             text: label
-            font.family: "Microsoft YaHei"
-            font.pixelSize: 16
-            color: "#666666"
+            font.family: Theme.fontFamilyUi
+            font.pixelSize: Theme.fontSizeBody
+            color: Theme.colorTextSecondary
             Layout.preferredWidth: 160
             Layout.alignment: Qt.AlignVCenter
         }
@@ -291,14 +273,14 @@ Item {
             Layout.preferredHeight: 44
             leftPadding: 16
             text: parent.inputText
-            font.pixelSize: 15
-            color: "#1B263B"
+            font.pixelSize: Theme.fontSizeBodySm
+            color: Theme.colorTextPrimary
             echoMode: parent.isPassword ? TextInput.Password : TextInput.Normal
             verticalAlignment: TextInput.AlignVCenter
             background: Rectangle {
                 radius: 8
-                border.color: activeFocus ? "#4361EE" : "#D1D5DB"
-                color: "#FAFAFA"
+                border.color: activeFocus ? Theme.colorAccent : Theme.colorInputBorder
+                color: Theme.colorInputBg
             }
         }
     }
@@ -313,9 +295,9 @@ Item {
 
         Text {
             text: parent.label
-            font.family: "Microsoft YaHei"
-            font.pixelSize: 16
-            color: "#333333"
+            font.family: Theme.fontFamilyUi
+            font.pixelSize: Theme.fontSizeBody
+            color: Theme.colorTextPrimary
             Layout.preferredWidth: 200
             Layout.alignment: Qt.AlignVCenter
         }
@@ -325,7 +307,7 @@ Item {
         Text {
             text: "\u203A"
             font.pixelSize: 20
-            color: "#94A3B8"
+            color: Theme.colorTextTertiary
             Layout.alignment: Qt.AlignVCenter
         }
 
