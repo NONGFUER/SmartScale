@@ -14,7 +14,7 @@ class AuthService : public QObject
     Q_OBJECT
     // === 会话属性 (QML 可绑定) ===
     Q_PROPERTY(QString token READ token NOTIFY tokenChanged)
-    Q_PROPERTY(int userId READ userId NOTIFY userInfoChanged)
+    Q_PROPERTY(qint64 userId READ userId NOTIFY userInfoChanged)
     Q_PROPERTY(QString role READ role NOTIFY userInfoChanged)
     Q_PROPERTY(bool isOnlineMode READ isOnlineMode NOTIFY modeChanged)
     Q_PROPERTY(QString currentUser READ currentUser NOTIFY currentUserChanged)
@@ -47,7 +47,7 @@ public:
 
     // === Getter ===
     QString token() const { return m_token; }
-    int userId() const { return m_userId; }
+    qint64 userId() const { return m_userId; }
     QString role() const { return m_role; }
     bool isOnlineMode() const { return m_isOnlineMode; }
     QString currentUser() const { return m_currentUser; }
@@ -87,7 +87,7 @@ private:
 
     // === 统一处理登录/刷新成功 ===
     void handleAuthSuccess(const QString &username,
-                           int userId,
+                           qint64 userId,
                            const QString &token,
                            const QString &refreshToken,
                            const QDateTime &expiresAt,
@@ -105,7 +105,7 @@ private:
                            QString &outToken,
                            QString &outRefreshToken,
                            QDateTime &outExpiresAt,
-                           int &outUserId,
+                           qint64 &outUserId,
                            QString &outUserName,
                            QString &outErrMsg);
 
@@ -124,7 +124,7 @@ private:
     QString m_token;
     QString m_refreshToken;
     QDateTime m_tokenExpiresAt;
-    int m_userId = -1;
+    qint64 m_userId = -1;
     QString m_role;
     bool m_isOnlineMode = false;
     int m_custId = 0;

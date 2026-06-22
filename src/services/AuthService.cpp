@@ -262,7 +262,7 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
 
     QString newToken, newRefreshToken, userName, errMsg;
     QDateTime expiresAt;
-    int userId = -1;
+    qint64 userId = -1;
 
     if (parseAuthResponse(data, newToken, newRefreshToken, expiresAt,
                           userId, userName, errMsg)) {
@@ -354,7 +354,7 @@ bool AuthService::parseAuthResponse(const QByteArray &data,
                                      QString &outToken,
                                      QString &outRefreshToken,
                                      QDateTime &outExpiresAt,
-                                     int &outUserId,
+                                     qint64 &outUserId,
                                      QString &outUserName,
                                      QString &outErrMsg)
 {
@@ -393,7 +393,7 @@ bool AuthService::parseAuthResponse(const QByteArray &data,
     }
     outUserName    = userData.value("userName").toString();
     QJsonValue uidVal = userData.value("userId");
-    outUserId = uidVal.isString() ? uidVal.toString().toInt() : uidVal.toInt(-1);
+    outUserId = uidVal.isString() ? uidVal.toString().toLongLong() : uidVal.toVariant().toLongLong();
     QString expiresAtStr = userData.value("accessTokenExpiration").toString();
     qDebug() << "[Auth] data keys:" << userData.keys();
 
@@ -420,7 +420,7 @@ bool AuthService::parseAuthResponse(const QByteArray &data,
 // ==========================================================================
 
 void AuthService::handleAuthSuccess(const QString &username,
-                                    int userId,
+                                    qint64 userId,
                                     const QString &token,
                                     const QString &refreshToken,
                                     const QDateTime &expiresAt,

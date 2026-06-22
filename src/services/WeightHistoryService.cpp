@@ -206,7 +206,7 @@ QByteArray WeightHistoryService::buildUploadJson(const WeightRecord &record)
     json["val"]    = static_cast<int>(record.weight * 1000);
     json["aiDet"]  = !record.categoryName.isEmpty();
     //json["img"]    = record.mainImagePath;
-    json["userId"] = m_authService ? m_authService->userId() : -1;
+    json["userId"] = m_authService ? QJsonValue(qlonglong(m_authService->userId())) : -1;
     json["bill"]   = static_cast<int>((qHash(QUuid::createUuid()) & 0x7FFFFFFFu) + 1);
 
     return QJsonDocument(json).toJson(QJsonDocument::Compact);
@@ -478,7 +478,7 @@ void WeightHistoryService::createUserWeightRecord(const QString &ingrCd,
     json["val"]    = static_cast<int>(weightKg * 1000);
     json["aiDet"]  = aiDetected;
     json["img"]    = QString();
-    json["userId"] = m_authService->userId();
+    json["userId"] = QJsonValue(qlonglong(m_authService->userId()));
     json["bill"]   = static_cast<int>((qHash(QUuid::createUuid()) & 0x7FFFFFFFu) + 1);
 
     QByteArray payload = QJsonDocument(json).toJson(QJsonDocument::Compact);
