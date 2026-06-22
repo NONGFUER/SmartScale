@@ -148,4 +148,16 @@ ApplicationWindow {
             systemInfoDialog.open()
         }
     }
+
+    // 全局 Toast 提示组件（成功/失败/警告/信息），所有页面共享
+    // 调用方式：mainWindow.toast.show("保存成功") / .show("保存失败", "error")
+    Toast {
+        id: globalToast
+        z: 9999
+    }
+
+    // 暴露给子页面调用
+    function toast(message, type, duration) {
+        globalToast.show(message, type, duration)
+    }
 }

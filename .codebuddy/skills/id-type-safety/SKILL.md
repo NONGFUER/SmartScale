@@ -71,8 +71,8 @@ int custId = dataObj.value("custId").toInt();
 ### 步骤 1：识别 ID 字段
 
 遇到以下字段时触发类型安全检查：
-- **云端雪花 ID**（必须 string）：`ingrId`、`emsId`、`cateId`、`recoId`、`productId`
-- **业务小整数**（兜底解析）：`custId`、`devId`、`userId`、`bill`
+- **云端雪花 ID**（必须 string / qint64）：`ingrId`、`emsId`、`cateId`、`recoId`、`userId`、`productId`
+- **业务小整数**（兜底解析）：`custId`、`devId`、`bill`
 - **本地 DB ID**（toInt 安全）：`id`（SQLite 自增）
 
 ### 步骤 2：检查转换方式

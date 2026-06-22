@@ -44,6 +44,7 @@ qt_add_qml_module(appSmartScale
         src/ui/components/LoginDialog.qml      # 登录弹窗
         src/ui/pages/CategoryCorrectionDialog.qml  # 品类纠错弹窗
         src/ui/components/SystemInfoDialog.qml     # [测试] 系统调试信息弹窗
+        src/ui/components/Toast.qml                # 全局 Toast 提示组件
 
         # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp

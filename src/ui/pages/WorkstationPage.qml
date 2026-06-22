@@ -802,6 +802,24 @@ Item {
         }
     }
 
+    // === 上传结果反馈：全局 Toast ===
+    // window 是 Main.qml 中 ApplicationWindow 的 id，QML 全局可见
+    Connections {
+        target: WeightHistoryService
+        function onCloudSyncSuccess(localId) {
+            console.log("[Toast] 上传成功 id=", localId)
+            window.toast("保存成功", "success")
+        }
+        function onCloudSyncFailed(localId, errorMsg) {
+            console.warn("[Toast] 上传失败 id=", localId, "err=", errorMsg)
+            window.toast("保存失败：" + errorMsg, "error", 4000)
+        }
+        function onUserRecordCreated(success, msg) {
+            window.toast(success ? "记录已创建" : "创建失败：" + msg,
+                         success ? "info" : "error")
+        }
+    }
+
     Timer {
        id: fadeTimer
        interval: 100

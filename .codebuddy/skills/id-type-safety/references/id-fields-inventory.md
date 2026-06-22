@@ -7,7 +7,8 @@
 | `ingrId` | `/api/user/UserIngr/paged` → items[].ingrId | `toVariant().toString()` 存为 QString；上传时 `toLongLong()` + `QJsonValue(qlonglong)` |
 | `emsId` | `/api/user/UserIngr/paged` → items[].emsId | `toVariant().toString()` 存为 QString |
 | `cateId` | `/api/user/UserIngr/paged` → items[].cateId | `toVariant().toString()` 存为 QString |
-| `recoId` | `/api/user/WeightRecord/create` 响应 → data.recoId | `isString() ? toString().toLongLong() : toInt()`，存 qint64 |
+| `recoId` | `/api/user/WeightRecord/create` 响应 → data.recoId | `isString() ? toString().toLongLong() : toVariant().toLongLong()`，存 qint64 |
+| `userId` | 登录/刷新响应 → data.userId | `isString() ? toString().toLongLong() : toVariant().toLongLong()`，存 qint64；Q_PROPERTY/成员/形参全用 qint64 |
 | `productId` | `/api/ems/Product/by-sn` → data.productId | `toVariant().toString()` 存为 QString |
 
 **风险**：17 位雪花 ID（如 `61128584684638212`）远超 `int32` 上限（~21 亿），`toInt()` 溢出为 0 或负数。
@@ -26,7 +27,6 @@
 |------|------|----------|
 | `custId` | 客户 ID | `isString() ? toString().toInt() : toInt()` 兜底 |
 | `devId` | 设备 ID | 同上 |
-| `userId` | 用户 ID | 同上 |
 | `bill` | 单据号 | Int32，`qHash(QUuid) & 0x7FFFFFFF + 1` |
 
 ## 禁止模式
