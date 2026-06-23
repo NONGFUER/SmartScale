@@ -306,18 +306,28 @@ void CameraController::processAndSaveImage(int cameraIndex, QImage image)
 // -----------------------------------------------------
 void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
 {
-    // 2 裁剪（按比例切到称台区域，分辨率变化时自动适配）
-    // 称台位置: 水平偏左(45%), 垂直偏下(53%); 大小约占画面35%
-    double cropRatio = 0.35;                    // 裁剪区占画面边长的比例
-    int side = (int)(qMin(watermarkedImg.width(), watermarkedImg.height()) * cropRatio);
-    int cropX = (int)(watermarkedImg.width() * 0.45) - (side / 2);
-    int cropY = (int)(watermarkedImg.height() * 0.53) - (side / 2);
+    // 2 裁剪：主摄切称台区域 / 副摄居中切人脸区域
+    QRect cropRect;
+    if (cameraIndex != 0) {
+        // 副摄像头（人脸）：居中大方形，占短边80%
+        int side = (int)(qMin(watermarkedImg.width(), watermarkedImg.height()) * 0.80);
+        cropRect = QRect((watermarkedImg.width() - side) / 2,
+                          (watermarkedImg.height() - side) / 2,
+                          side, side);
+    } else {
+        // 主摄像头（称台）：水平偏左45%、垂直偏下53%，约占35%
+        double cropRatio = 0.35;
+        int side = (int)(qMin(watermarkedImg.width(), watermarkedImg.height()) * cropRatio);
+        int cropX = (int)(watermarkedImg.width() * 0.45) - (side / 2);
+        int cropY = (int)(watermarkedImg.height() * 0.53) - (side / 2);
+        cropRect = QRect(cropX, cropY, side, side);
+    }
 
     // 3 分发：主摄存 yt0.jpg，副摄存 yt1.jpg + 缓存员工照片 + 串联通知
     QString debugPrefix = (cameraIndex == 0) ? "yt0" : "yt1";
     watermarkedImg.save(QString("/home/sjwu/Pictures/%1.jpg").arg(debugPrefix), "JPG", 90);
 
-    QImage pureImageForAI = watermarkedImg.copy(cropX, cropY, side, side);
+    QImage pureImageForAI = watermarkedImg.copy(cropRect);
     pureImageForAI.save("/home/sjwu/Pictures/cp0.jpg", "JPG", 90);
 
     if (cameraIndex != 0) {

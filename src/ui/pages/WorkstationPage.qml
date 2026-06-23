@@ -488,7 +488,7 @@ Item {
                                 VideoOutput {
                                     id: subVideo
                                     anchors.fill: parent
-                                    fillMode: VideoOutput.PreserveAspectFit
+                                    fillMode: VideoOutput.PreserveAspectCrop  // 填满容器，超出部分自动裁切（外层 clip:true 生效）
                                     Component.onCompleted: {
                                         CameraController.setSubVideoSink(subVideo.videoSink)
                                     }
