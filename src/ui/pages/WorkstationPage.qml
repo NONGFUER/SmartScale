@@ -799,6 +799,13 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 onClicked: {
+                                    // 保存需要登录：未登录则弹登录窗口，中止本次保存
+                                    if (!BackendAuth.currentUser) {
+                                        console.warn("[WSP] 未登录，拦截保存操作，弹出登录窗口")
+                                        window.toast("请先登录后再保存", "warning", 2000)
+                                        window.showLogin()
+                                        return
+                                    }
                                     let currentWeight = WeightManager.netWeight
                                     if (currentWeight > 0.01) {
                                         let chineseLabel = Translator.translate(root.currentPrediction)
