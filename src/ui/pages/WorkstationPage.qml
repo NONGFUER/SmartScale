@@ -770,9 +770,15 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 onLoaded: {
-                                    item.text = "去皮"; 
-                                    item.clicked.connect(function() { WeightManager.tare() })
-                                    }
+                                    item.text = "去皮";
+                                    item.clicked.connect(function() {
+                                        console.log("[WSP] 点击去皮按钮, 触发硬件去皮")
+                                        WeightManager.tare()
+                                        if (typeof window !== "undefined" && window.toast) {
+                                            window.toast("去皮执行中...", "info", 1500)
+                                        }
+                                    })
+                                }
                             }
 
                             // 保存按钮（蓝色渐变主按钮）
@@ -900,6 +906,18 @@ Item {
         function onUserRecordCreated(success, msg) {
             window.toast(success ? "记录已创建" : "创建失败：" + msg,
                          success ? "info" : "error")
+        }
+    }
+
+    // === 去皮结果反馈 ===
+    Connections {
+        target: WeightManager
+        function onTareDone(ok) {
+            if (ok) {
+                window.toast("去皮成功", "success", 1500)
+            } else {
+                window.toast("去皮失败：请检查秤通信", "error", 3000)
+            }
         }
     }
 

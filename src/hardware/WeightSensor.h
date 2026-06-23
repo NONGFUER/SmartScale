@@ -40,20 +40,32 @@ public:
     Q_INVOKABLE void tare();
     /** 清零: 软件清零（记录当前为零点偏移） */
     Q_INVOKABLE void zero();
+    /** 半量程标定 (预留接口, Feigong 协议下有效; 校准前需先去皮空载再放砝码) */
+    Q_INVOKABLE void calibrateHalf();
+    /** 满量程标定 (预留接口, Feigong 协议下有效) */
+    Q_INVOKABLE void calibrateFull();
 
 Q_SIGNALS:
     void weightChanged();
     void stableChanged();
     void stableTriggered(); // 重量从"不稳定"刚变为"稳定的瞬间触发"
+    /** 去皮完成通知 (true=成功, false=失败) */
+    void tareDone(bool ok);
+    /** 校准完成通知 (true=命令已确认, false=失败) */
+    void calibrateDone(bool ok);
 
     /** 内部信号: 向 Worker 线程发送去皮请求 */
     void requestTare();
+    /** 内部信号: 向 Worker 线程发送校准请求 (cmd=2 半量程 / cmd=3 满量程) */
+    void requestCalibrate(uint16_t cmd);
 
 private Q_SLOTS:
     /** 接收 Worker 的称重数据, 写入缓冲池 */
     void onWeightDataReady(int32_t weight_g, uint16_t status, int32_t adc_raw);
     /** 接收 Worker 的去皮结果 */
     void onTareDone(bool ok);
+    /** 接收 Worker 的校准结果 */
+    void onCalibrateDone(bool ok);
     /** 消费缓冲池数据 (低频定时器驱动) */
     void consumeBuffer();
 

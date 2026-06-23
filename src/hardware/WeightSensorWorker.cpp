@@ -10,7 +10,13 @@ WeightSensorWorker::WeightSensorWorker(QObject *parent)
     : QObject(parent)
     , m_serial(nullptr)
     , m_pollTimer(new QTimer(this))
+    , m_portName(QStringLiteral("/dev/ttyAMA0"))
+    , m_baudRate(9600)
+    , m_slaveAddr(0x01)
+    , m_pollIntervalMs(DEFAULT_POLL_INTERVAL_MS)
+    , m_readTimeoutMs(DEFAULT_READ_TIMEOUT_MS)
 {
+    loadConfigFromEnv();
     m_pollTimer->setSingleShot(false);
 
     if (!initSerial()) {
@@ -36,8 +42,65 @@ WeightSensorWorker::~WeightSensorWorker()
 void WeightSensorWorker::startPolling()
 {
     connect(m_pollTimer, &QTimer::timeout, this, &WeightSensorWorker::poll);
-    m_pollTimer->start(POLL_INTERVAL_MS);
-    qDebug() << "[WeightSensorWorker] 轮询已启动, interval=" << POLL_INTERVAL_MS << "ms";
+    m_pollTimer->start(m_pollIntervalMs);
+    qDebug() << "[WeightSensorWorker] 轮询已启动, interval=" << m_pollIntervalMs << "ms";
+}
+
+// ============================================================================
+// 环境变量加载 — 启动时一次性读取, 失败时保留默认值
+// ============================================================================
+
+void WeightSensorWorker::loadConfigFromEnv()
+{
+    // 串口设备路径
+    QByteArray portEnv = qgetenv("SMARTSCALE_SERIAL_PORT");
+    if (!portEnv.isEmpty()) {
+        m_portName = QString::fromLocal8Bit(portEnv);
+    }
+
+    // 波特率
+    QByteArray baudEnv = qgetenv("SMARTSCALE_SERIAL_BAUD");
+    bool baudOk = false;
+    int baudVal = baudEnv.toInt(&baudOk);
+    if (baudOk && baudVal > 0) {
+        m_baudRate = baudVal;
+    }
+
+    // Modbus 从站地址
+    QByteArray slaveEnv = qgetenv("SMARTSCALE_MODBUS_SLAVE");
+    bool slaveOk = false;
+    int slaveVal = slaveEnv.toInt(&slaveOk);
+    if (slaveOk && slaveVal > 0 && slaveVal <= 247) {
+        m_slaveAddr = static_cast<uint8_t>(slaveVal);
+    }
+
+    // 轮询间隔
+    QByteArray pollEnv = qgetenv("SMARTSCALE_POLL_INTERVAL_MS");
+    bool pollOk = false;
+    int pollVal = pollEnv.toInt(&pollOk);
+    if (pollOk && pollVal >= 20 && pollVal <= 5000) {
+        m_pollIntervalMs = pollVal;
+    }
+
+    // 读响应总超时
+    QByteArray timeoutEnv = qgetenv("SMARTSCALE_READ_TIMEOUT_MS");
+    bool timeoutOk = false;
+    int timeoutVal = timeoutEnv.toInt(&timeoutOk);
+    if (timeoutOk && timeoutVal >= 100 && timeoutVal <= 10000) {
+        m_readTimeoutMs = timeoutVal;
+    }
+
+    qDebug().nospace() << "[WeightSensorWorker] 配置: port=" << m_portName
+                       << " baud=" << m_baudRate
+                       << " slave=0x" << QString::number(m_slaveAddr, 16)
+                       << " poll=" << m_pollIntervalMs << "ms"
+                       << " timeout=" << m_readTimeoutMs << "ms"
+#ifdef SMARTSCALE_MODBUS_PROTOCOL_V2
+                       << " protocol=V2"
+#else
+                       << " protocol=Feigong"
+#endif
+                       ;
 }
 
 // ============================================================================
@@ -46,11 +109,9 @@ void WeightSensorWorker::startPolling()
 
 bool WeightSensorWorker::initSerial()
 {
-    QString portName = QStringLiteral("/dev/ttyAMA0");
-
     m_serial = new QSerialPort(this);
-    m_serial->setPortName(portName);
-    m_serial->setBaudRate(QSerialPort::Baud9600);
+    m_serial->setPortName(m_portName);
+    m_serial->setBaudRate(m_baudRate);
     m_serial->setDataBits(QSerialPort::Data8);
     m_serial->setParity(QSerialPort::NoParity);
     m_serial->setStopBits(QSerialPort::OneStop);
@@ -58,13 +119,15 @@ bool WeightSensorWorker::initSerial()
 
     if (!m_serial->open(QIODevice::ReadWrite)) {
         qWarning() << "[WeightSensorWorker] 无法打开串口"
-                   << portName << "-" << m_serial->errorString();
+                   << m_portName << "-" << m_serial->errorString();
         delete m_serial;
         m_serial = nullptr;
         return false;
     }
 
-    qDebug() << "[WeightSensorWorker] 串口已打开:" << portName << "@9600 8N1";
+    qDebug() << "[WeightSensorWorker] 串口已打开:" << m_portName
+             << "@" << m_baudRate << "8N1 slave=0x"
+             << QString::number(m_slaveAddr, 16);
     return true;
 }
 
@@ -106,6 +169,39 @@ void WeightSensorWorker::doTare()
     } else {
         qWarning() << "[WeightSensorWorker] 去皮失败, err=" << ret;
         Q_EMIT tareDone(false);
+    }
+}
+
+// ============================================================================
+// 校准 — 预留接口, 转发到 modbusWriteCmd
+//   cmd = CMD_CALIB_HALF(2) 半量程标定
+//   cmd = CMD_CALIB_FULL(3) 满量程标定
+// 注意: 校准前需先去皮 (空载), 再放砝码, 再发校准命令。
+//       V2 旧协议只支持单一校准命令 (CMD_CALIBRATE=2), 此处走 Feigong 定义。
+// ============================================================================
+
+void WeightSensorWorker::doCalibrate(uint16_t cmd)
+{
+    if (!m_serial || !m_serial->isOpen()) {
+        qWarning() << "[WeightSensorWorker] 校准失败: 串口未打开";
+        Q_EMIT calibrateDone(false);
+        return;
+    }
+
+    if (cmd != CMD_CALIB_HALF && cmd != CMD_CALIB_FULL) {
+        qWarning() << "[WeightSensorWorker] 校准失败: 非法命令值=" << cmd;
+        Q_EMIT calibrateDone(false);
+        return;
+    }
+
+    qDebug() << "[WeightSensorWorker] >>> 发送校准命令, cmd=" << cmd;
+    int ret = modbusWriteCmd(REG_CMD_ADDR, cmd);
+    if (ret == 0) {
+        qDebug() << "[WeightSensorWorker] 校准命令已确认";
+        Q_EMIT calibrateDone(true);
+    } else {
+        qWarning() << "[WeightSensorWorker] 校准失败, err=" << ret;
+        Q_EMIT calibrateDone(false);
     }
 }
 
@@ -170,6 +266,23 @@ int16_t WeightSensorWorker::beToInt16(const uint8_t *p)
 }
 
 // ============================================================================
+// V2 旧协议状态位 → Feigong 标准状态位 重映射
+//   V2:  Bit0=去皮  Bit1=稳定  Bit2=负重
+//   飞功: Bit0=稳定  Bit1=过载  Bit2=负重  Bit3=去皮
+//   (V2 无过载位定义, 重映射后过载位恒为 0)
+// ============================================================================
+
+uint16_t WeightSensorWorker::remapV2StatusToFeigong(uint16_t v2Status)
+{
+    uint16_t out = 0;
+    if (v2Status & 0x02) out |= 0x01;  // V2 Bit1 稳定 → Feigong Bit0
+    // 过载位 V2 无定义, 留 0
+    if (v2Status & 0x04) out |= 0x04;  // V2 Bit2 负重 → Feigong Bit2
+    if (v2Status & 0x01) out |= 0x08;  // V2 Bit0 去皮 → Feigong Bit3
+    return out;
+}
+
+// ============================================================================
 // 功能码 06: 写单个寄存器 (去皮/校准)
 // 返回: 0=OK  -1=写/读失败  -2=CRC错  -3=异常响应
 // ============================================================================
@@ -180,7 +293,7 @@ int WeightSensorWorker::modbusWriteCmd(uint16_t regAddr, uint16_t value)
 
     // 组帧
     uint8_t tx[8];
-    tx[0] = SLAVE_ADDR;
+    tx[0] = m_slaveAddr;
     tx[1] = FUNC_WRITE;
     tx[2] = (regAddr >> 8) & 0xFF;
     tx[3] = regAddr & 0xFF;
@@ -194,7 +307,8 @@ int WeightSensorWorker::modbusWriteCmd(uint16_t regAddr, uint16_t value)
     // 打印 TX
     QByteArray txHex;
     for (int i = 0; i < 8; i++) txHex.append(QString("%1 ").arg(tx[i], 2, 16, QChar('0')).toUpper().toUtf8());
-    //qDebug().nospace() << "[Modbus] TX WRITE: " << txHex.trimmed();
+    qDebug().nospace() << "[Modbus] TX WRITE(" << m_portName << " slave=0x"
+                       << QString::number(m_slaveAddr, 16) << "): " << txHex.trimmed();
 
     // 发送前清空接收缓冲区
     m_serial->clear(QSerialPort::Input);
@@ -264,7 +378,7 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
 
     // 组帧
     uint8_t tx[8];
-    tx[0] = SLAVE_ADDR;
+    tx[0] = m_slaveAddr;
     tx[1] = FUNC_READ;
     tx[2] = (REG_DATA_ADDR >> 8) & 0xFF;
     tx[3] = REG_DATA_ADDR & 0xFF;
@@ -274,11 +388,6 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
     uint16_t crc = crc16Modbus(tx, 6);
     tx[6] = crc & 0xFF;
     tx[7] = (crc >> 8) & 0xFF;
-
-    // 打印 TX
-    QByteArray txHex;
-    for (int i = 0; i < 8; i++) txHex.append(QString("%1 ").arg(tx[i], 2, 16, QChar('0')).toUpper().toUtf8());
-    //qDebug().nospace() << "[Modbus] TX(8B): " << txHex.trimmed();
 
     // 发送前清空接收缓冲区
     m_serial->clear(QSerialPort::Input);
@@ -291,16 +400,14 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
     }
     if (!m_serial->flush()) return -1;
 
-    // 循环等待响应，直至收满23字节或总超时
-    // 9600bps: 23B × 11bit / 9600 ≈ 26ms + 从站处理时间
-    // 超时 1000ms 对 UI 无影响 (Worker 线程)
-    const int FRAME_LEN = 23;  // V2.0协议: 地址+功能码+字节数(18)+数据+CRC = 23B
-
+    // 循环等待响应，直至收满 FRAME_LEN 字节或总超时
+    // 9600bps: 15B × 11bit / 9600 ≈ 17ms (Feigong) / 23B ≈ 26ms (V2) + 从站处理时间
+    // 超时对 UI 无影响 (Worker 线程)
     QElapsedTimer timer;
     timer.start();
 
     QByteArray rxBuf;
-    while (rxBuf.size() < FRAME_LEN && timer.elapsed() < READ_TIMEOUT_MS) {
+    while (rxBuf.size() < FRAME_LEN && timer.elapsed() < m_readTimeoutMs) {
         if (m_serial->waitForReadyRead(SINGLE_WAIT_MS)) {
             rxBuf += m_serial->readAll();
         }
@@ -311,22 +418,15 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
         return -1;
     }
 
-    // 打印 RX
-    QByteArray rxHex;
-    for (int i = 0; i < rxBuf.size(); i++) rxHex.append(QString("%1 ").arg((uint8_t)rxBuf[i], 2, 16, QChar('0')).toUpper().toUtf8());
-
     if (rxBuf.size() < FRAME_LEN) {
+        QByteArray rxHex;
+        for (int i = 0; i < rxBuf.size(); i++) rxHex.append(QString("%1 ").arg((uint8_t)rxBuf[i], 2, 16, QChar('0')).toUpper().toUtf8());
         qWarning() << "[Modbus] 数据不足: 期望" << FRAME_LEN << "B 实际" << rxBuf.size() << "B -" << rxHex.trimmed();
         return -1;
     }
     if (rxBuf.size() > FRAME_LEN) {
         qDebug() << "[Modbus] 收到" << rxBuf.size() << "B, 仅使用前" << FRAME_LEN << "B (粘包)";
     }
-
-    // 打印完整 RX 帧
-    QByteArray rxFullHex;
-    for (int i = 0; i < rxBuf.size(); i++) rxFullHex.append(QString("%1 ").arg((uint8_t)rxBuf[i], 2, 16, QChar('0')).toUpper().toUtf8());
-    //qDebug().nospace() << "[Modbus] RX(" << rxBuf.size() << "B): " << rxFullHex.trimmed();
 
     // CRC 校验
     uint16_t calcCrc = crc16Modbus((const uint8_t *)rxBuf.data(), FRAME_LEN - 2);
@@ -344,30 +444,33 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
         return -3;
     }
 
-    // 解析数据区 (V2.0 协议, 18字节):
-    //   +0  ADC_Value      (int32, 小端)
-    //   +4  EmptyLoad_Value (int32, 小端)
-    //   +8  SCALE1          (float, 小端 IEEE754)
-    //   +12 WEIGHT          (int32, 大端, 单位 g)  如 01 02 03 00 → 0x01020300
-    //   +16 ContAndStatus   (uint16, 大端)
+    // ==================== 数据区解析 (按协议宏分支) ====================
+    // rxBuf 布局: [0]=slave [1]=func [2]=byteCount [3..]=data ... [last-1..last]=CRC
     const uint8_t *d = (const uint8_t *)rxBuf.data() + 3;
 
-    // 打印原始数据区
-    QByteArray dataHex;
-    for (int i = 0; i < 18; i++) dataHex.append(QString("%1 ").arg(d[i], 2, 16, QChar('0')).toUpper().toUtf8());
-    //qDebug().nospace() << "[Modbus] 原始数据(18B): " << dataHex.trimmed();
-
+#ifdef SMARTSCALE_MODBUS_PROTOCOL_V2
+    // V2 旧协议, 数据区 18 字节:
+    //   +0  ADC_Value       (int32, 小端)
+    //   +4  EmptyLoad_Value (int32, 小端)
+    //   +8  SCALE1          (float, 小端 IEEE754)
+    //   +12 WEIGHT          (int32, 小端, 单位 g) — 旧代码曾注释为大端, 实际按小端解析
+    //   +16 ContAndStatus   (uint16, 大端)
     *adc_raw   = leToInt32(d + 0);
-    int32_t emptyLoad = leToInt32(d + 4);
-    float scale1 = leToFloat(d + 8);
+    int32_t emptyLoad = leToInt32(d + 4);   Q_UNUSED(emptyLoad);
+    float scale1 = leToFloat(d + 8);         Q_UNUSED(scale1);
     *weight_g = leToInt32(d + 12);
-    *status   = beToUint16(d + 16);
-
-    //qDebug().nospace() << "[Modbus] 解析: ADC=" << *adc_raw
-                      // << " EmptyLoad=" << emptyLoad
-                      // << " SCALE1=" << scale1
-                      // << " WEIGHT=" << *weight_g << "g"
-                      // << QString(" Status=0x%1").arg(*status, 4, 16, QChar('0'));
+    uint16_t v2Status = beToUint16(d + 16);
+    // V2 → Feigong 状态位归一化 (consumeBuffer 统一按 Feigong 位定义读取)
+    *status = remapV2StatusToFeigong(v2Status);
+#else
+    // Feigong 标准协议, 数据区 10 字节:
+    //   +0  Net_Weight  (int32, 大端, 单位 g)
+    //   +4  Status_Word (uint16, 大端)
+    //   +6  ADC_Raw     (int32, 大端)  — 注意 ADC 实际可能 uint32, 这里按 int32 解释
+    *weight_g = beToInt32(d + 0);
+    *status   = beToUint16(d + 4);
+    *adc_raw  = beToInt32(d + 6);
+#endif
 
     return 0;
 }

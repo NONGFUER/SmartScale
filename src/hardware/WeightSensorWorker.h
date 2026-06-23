@@ -11,10 +11,26 @@
  * @brief 串口 I/O 工作线程 — 承载所有阻塞式 Modbus 通信
  *
  * 运行在独立 QThread 中, 通过信号与 GUI 线程的 WeightSensor 通信:
- *   GUI → Worker:  requestTare()
+ *   GUI → Worker:  requestTare() / requestCalibrate(cmd)
  *   Worker → GUI:  weightDataReady(int32_t weight_g, uint16_t status, int32_t adc)
  *                 tareDone(bool ok)
+ *                 calibrateDone(bool ok)
  *                 errorOccurred(const QString &msg)
+ *
+ * 协议变体由编译期宏控制:
+ *   -DSMARTSCALE_MODBUS_PROTOCOL=feigong (默认) → SMARTSCALE_MODBUS_PROTOCOL_FEIGONG
+ *   -DSMARTSCALE_MODBUS_PROTOCOL=v2            → SMARTSCALE_MODBUS_PROTOCOL_V2
+ *
+ * 串口参数与轮询超时通过环境变量配置 (initSerial() 中读取):
+ *   SMARTSCALE_SERIAL_PORT       默认 /dev/ttyAMA0
+ *   SMARTSCALE_SERIAL_BAUD       默认 9600
+ *   SMARTSCALE_MODBUS_SLAVE      默认 1
+ *   SMARTSCALE_POLL_INTERVAL_MS  默认 200
+ *   SMARTSCALE_READ_TIMEOUT_MS   默认 1000
+ *
+ * 状态字在 emit 前统一归一化到 Feigong 位定义:
+ *   Bit0=稳定  Bit1=过载  Bit2=负重  Bit3=去皮
+ * (V2 路径在 modbusReadWeight() 内部完成位重映射)
  */
 class WeightSensorWorker : public QObject
 {
@@ -30,12 +46,16 @@ public:
 public Q_SLOTS:
     /** 去皮请求 (来自 GUI 线程的 QueuedConnection) */
     void doTare();
+    /** 校准请求 (预留接口, cmd=2 半量程 / cmd=3 满量程, 仅 Feigong 路径有意义) */
+    void doCalibrate(uint16_t cmd);
 
 Q_SIGNALS:
     /** 称重数据就绪 (跨线程 → GUI) */
     void weightDataReady(int32_t weight_g, uint16_t status, int32_t adc_raw);
     /** 去皮完成 (跨线程 → GUI) */
     void tareDone(bool ok);
+    /** 校准完成 (跨线程 → GUI) */
+    void calibrateDone(bool ok);
     /** 错误通知 (跨线程 → GUI) */
     void errorOccurred(const QString &msg);
 
@@ -51,32 +71,53 @@ private:
     static int32_t  leToInt32(const uint8_t *p);
     static float    leToFloat(const uint8_t *p);
     static int16_t  beToInt16(const uint8_t *p);
+    /** V2 旧协议状态位 → Feigong 标准状态位 重映射 */
+    static uint16_t remapV2StatusToFeigong(uint16_t v2Status);
 
     /** 功能码03: 读取净重+状态+ADC */
     int modbusReadWeight(int32_t *weight_g, uint16_t *status, int32_t *adc_raw);
-    /** 功能码06: 写单个寄存器 (去皮) */
+    /** 功能码06: 写单个寄存器 (去皮/校准) */
     int modbusWriteCmd(uint16_t regAddr, uint16_t value);
 
     // ==================== 串口 ====================
     QSerialPort *m_serial;
     bool initSerial();
+    /** 从环境变量读取初始参数, 失败时使用默认值 */
+    void loadConfigFromEnv();
 
     // ==================== 定时器 (Worker 线程内驱动) ====================
     QTimer *m_pollTimer;
 
+    // ==================== 运行时配置 (环境变量注入) ====================
+    QString m_portName;          // 串口设备路径
+    qint32  m_baudRate;          // 波特率
+    uint8_t m_slaveAddr;         // Modbus 从站地址
+    int     m_pollIntervalMs;    // 轮询间隔
+    int     m_readTimeoutMs;     // 读响应总超时
+
     // ==================== Modbus 常量 ====================
-    static constexpr uint8_t  SLAVE_ADDR     = 0x01;
-    static constexpr uint8_t  FUNC_READ      = 0x03;
-    static constexpr uint8_t  FUNC_WRITE     = 0x06;
+    // 寄存器/帧长按协议宏切换; 命令寄存器与去皮值两协议一致
+#ifdef SMARTSCALE_MODBUS_PROTOCOL_V2
+    // V2 旧协议: 读 0x0010 起 9 个寄存器, 响应帧 23 字节
     static constexpr uint16_t REG_DATA_ADDR  = 0x0010;
     static constexpr uint16_t REG_DATA_COUNT = 9;
-    static constexpr uint16_t REG_CMD_ADDR   = 0x0010;
-    static constexpr uint16_t CMD_TARE       = 1;
-    static constexpr uint16_t CMD_CALIBRATE  = 2;
+    static constexpr int      FRAME_LEN      = 23;
+#else
+    // Feigong 标准协议: 读 0x0000 起 5 个寄存器, 响应帧 15 字节
+    static constexpr uint16_t REG_DATA_ADDR  = 0x0000;
+    static constexpr uint16_t REG_DATA_COUNT = 5;
+    static constexpr int      FRAME_LEN      = 15;
+#endif
+    static constexpr uint8_t  FUNC_READ      = 0x03;
+    static constexpr uint8_t  FUNC_WRITE     = 0x06;
+    static constexpr uint16_t REG_CMD_ADDR   = 0x0010;  // System_Cmd 命令寄存器
+    static constexpr uint16_t CMD_TARE       = 1;        // 去皮
+    static constexpr uint16_t CMD_CALIB_HALF = 2;        // 半量程标定 (Feigong)
+    static constexpr uint16_t CMD_CALIB_FULL = 3;        // 满量程标定 (Feigong)
 
-    // ==================== 超时参数 ====================
-    static constexpr int POLL_INTERVAL_MS  = 200;   // 轮询间隔
-    static constexpr int READ_TIMEOUT_MS   = 1000;  // 读取总超时 (Worker线程中阻塞无压力!)
+    // ==================== 超时参数 (默认值, 可被环境变量覆盖) ====================
+    static constexpr int DEFAULT_POLL_INTERVAL_MS = 200;
+    static constexpr int DEFAULT_READ_TIMEOUT_MS  = 1000;
     static constexpr int SINGLE_WAIT_MS    = 30;    // 单次 waitForReadyRead
 };
 

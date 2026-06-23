@@ -20,6 +20,21 @@ configure_file(
 )
 message(STATUS "应用版本: ${APP_VERSION_FULL}_${APP_BUILD_DATE}")
 
+# ============================================================
+# Modbus 协议变体 (编译期宏开关)
+#   cmake .. -DSMARTSCALE_MODBUS_PROTOCOL=feigong|v2
+#   默认: feigong (飞功标准协议)
+#   宏定义: SMARTSCALE_MODBUS_PROTOCOL_FEIGONG / SMARTSCALE_MODBUS_PROTOCOL_V2
+# ============================================================
+set(SMARTSCALE_MODBUS_PROTOCOL "feigong" CACHE STRING "Modbus protocol variant: feigong|v2")
+if(SMARTSCALE_MODBUS_PROTOCOL STREQUAL "v2")
+    add_compile_definitions(SMARTSCALE_MODBUS_PROTOCOL_V2)
+    message(STATUS "Modbus 协议: V2 (旧版, 0x0010 起 9 寄存器)")
+else()
+    add_compile_definitions(SMARTSCALE_MODBUS_PROTOCOL_FEIGONG)
+    message(STATUS "Modbus 协议: Feigong (飞功标准, 0x0000 起 5 寄存器)")
+endif()
+
 # Qt 组件
 find_package(Qt6 REQUIRED COMPONENTS Quick VirtualKeyboard Multimedia Sql Network SerialPort)
 

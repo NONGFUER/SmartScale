@@ -29,10 +29,16 @@ WeightSensor::WeightSensor(QObject *parent)
     // Worker → GUI: 去皮完成
     connect(m_worker, &WeightSensorWorker::tareDone,
             this,     &WeightSensor::onTareDone);
+    // Worker → GUI: 校准完成
+    connect(m_worker, &WeightSensorWorker::calibrateDone,
+            this,     &WeightSensor::onCalibrateDone);
 
     // GUI → Worker: 去皮请求 (QueuedConnection)
     connect(this, &WeightSensor::requestTare,
             m_worker, &WeightSensorWorker::doTare);
+    // GUI → Worker: 校准请求 (QueuedConnection)
+    connect(this, &WeightSensor::requestCalibrate,
+            m_worker, &WeightSensorWorker::doCalibrate);
 
     // 启动线程 → Worker 初始化串口 → 启动轮询定时器
     // 使用 QueuedConnection 确保 startPolling() 在 Worker 线程中执行
@@ -91,6 +97,23 @@ void WeightSensor::zero()
 }
 
 // ============================================================================
+// 校准 — 预留接口, 转发到 Worker 线程
+//   使用流程: 1) 空载 → tare()  2) 放砝码 → calibrateHalf()/calibrateFull()
+// ============================================================================
+
+void WeightSensor::calibrateHalf()
+{
+    qDebug() << "[WeightSensor] >>> 请求半量程标定...";
+    Q_EMIT requestCalibrate(2);  // CMD_CALIB_HALF
+}
+
+void WeightSensor::calibrateFull()
+{
+    qDebug() << "[WeightSensor] >>> 请求满量程标定...";
+    Q_EMIT requestCalibrate(3);  // CMD_CALIB_FULL
+}
+
+// ============================================================================
 // 接收 Worker 的称重数据 — 在 GUI 线程执行滤波 + 稳定检测 + 属性更新
 // ============================================================================
 
@@ -113,6 +136,21 @@ void WeightSensor::onTareDone(bool ok)
     } else {
         qWarning() << "[WeightSensor]去皮失败 (来自 Worker)";
     }
+    Q_EMIT tareDone(ok);
+}
+
+// ============================================================================
+// 接收 Worker 的校准结果
+// ============================================================================
+
+void WeightSensor::onCalibrateDone(bool ok)
+{
+    if (ok) {
+        qDebug() << "[WeightSensor] 校准命令已确认 (来自 Worker)";
+    } else {
+        qWarning() << "[WeightSensor] 校准失败 (来自 Worker)";
+    }
+    Q_EMIT calibrateDone(ok);
 }
 
 // ============================================================================
@@ -128,8 +166,10 @@ void WeightSensor::consumeBuffer()
     uint16_t statusWord = m_buffer.statusWord;
     int32_t adcRaw = m_buffer.adcRaw;
 
-    bool hwStable = (statusWord & 0x02);
-    bool hwTared  = (statusWord & 0x01);
+    // 状态字位定义 (Feigong 标准, Worker 已将 V2 旧位归一化到此处):
+    //   Bit0=稳定  Bit1=过载  Bit2=负重  Bit3=去皮
+    bool hwStable = (statusWord & 0x01);
+    bool hwTared  = (statusWord & 0x08);
 
     //qDebug().nospace() << "[Scale] raw=" << rawWeightKg << "kg"
                       // << " ADC=" << adcRaw
