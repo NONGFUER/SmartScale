@@ -24,7 +24,7 @@ Item {
     // 推理耗时相关属性
     property string lastInferenceTime: PState.NONE + " ms"
 
-    // 默认选中最新一条记录（页面加载时 + 历史记录刷新后）
+    // 若未选中任何记录，自动选中最新一条（页面加载 + 历史刷新时）
     function _selectLatestRecord() {
         if (!root.currentDetailRecord
             && WeightHistoryService
@@ -459,7 +459,7 @@ Item {
                                         spacing: 5
                                         anchors.centerIn: parent
                                        
-                                        Text { text: "蔬菜拍摄"; font.pixelSize: 13; font.bold: true; color: "#FFFFFF" }
+                                        Text { text: "食材拍摄"; font.pixelSize: 13; font.bold: true; color: "#FFFFFF" }
                                     }
                                 }
 
@@ -857,6 +857,8 @@ Item {
                     let w = root.pendingSaveWeight
                     let label = root.pendingSaveLabel
                     console.log(">> 图片保存完成，立即执行记录:", label, w.toFixed(2) + "kg")
+                    // 清空当前选中，让 historyChanged 触发时自动选中刚写入的最新记录
+                    root.currentDetailRecord = null
                     WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId)
                     root.currentPrediction = PState.IDLE
                     root.currentImagePath = ""
