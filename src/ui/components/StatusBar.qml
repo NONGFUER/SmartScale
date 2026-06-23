@@ -27,93 +27,73 @@ Rectangle {
                 font.bold: true
                 color: "#FFFFFF"
                 Layout.alignment: Qt.AlignVCenter
-            }
-        }
-        // 左侧空占位（版本号已移至设置页，这里保留让中间标题居中）
-        Item { Layout.fillWidth: true }
-
-        // ===== 中间：大标题 =====
-        Item {
-            Layout.preferredHeight: root.height
-            Layout.alignment: Qt.AlignVCenter
-            // 外边距
-            Layout.topMargin: 20
-            Layout.leftMargin: 40
-            Layout.rightMargin: 40
-
-            Text {
-                anchors.centerIn: parent   // 相当于 padding: 均匀分布
-                text: "AI 视 觉 识 别 智 能 网 络 称"
-                font.family: "AlibabaPuHuiTi"
-                font.pixelSize: 36
-                font.bold: true
-                color: "#FFFFFF"
+                Layout.maximumWidth: 500              // 限制最大宽度，防止吃掉中间空间
+                elide: Text.ElideRight                // 超出省略号
             }
         }
 
+        // 弹性占位：把右侧推到最右
         Item { Layout.fillWidth: true }
 
         // ===== 右侧：日期时间 + 状态图标行 =====
         RowLayout {
             spacing: 16
             Layout.alignment: Qt.AlignVCenter
-            Layout.preferredHeight: root.height
+            Layout.preferredHeight: root.height       // 占满栏高，垂直方向有明确基准
             // 日期时间显示
             ColumnLayout {
-                    spacing: 2
-                    Layout.alignment: Qt.AlignVCenter
+                spacing: 0
+                Layout.alignment: Qt.AlignVCenter
 
-                    Text {
-                        id: dateText
-                        text: ""
-                        font.pixelSize: 18
-                        color: "#E8F0FE"
-                        Layout.alignment: Qt.AlignHCenter
-                    }
-
-                    Text {
-                        id: timeText
-                        text: "00:00:00"
-                        font.pixelSize: 24
-                        font.family: "Monospace"
-                        font.bold: true
-                        color: "#FFFFFF"
-                        Layout.alignment: Qt.AlignHCenter
-                    }
+                Text {
+                    id: dateText
+                    text: ""
+                    font.pixelSize: 14
+                    color: "#E8F0FE"
+                    Layout.alignment: Qt.AlignHCenter
                 }
 
-                // 信号强度图标（4格柱状）
-                Item {
-                    width: 20; height: 16
-                    Layout.alignment: Qt.AlignVCenter
+                Text {
+                    id: timeText
+                    text: "00:00:00"
+                    font.pixelSize: 22
+                    font.family: "Monospace"
+                    font.bold: true
+                    color: "#FFFFFF"
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
 
-                    Canvas {
-                        anchors.fill: parent
-                        onPaint: {
-                            var ctx = getContext("2d")
-                            ctx.strokeStyle = "#FFFFFF"
-                            ctx.lineWidth = 1.5
-                            ctx.lineCap = "round"
-                            var barW = 3, gap = 2, baseY = height - 1
-                            for (var i = 0; i < 4; i++) {
-                                var h = [5, 8, 11, 15][i]
-                                var x = i * (barW + gap) + 1
-                                ctx.beginPath()
-                                ctx.moveTo(x, baseY)
-                                ctx.lineTo(x, baseY - h)
-                                ctx.stroke()
-                            }
+            // 信号强度图标（4格柱状）
+            Item {
+                width: 40; height: 40
+                Layout.alignment: Qt.AlignVCenter
+
+                Canvas {
+                    anchors.fill: parent
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.strokeStyle = "#FFFFFF"
+                        ctx.lineWidth = 2.5
+                        ctx.lineCap = "round"
+                        var barW = 5, gap = 3, baseY = height - 8
+                        for (var i = 0; i < 4; i++) {
+                            var h = [10, 16, 22, 30][i]
+                            var x = i * (barW + gap) + 6
+                            ctx.beginPath()
+                            ctx.moveTo(x, baseY)
+                            ctx.lineTo(x, baseY - h)
+                            ctx.stroke()
                         }
-                        Component.onCompleted: requestPaint()
                     }
+                    Component.onCompleted: requestPaint()
                 }
+            }
 
-            
-
-                // 调试按钮（测试阶段，放在设置齿轮左侧）
-                Item {
-                    width: 40; height: 40
-                    Layout.alignment: Qt.AlignVCenter
+            // 调试按钮（测试阶段，放在设置齿轮左侧）
+            Item {
+                width: 40; height: 40
+                Layout.alignment: Qt.AlignVCenter
 
                     Rectangle {
                         id: debugBg
@@ -130,22 +110,22 @@ Rectangle {
                     // 调试图标 (bug / 终端风格)
                     Canvas {
                         anchors.centerIn: parent
-                        width: 18; height: 18
+                        width: 24; height: 24
                         onPaint: {
                             var ctx = getContext("2d")
                             ctx.strokeStyle = "#FFFFFF"
-                            ctx.lineWidth = 1.6
+                            ctx.lineWidth = 2.2
                             ctx.lineCap = "round"
                             ctx.lineJoin = "round"
                             var cx = width / 2, cy = height / 2
                             // 终端窗口外形
-                            ctx.strokeRect(cx - 7, cy - 5, 14, 10)
+                            ctx.strokeRect(cx - 9, cy - 6, 18, 12)
                             // 提示符 "_"
                             ctx.beginPath()
-                            ctx.moveTo(cx - 4, cy + 2)
-                            ctx.lineTo(cx, cy + 2)
-                            ctx.moveTo(cx + 3, cy)
-                            ctx.lineTo(cx + 3, cy + 4)
+                            ctx.moveTo(cx - 5, cy + 3)
+                            ctx.lineTo(cx, cy + 3)
+                            ctx.moveTo(cx + 4, cy)
+                            ctx.lineTo(cx + 4, cy + 5)
                             ctx.stroke()
                         }
                         Component.onCompleted: requestPaint()
@@ -184,24 +164,24 @@ Rectangle {
                     Canvas {
                         id: gearIcon
                         anchors.centerIn: parent
-                        width: 20; height: 20
+                        width: 26; height: 26
                         onPaint: {
                             var ctx = getContext("2d")
                             ctx.strokeStyle = "#FFFFFF"
-                            ctx.lineWidth = 1.8
+                            ctx.lineWidth = 2.4
                             ctx.lineCap = "round"
                             ctx.lineJoin = "round"
                             var cx = width / 2, cy = height / 2
                             ctx.beginPath()
-                            var r = 7, teeth = 8
+                            var r = 9, teeth = 8
                             for (var i = 0; i < teeth; i++) {
                                 var a1 = (i / teeth) * 2 * Math.PI - Math.PI / 2
                                 var a2 = ((i + 0.35) / teeth) * 2 * Math.PI - Math.PI / 2
                                 var a3 = ((i + 0.65) / teeth) * 2 * Math.PI - Math.PI / 2
                                 var a4 = ((i + 1) / teeth) * 2 * Math.PI - Math.PI / 2
                                 var px1 = cx + r * Math.cos(a1), py1 = cy + r * Math.sin(a1)
-                                var px2 = cx + (r + 2.5) * Math.cos(a2), py2 = cy + (r + 2.5) * Math.sin(a2)
-                                var px3 = cx + (r + 2.5) * Math.cos(a3), py3 = cy + (r + 2.5) * Math.sin(a3)
+                                var px2 = cx + (r + 3) * Math.cos(a2), py2 = cy + (r + 3) * Math.sin(a2)
+                                var px3 = cx + (r + 3) * Math.cos(a3), py3 = cy + (r + 3) * Math.sin(a3)
                                 var px4 = cx + r * Math.cos(a4), py4 = cy + r * Math.sin(a4)
                                 if (i === 0) ctx.moveTo(px1, py1)
                                 else ctx.lineTo(px1, py1)
@@ -209,7 +189,7 @@ Rectangle {
                             }
                             ctx.closePath(); ctx.stroke()
                             ctx.beginPath()
-                            ctx.arc(cx, cy, 3, 0, 2 * Math.PI)
+                            ctx.arc(cx, cy, 4, 0, 2 * Math.PI)
                             ctx.stroke()
                         }
                         Component.onCompleted: requestPaint()
@@ -227,6 +207,21 @@ Rectangle {
                     }
                 }
             }
+    }
+
+    // ===== 中间：大标题（独立锚定到 root 中心，不参与 RowLayout） =====
+    Text {
+        anchors.centerIn: parent
+        height: 60                              // 框铺满状态栏高度
+        text: "AI 视 觉 识 别 智 能 网 络 称"
+        font.family: "AlibabaPuHuiTi"
+        font.pixelSize: 36
+        font.bold: true
+        color: "#FFFFFF"
+        elide: Text.ElideRight
+        width: Math.min(implicitWidth, parent.width - 600)   // 极端情况也不溢出
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter                // 文字在框内垂直居中
     }
 
     Timer {
