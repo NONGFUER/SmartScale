@@ -115,8 +115,10 @@ CameraController::CameraController(QObject *parent)
     QStringList subArgs = {"--camera", "0", "--tuning-file", SUB_TUNING_FILE,
                            "--width", QString::number(m_subWidth),
                            "--height", QString::number(m_subHeight),
+                           "--mode", "2328:1748",
+                          // "--roi", m_subRoi,
                            "--framerate", "15", "--codec", "yuv420",
-                           "--autofocus-mode", "continuous",
+                           "--autofocus-mode", "auto",
                            "--nopreview", "--timeout", "0", "-o", "-"};
     m_subProcess->start("rpicam-vid", subArgs);
 }

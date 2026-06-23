@@ -488,7 +488,7 @@ Item {
                                 VideoOutput {
                                     id: subVideo
                                     anchors.fill: parent
-                                    fillMode: VideoOutput.PreserveAspectCrop
+                                    fillMode: VideoOutput.PreserveAspectFit
                                     Component.onCompleted: {
                                         CameraController.setSubVideoSink(subVideo.videoSink)
                                     }

@@ -46,15 +46,17 @@ void SystemInfoService::parseLog()
 
         if (line.startsWith("[BOOT]")) {
             // 格式: [BOOT] System Started at: 2026-06-18 21:56:09
-            int colonIdx = line.lastIndexOf(':');
-            if (colonIdx > 0)
-                bootTimes.append(line.mid(colonIdx + 1).trimmed());
+            static const QString tag("at: ");
+            int tagIdx = line.indexOf(tag);
+            if (tagIdx >= 0)
+                bootTimes.append(line.mid(tagIdx + tag.length()).trimmed());
 
         } else if (line.startsWith("[SHUTDOWN]")) {
             // 格式: [SHUTDOWN] System Shutting down at: 2026-06-18 22:01:58
-            int colonIdx = line.lastIndexOf(':');
-            if (colonIdx > 0)
-                lastShutdown = line.mid(colonIdx + 1).trimmed();
+            static const QString tag("at: ");
+            int tagIdx = line.indexOf(tag);
+            if (tagIdx >= 0)
+                lastShutdown = line.mid(tagIdx + tag.length()).trimmed();
         }
     }
     file.close();

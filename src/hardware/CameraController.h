@@ -85,6 +85,9 @@ private:
     int m_subWidth = 1280;
     int m_subHeight = 720;
     int m_subFrameSize = 0;
+    // rpicam-vid --roi 归一化坐标 (x,y,w,h)，0~1；居中裁掉四周 10%
+    // 修改后需重启进程生效（见 setSubRoi / restartSubCamera）
+    QString m_subRoi = QStringLiteral("0.1,0.1,0.8,0.8");
 
     VisionAIService* m_aiService = nullptr;
     VoiceSpeaker *m_voiceSpeaker = nullptr;
