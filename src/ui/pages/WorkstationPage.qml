@@ -46,7 +46,7 @@ Item {
         Rectangle {
             id: mainCard
             anchors.fill: parent
-            anchors.margins: 24
+            anchors.margins: 12
             radius: 20
             color: "#FFFFFF"
 
@@ -759,8 +759,16 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 onLoaded: {
-                                    item.text = "归零"; 
-                                    item.clicked.connect(function() { WeightManager.zero() })
+                                    item.text = "归零"
+                                    item.clicked.connect(function() {
+                                        console.log("[WSP] 点击归零按钮")
+                                        if (WeightManager.netWeight > 8.0) {
+                                            window.toast("无法归零", "error", 2000)
+                                            return
+                                        }
+                                        WeightManager.zero()
+                                        window.toast("归零执行中...", "info", 1500)
+                                    })
                                     }
                             }
 

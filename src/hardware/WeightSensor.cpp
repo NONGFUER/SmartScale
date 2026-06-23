@@ -90,10 +90,15 @@ void WeightSensor::tare()
 
 void WeightSensor::zero()
 {
-    m_zeroOffset = m_netWeight + m_tareWeight;
-    m_tareWeight = 0.0;
-    qDebug() << "[WeightSensor] 清零, zeroOffset=" << m_zeroOffset << "kg";
-    Q_EMIT weightChanged();
+    // 归零 = 硬件去皮，但 8kg 以上硬件不支持，软件层先拦截
+    if (m_netWeight > ZERO_MAX_KG) {
+        qWarning() << "[WeightSensor] 归零失败: 当前净重" << m_netWeight
+                   << "kg >" << ZERO_MAX_KG << "kg, 硬件不支持去皮";
+        Q_EMIT tareDone(false);
+        return;
+    }
+    qDebug() << "[WeightSensor] >>> 请求归零(走硬件去皮), 当前净重" << m_netWeight << "kg";
+    Q_EMIT requestTare();
 }
 
 // ============================================================================

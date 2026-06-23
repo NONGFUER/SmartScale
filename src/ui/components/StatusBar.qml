@@ -66,7 +66,7 @@ Rectangle {
 
             // 信号强度图标（4格柱状）
             Item {
-                width: 40; height: 40
+                width: 20; height: 16
                 Layout.alignment: Qt.AlignVCenter
 
                 Canvas {
@@ -74,12 +74,12 @@ Rectangle {
                     onPaint: {
                         var ctx = getContext("2d")
                         ctx.strokeStyle = "#FFFFFF"
-                        ctx.lineWidth = 2.5
+                        ctx.lineWidth = 1.5
                         ctx.lineCap = "round"
-                        var barW = 5, gap = 3, baseY = height - 8
+                        var barW = 3, gap = 2, baseY = height - 1
                         for (var i = 0; i < 4; i++) {
-                            var h = [10, 16, 22, 30][i]
-                            var x = i * (barW + gap) + 6
+                            var h = [5, 8, 11, 15][i]
+                            var x = i * (barW + gap) + 1
                             ctx.beginPath()
                             ctx.moveTo(x, baseY)
                             ctx.lineTo(x, baseY - h)

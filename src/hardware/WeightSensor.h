@@ -38,7 +38,7 @@ public:
 
     /** 去皮: 通过信号转发到 Worker 线程 */
     Q_INVOKABLE void tare();
-    /** 清零: 软件清零（记录当前为零点偏移） */
+    /** 归零: 等同硬件去皮，但当前净重 > 8kg 时拒绝(硬件限制) */
     Q_INVOKABLE void zero();
     /** 半量程标定 (预留接口, Feigong 协议下有效; 校准前需先去皮空载再放砝码) */
     Q_INVOKABLE void calibrateHalf();
@@ -83,6 +83,7 @@ private:
     // ==================== 稳定检测 & 触发防抖 ====================
     static constexpr double MIN_TRIGGER_WEIGHT_KG = 0.15;     // 最小触发重量(150g)，过滤微小数据误报
     static constexpr int    MIN_STABLE_COUNT        = 2;      // 连续稳定次数才触发（防瞬时假稳定）
+    static constexpr double ZERO_MAX_KG = 8.0;                // 归零(硬件去皮)允许的最大净重(kg)，超过则硬件不支持
     int  m_stableCount  = 0;
     bool m_triggered    = false; // 防止重复触发
 
