@@ -20,7 +20,8 @@ Item {
     property string pendingSaveLabel: ""
     property string currentIngrId: ""        // 当前选中食材的 ingrId (上传用)
     property string pendingSaveIngrId: ""    // 手动保存待写入的 ingrId
-    
+    property bool aiRecognizing: false       // 是否正在执行 AI 识别（控制"识别"按钮 loading 状态）
+
     // 推理耗时相关属性
     property string lastInferenceTime: PState.NONE + " ms"
 
@@ -46,7 +47,7 @@ Item {
         Rectangle {
             id: mainCard
             anchors.fill: parent
-            anchors.margins: 12
+            anchors.margins: 10
             radius: 20
             color: "#FFFFFF"
 
@@ -674,11 +675,127 @@ Item {
                                     }
                             }
 
-                            // 弹性占位 — 把称重标签+卡片挤到列底
-                            Item {
+                            // ===== 双按钮行：选择食材 + 识别（胶囊按钮，靠右）=====
+                            Row {
                                 Layout.fillWidth: true
-                                Layout.fillHeight: true
+                                Layout.preferredHeight: 52
+                                spacing: 14
+                                layoutDirection: Qt.RightToLeft
+
+                                // ----- 按钮 2：识别（含 loading 状态）-----
+                                Rectangle {
+                                    id: recognizeBtn
+                                    width: recognizeRow.implicitWidth + 40
+                                    height: 52
+                                    radius: 26
+                                    color: recognizeMA.pressed ? "#E2E8F0"
+                                         : (recognizeMA.containsMouse ? "#E8ECF0" : "#F1F5F9")
+                                    border.color: "#D1D5DB"
+                                    border.width: 1
+                                    opacity: root.aiRecognizing ? 0.7 : 1.0
+                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                    Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                    Row {
+                                        id: recognizeRow
+                                        anchors.centerIn: parent
+                                        spacing: 6
+
+                                        BusyIndicator {
+                                            id: recognizeSpinner
+                                            running: root.aiRecognizing
+                                            visible: root.aiRecognizing
+                                            width: 22
+                                            height: 22
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            contentItem: Item {
+                                                implicitWidth: 22
+                                                implicitHeight: 22
+                                                Canvas {
+                                                    anchors.fill: parent
+                                                    onPaint: {
+                                                        var ctx = getContext("2d")
+                                                        ctx.clearRect(0, 0, width, height)
+                                                        ctx.strokeStyle = "#475569"
+                                                        ctx.lineWidth = 3
+                                                        ctx.lineCap = "round"
+                                                        ctx.beginPath()
+                                                        ctx.arc(width / 2, height / 2, width / 2 - 2, 0, Math.PI * 1.4)
+                                                        ctx.stroke()
+                                                    }
+                                                    NumberAnimation on rotation {
+                                                        from: 0; to: 360; duration: 800
+                                                        loops: Animation.Infinite
+                                                        running: root.aiRecognizing
+                                                    }
+                                                    Component.onCompleted: requestPaint()
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            text: root.aiRecognizing ? "识别中..." : "识别"
+                                            font.pixelSize: 24
+                                            font.bold: true
+                                            color: "#475569"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: recognizeMA
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: root.aiRecognizing ? Qt.ArrowCursor : Qt.PointingHandCursor
+                                        enabled: !root.aiRecognizing && WeightManager.netWeight > 0.01
+                                        onClicked: {
+                                            console.log("[WSP] 点击识别按钮，手动触发 AI 识别")
+                                            if (WeightManager.netWeight <= 0.01) {
+                                                window.toast("请先放置食材再识别", "warning", 2000)
+                                                return
+                                            }
+                                            root.aiRecognizing = true
+                                            window.toast("AI 识别中...", "info", 1500)
+                                            CameraController.captureVegetable(WeightManager.netWeight, root.currentPrediction)
+                                        }
+                                    }
+                                }
+
+                                // ----- 按钮 1：选择食材 -----
+                                Rectangle {
+                                    id: selectFoodBtn
+                                    width: selectFoodText.implicitWidth + 40
+                                    height: 52
+                                    radius: 26
+                                    color: selectFoodMA.pressed ? "#E2E8F0"
+                                          : (selectFoodMA.containsMouse ? "#E8ECF0" : "#F1F5F9")
+                                    border.color: "#D1D5DB"
+                                    border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                                    Text {
+                                        id: selectFoodText
+                                        anchors.centerIn: parent
+                                        text: "选择食材"
+                                        font.pixelSize: 24
+                                        font.bold: true
+                                        color: "#475569"
+                                    }
+
+                                    MouseArea {
+                                        id: selectFoodMA
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            console.log("[WSP] 点击选择食材按钮，打开品类选择弹窗")
+                                            root.categorySelectMode = true
+                                            correctionDialog.open()
+                                        }
+                                    }
+                                }
                             }
+
 
                             // "称重克数" 独立标签 — 在卡片外部上方
                             Text {
@@ -905,6 +1022,17 @@ Item {
             }
             // 注意：手动保存的 addRecord 已在 onPhotoSaved 中立即执行
             // 此处仅更新 UI 品类显示，不再绑定保存/上传逻辑
+
+            // 手动"识别"按钮触发的流程完成：恢复按钮状态并反馈结果
+            if (root.aiRecognizing) {
+                root.aiRecognizing = false
+                var chineseLabel = Translator.translate(predictedLabel)
+                if (PState.isValid(predictedLabel)) {
+                    window.toast("识别完成：" + chineseLabel, "success", 2000)
+                } else {
+                    window.toast("识别未识别出有效结果", "warning", 2500)
+                }
+            }
         }
     }
 
