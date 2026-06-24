@@ -38,6 +38,14 @@
 - SmartScale 项目 `CMakeLists.txt` 用 `qt_add_qml_module` **显式列出** `QML_FILES`（非自动扫描）
 - 新建 QML 文件后**必须**手动追加到 `QML_FILES` 列表，否则运行时报 "xxx is not a type" 导致 Main.qml 白屏
 
+## QML 跨目录类型引用（WorkstationPage 白屏根因）
+
+- `WorkstationPage.qml` 在 `src/ui/pages/`，通过 `StackView.initialItem: "pages/WorkstationPage.qml"` **文件路径加载**，脱离 SmartScale 模块上下文
+- 它能用同目录的 `CategoryCorrectionDialog` 是因为**同目录本地文件可见性**，不是因为模块注册
+- 引用 `src/ui/components/` 下的 QML 组件（如 `ActionButton`、`FoodItemCard`）**必须**在文件顶部加 `import "../components"`，否则类型解析失败 → WorkstationPage 加载失败 → 白屏（仅剩背景图）
+- `Main.qml` 在 `src/ui/` 下用 `import "components"`；`pages/` 下的文件用 `import "../components"`
+- **诊断**：QML_FILES 已注册 + qrc 已含文件 + 构建成功，但页面白屏 → 检查引用方是否缺相对路径 import
+
 ## QML Singleton 创建方式
 
 - **纯 QML singleton**（如 Theme.qml）需要**三步**（缺一不可，Qt 6.8 实测）：

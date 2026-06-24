@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtMultimedia
 import App.Backend 1.0
 import SmartScale.Tools 1.0
+import "../components"
 
 Item {
     id: root
@@ -854,128 +855,81 @@ Item {
                         Layout.maximumHeight: 80
                         spacing: 12
 
-                        // 可复用的次要按钮样式组件
-                        Component {
-                            id: secondaryButton
-                            Button {
-                                font.pixelSize: 32
-                                font.bold: true
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                background: Rectangle {
-                                    radius: 12
-                                    color: parent.down ? "#E2E8F0" : "#F1F5F9"
-                                    border.color: "#CBD5E1"
-                                    border.width: 1
+                        // 归零按钮
+                        ActionButton {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            text: "归零"
+                            onClicked: {
+                                console.log("[WSP] 点击归零按钮")
+                                if (WeightManager.netWeight > 8.0) {
+                                    window.toast("无法归零", "error", 2000)
+                                    return
                                 }
-                                contentItem: Text {
-                                    text: parent.text
-                                    color: "#475569"
-                                    font: parent.font
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
+                                WeightManager.zero()
+                                window.toast("归零执行中...", "info", 1500)
+                            }
+                        }
+
+                        // 去皮按钮
+                        ActionButton {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            text: "去皮"
+                            onClicked: {
+                                console.log("[WSP] 点击去皮按钮, 触发硬件去皮")
+                                WeightManager.tare()
+                                if (typeof window !== "undefined" && window.toast) {
+                                    window.toast("去皮执行中...", "info", 1500)
                                 }
                             }
                         }
 
-                            // 归零按钮
-                            Loader {
-                                sourceComponent: secondaryButton
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                onLoaded: {
-                                    item.text = "归零"
-                                    item.clicked.connect(function() {
-                                        console.log("[WSP] 点击归零按钮")
-                                        if (WeightManager.netWeight > 8.0) {
-                                            window.toast("无法归零", "error", 2000)
-                                            return
-                                        }
-                                        WeightManager.zero()
-                                        window.toast("归零执行中...", "info", 1500)
-                                    })
-                                    }
-                            }
-
-                            // 去皮按钮
-                            Loader {
-                                sourceComponent: secondaryButton
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                onLoaded: {
-                                    item.text = "去皮";
-                                    item.clicked.connect(function() {
-                                        console.log("[WSP] 点击去皮按钮, 触发硬件去皮")
-                                        WeightManager.tare()
-                                        if (typeof window !== "undefined" && window.toast) {
-                                            window.toast("去皮执行中...", "info", 1500)
-                                        }
-                                    })
+                        // 保存按钮（蓝色主按钮）
+                        ActionButton {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            text: "保存"
+                            primary: true
+                            onClicked: {
+                                // 保存需要登录：未登录则弹登录窗口，中止本次保存
+                                if (!BackendAuth.currentUser) {
+                                    console.warn("[WSP] 未登录，拦截保存操作，弹出登录窗口")
+                                    window.toast("请先登录后再保存", "warning", 2000)
+                                    window.showLogin()
+                                    return
                                 }
-                            }
-
-                            // 保存按钮（蓝色渐变主按钮）
-                            Button {
-                                text: "保存"
-                                //enabled: WeightManager.netWeight > 0.01 && PState.isValid(root.currentPrediction)
-                                font.pixelSize: 32
-                                font.bold: true
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                onClicked: {
-                                    // 保存需要登录：未登录则弹登录窗口，中止本次保存
-                                    if (!BackendAuth.currentUser) {
-                                        console.warn("[WSP] 未登录，拦截保存操作，弹出登录窗口")
-                                        window.toast("请先登录后再保存", "warning", 2000)
-                                        window.showLogin()
-                                        return
-                                    }
-                                    let currentWeight = WeightManager.netWeight
-                                    if (currentWeight <= 0.01) {
-                                        console.warn("重量不足，无法提交记录")
-                                        window.toast("重量不足，无法保存", "warning", 2000)
-                                        return
-                                    }
-                                    // 品类校验：必须先识别成功或手动选择有效食材
-                                    if (!PState.isValid(root.currentPrediction)) {
-                                        console.warn("[WSP] 品类无效，拦截保存:", root.currentPrediction)
-                                        window.toast("请先识别或选择食材", "warning", 2500)
-                                        return
-                                    }
-                                    // ingrId 校验：雪花 ID 必须有效，否则上传会落库孤儿记录
-                                    if (!root.currentIngrId || root.currentIngrId === "") {
-                                        console.warn("[WSP] ingrId 为空，拦截保存, prediction=", root.currentPrediction)
-                                        window.toast("食材数据异常，请重新选择", "warning", 2500)
-                                        return
-                                    }
-                                    let chineseLabel = Translator.translate(root.currentPrediction)
-                                    console.log(">> 手动保存，触发拍照:", chineseLabel, currentWeight.toFixed(2) + "kg",
-                                                "ingrId=", root.currentIngrId)
-                                    root.pendingManualSave = true
-                                    root.pendingSaveWeight = currentWeight
-                                    root.pendingSaveLabel = chineseLabel
-                                    root.pendingSaveIngrId = root.currentIngrId
-                                    root.pendingSaveAiDetected = root.currentAiDetected
-                                    // 传入当前已知品类标签，水印立即绘制，保存/上传独立执行
-                                    CameraController.captureVegetable(currentWeight, root.currentPrediction)
+                                let currentWeight = WeightManager.netWeight
+                                if (currentWeight <= 0.01) {
+                                    console.warn("重量不足，无法提交记录")
+                                    window.toast("重量不足，无法保存", "warning", 2000)
+                                    return
                                 }
-                                background: Rectangle {
-                                    radius: 12
-                                    gradient: Gradient {
-                                        orientation: Gradient.Horizontal
-                                        GradientStop { position: 0.0; color: parent.parent.enabled ? "#3B82F6" : "#CBD5E1" }
-                                        GradientStop { position: 1.0; color: parent.parent.enabled ? "#1D4ED8" : "#94A3B8" }
-                                    }
+                                // 品类校验：必须先识别成功或手动选择有效食材
+                                if (!PState.isValid(root.currentPrediction)) {
+                                    console.warn("[WSP] 品类无效，拦截保存:", root.currentPrediction)
+                                    window.toast("请先识别或选择食材", "warning", 2500)
+                                    return
                                 }
-                                contentItem: Text {
-                                    text: parent.text
-                                    color: parent.enabled ? "#FFFFFF" : "#FFFFFF"
-                                    font: parent.font
-                                    horizontalAlignment: Text.AlignHCenter
-                                    verticalAlignment: Text.AlignVCenter
+                                // ingrId 校验：雪花 ID 必须有效，否则上传会落库孤儿记录
+                                if (!root.currentIngrId || root.currentIngrId === "") {
+                                    console.warn("[WSP] ingrId 为空，拦截保存, prediction=", root.currentPrediction)
+                                    window.toast("食材数据异常，请重新选择", "warning", 2500)
+                                    return
                                 }
+                                let chineseLabel = Translator.translate(root.currentPrediction)
+                                console.log(">> 手动保存，触发拍照:", chineseLabel, currentWeight.toFixed(2) + "kg",
+                                            "ingrId=", root.currentIngrId)
+                                root.pendingManualSave = true
+                                root.pendingSaveWeight = currentWeight
+                                root.pendingSaveLabel = chineseLabel
+                                root.pendingSaveIngrId = root.currentIngrId
+                                root.pendingSaveAiDetected = root.currentAiDetected
+                                // 传入当前已知品类标签，水印立即绘制，保存/上传独立执行
+                                CameraController.captureVegetable(currentWeight, root.currentPrediction)
                             }
                         }
+                    }
                     }
                 }
             }
