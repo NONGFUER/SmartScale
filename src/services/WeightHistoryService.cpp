@@ -94,7 +94,8 @@ void WeightHistoryService::addRecord(double weight,
                                      const QString &operatorName,
                                      const QString &mainImagePath,
                                      const QString &subImagePath,
-                                     const QString &ingrId)
+                                     const QString &ingrId,
+                                     bool aiDetected)
 {
     if (!m_repo) {
         qWarning() << "[WHS] Repository 未设置，无法添加记录";
@@ -105,6 +106,7 @@ void WeightHistoryService::addRecord(double weight,
     WeightRecord model(weight, categoryName, operatorName,
                        QString(), mainImagePath, subImagePath);
     model.ingrId = ingrId;
+    model.aiDetected = aiDetected;
 
     // 1. 写入数据库
     int newId = m_repo->insert(model);
@@ -200,11 +202,15 @@ QByteArray WeightHistoryService::buildUploadJson(const WeightRecord &record)
     // ingrId 为雪花 ID（64-bit），用 toLongLong 避免 int(32-bit) 溢出
     bool ok;
     qint64 ingrIdVal = record.ingrId.toLongLong(&ok);
+    if (!ok || ingrIdVal <= 0) {
+        qWarning() << "[WHS] ingrId 无效，上传将携带 ingrId=0, record.id=" << record.id
+                   << "ingrId=" << record.ingrId << "food=" << record.categoryName;
+    }
     json["ingrId"] = ok ? QJsonValue(qlonglong(ingrIdVal)) : 0;
     json["custId"] = m_authService ? m_authService->custId() : 0;
     json["devId"]  = 2;//m_authService ? m_authService->devId() : 0;
     json["val"]    = static_cast<int>(record.weight * 1000);
-    json["aiDet"]  = !record.categoryName.isEmpty();
+    json["aiDet"]  = record.aiDetected;
     //json["img"]    = record.mainImagePath;
     json["userId"] = m_authService ? QJsonValue(qlonglong(m_authService->userId())) : -1;
     json["bill"]   = static_cast<int>((qHash(QUuid::createUuid()) & 0x7FFFFFFFu) + 1);

@@ -804,11 +804,29 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
 
     QJsonObject obj = doc.object();
     bool success = obj["success"].toBool(false);
-    QString label = obj["data"].toString(PState::NONE);
+    QString message = obj["message"].toString();
 
+    // ★ 兼容两种 data 格式：
+    //   新格式: { "data": { "code": "tudou", "name": "土豆" } }  → 取 code 作为 emsCd
+    //   旧格式: { "data": "POTATO" }                              → 直接取字符串
+    QString label;
+    QJsonValue dataVal = obj.value("data");
+    if (dataVal.isObject()) {
+        QJsonObject dataObj = dataVal.toObject();
+        label = dataObj.value("code").toString();
+        QString name = dataObj.value("name").toString();
+        qInfo() << "[在线AI] 新格式响应, code=" << label << "name=" << name;
+    } else {
+        label = dataVal.toString(PState::NONE);
+        if (!label.isEmpty() && label != PState::NONE)
+            qInfo() << "[在线AI] 旧格式响应, label=" << label;
+    }
+
+    // 业务结果判定：success 为假、label 为空/NONE 均视为识别失败
     if (!success || label == PState::NONE || label.isEmpty()) {
         qWarning() << "[在线AI] 识别失败, success=" << success
-                   << "message=" << obj["message"].toString();
+                   << "message=" << message
+                   << "label=" << label;
         label = PState::UNKNOWN;
     }
 

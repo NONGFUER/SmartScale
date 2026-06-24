@@ -30,8 +30,10 @@ public:
 
     // ---- 方法 ----
     Q_INVOKABLE QString label(const QString &s) const {
-        if (s == IDLE || s == NOT_READY || s == UNKNOWN || s == NONE)
-            return QStringLiteral("点击选择食材");
+        if (s == IDLE)                  return QStringLiteral("请识别或选择食材");
+        if (s == NOT_READY)             return QStringLiteral("设备未就绪");
+        if (s == UNKNOWN)               return QStringLiteral("识别失败 请重试");
+        if (s == NONE)                  return QStringLiteral("无识别结果");
         if (s == BUSY)                  return QStringLiteral("识别中...");
         return s;
     }

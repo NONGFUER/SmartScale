@@ -15,6 +15,7 @@ public:
     double weight = 0.0;             // 物品重量, 单位: kg
     QString categoryName;            // 物品类别名称 (中文显示名, 如 "大白菜")
     QString ingrId;                  // 食材 ID (上传云端用, 登录拉取食材时选中保存)
+    bool aiDetected = false;         // 是否由 AI 识别接口得出 (true=AI识别, false=手动选择/纠错)
     QString recordTime;              // 物品称重时间, 格式: "2026-04-26 14:30"
     QString operatorName;            // 操作人员名称
 

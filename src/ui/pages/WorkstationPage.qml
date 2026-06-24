@@ -21,6 +21,8 @@ Item {
     property string currentIngrId: ""        // 当前选中食材的 ingrId (上传用)
     property string pendingSaveIngrId: ""    // 手动保存待写入的 ingrId
     property bool aiRecognizing: false       // 是否正在执行 AI 识别（控制"识别"按钮 loading 状态）
+    property bool currentAiDetected: false   // 当前品类是否由 AI 识别接口得出 (上传 aiDet 字段用)
+    property bool pendingSaveAiDetected: false // 手动保存待写入的 aiDetected
 
     // 推理耗时相关属性
     property string lastInferenceTime: PState.NONE + " ms"
@@ -746,7 +748,7 @@ Item {
                                         id: recognizeMA
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        enabled: !root.aiRecognizing && WeightManager.netWeight > 0.01
+                                        //enabled: !root.aiRecognizing && WeightManager.netWeight > 0.01
                                     onClicked: {
                                         console.log("[WSP] 点击识别按钮，手动触发 AI 识别")
                                         // 登录拦截：未登录则中止识别并引导登录
@@ -915,8 +917,7 @@ Item {
                             // 保存按钮（蓝色渐变主按钮）
                             Button {
                                 text: "保存"
-                                enabled: WeightManager.netWeight > 0.01 && 
-                                         PState.isValid(root.currentPrediction)
+                                //enabled: WeightManager.netWeight > 0.01 && PState.isValid(root.currentPrediction)
                                 font.pixelSize: 32
                                 font.bold: true
                                 Layout.fillWidth: true
@@ -930,18 +931,33 @@ Item {
                                         return
                                     }
                                     let currentWeight = WeightManager.netWeight
-                                    if (currentWeight > 0.01) {
-                                        let chineseLabel = Translator.translate(root.currentPrediction)
-                                        console.log(">> 手动保存，触发拍照:", chineseLabel, currentWeight.toFixed(2) + "kg")
-                                        root.pendingManualSave = true
-                                        root.pendingSaveWeight = currentWeight
-                                        root.pendingSaveLabel = chineseLabel
-                                        root.pendingSaveIngrId = root.currentIngrId
-                                        // 传入当前已知品类标签，水印立即绘制，保存/上传独立执行
-                                        CameraController.captureVegetable(currentWeight, root.currentPrediction)
-                                    } else {
+                                    if (currentWeight <= 0.01) {
                                         console.warn("重量不足，无法提交记录")
+                                        window.toast("重量不足，无法保存", "warning", 2000)
+                                        return
                                     }
+                                    // 品类校验：必须先识别成功或手动选择有效食材
+                                    if (!PState.isValid(root.currentPrediction)) {
+                                        console.warn("[WSP] 品类无效，拦截保存:", root.currentPrediction)
+                                        window.toast("请先识别或选择食材", "warning", 2500)
+                                        return
+                                    }
+                                    // ingrId 校验：雪花 ID 必须有效，否则上传会落库孤儿记录
+                                    if (!root.currentIngrId || root.currentIngrId === "") {
+                                        console.warn("[WSP] ingrId 为空，拦截保存, prediction=", root.currentPrediction)
+                                        window.toast("食材数据异常，请重新选择", "warning", 2500)
+                                        return
+                                    }
+                                    let chineseLabel = Translator.translate(root.currentPrediction)
+                                    console.log(">> 手动保存，触发拍照:", chineseLabel, currentWeight.toFixed(2) + "kg",
+                                                "ingrId=", root.currentIngrId)
+                                    root.pendingManualSave = true
+                                    root.pendingSaveWeight = currentWeight
+                                    root.pendingSaveLabel = chineseLabel
+                                    root.pendingSaveIngrId = root.currentIngrId
+                                    root.pendingSaveAiDetected = root.currentAiDetected
+                                    // 传入当前已知品类标签，水印立即绘制，保存/上传独立执行
+                                    CameraController.captureVegetable(currentWeight, root.currentPrediction)
                                 }
                                 background: Rectangle {
                                     radius: 12
@@ -997,11 +1013,13 @@ Item {
                     console.log(">> 图片保存完成，立即执行记录:", label, w.toFixed(2) + "kg")
                     // 清空当前选中，让 historyChanged 触发时自动选中刚写入的最新记录
                     root.currentDetailRecord = null
-                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId)
+                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId, root.pendingSaveAiDetected)
                     root.currentPrediction = PState.IDLE
                     root.currentImagePath = ""
                     root.currentIngrId = ""
+                    root.currentAiDetected = false
                     root.pendingSaveIngrId = ""
+                    root.pendingSaveAiDetected = false
                 } else {
                     // 自动模式：照片已保存，独立触发 AI 识别（不阻塞保存管线）
                     CameraController.recognizeLastCapture()
@@ -1017,9 +1035,28 @@ Item {
             root.currentPrediction = predictedLabel
             root.currentImagePath = imagePath
 
-            // AI 返回 emsCd，查 ingredients 缓存取 ingrId (上传用)
-            var aiItem = UserIngredientService.findByEmsCd(predictedLabel)
-            root.currentIngrId = (aiItem && aiItem["id"]) ? aiItem["id"] : ""
+            // 识别失败（unknown/idle 等无效结果）：清空残留 ingrId，避免脏数据被保存误用
+            if (!PState.isValid(predictedLabel)) {
+                console.warn("[WSP] AI 识别结果无效，清空 currentIngrId, label=", predictedLabel)
+                root.currentIngrId = ""
+                root.currentAiDetected = false
+            } else {
+                // AI 返回 emsCd，查 ingredients 缓存取 ingrId (上传用)
+                var aiItem = UserIngredientService.findByEmsCd(predictedLabel)
+                if (aiItem && aiItem["id"]) {
+                    root.currentIngrId = aiItem["id"]
+                    // 品类由 AI 识别接口直接得出，标记 aiDetected=true
+                    root.currentAiDetected = true
+                    console.log("[WSP] 食材反查成功, emsCd=", predictedLabel,
+                                "ingrId=", root.currentIngrId,
+                                "ingrNm=", aiItem["cn"] ? aiItem["cn"] : "",
+                                "aiDetected=true")
+                } else {
+                    console.warn("[WSP] 食材库未匹配到 emsCd=", predictedLabel, "currentIngrId 置空")
+                    root.currentIngrId = ""
+                    root.currentAiDetected = false
+                }
+            }
             
             if (inferenceTimeMs !== undefined) {
                 root.lastInferenceTime = inferenceTimeMs + " ms"
@@ -1092,6 +1129,8 @@ Item {
         // 监听组件发出的信号，更新 root
         onLabelConfirmed: function(newPred, ingrId) {
             root.currentPrediction = newPred
+            // 人工选择/纠错：品类非 AI 接口直接得出，aiDetected=false
+            root.currentAiDetected = false
             if (ingrId) {
                 root.currentIngrId = ingrId
             } else {

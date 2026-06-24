@@ -148,8 +148,25 @@ void DatabaseManager::migrate()
         setVersion(2);
     }
 
+    // v3: weight_records 新增 ai_detected 列 (标记是否由 AI 识别接口得出)
+    if (version < 3) {
+        qDebug() << "[DB] 执行迁移 v3: weight_records 增加 ai_detected 列";
+        QSqlQuery v3q(m_db);
+        v3q.exec("PRAGMA table_info(weight_records)");
+        QStringList cols3;
+        while (v3q.next()) cols3 << v3q.value(1).toString();
+        if (!cols3.contains("ai_detected")) {
+            if (!v3q.exec("ALTER TABLE weight_records ADD COLUMN ai_detected INTEGER DEFAULT 0")) {
+                qCritical() << "[DB] v3 ALTER TABLE 失败:" << v3q.lastError().text();
+            } else {
+                qDebug() << "[DB] v3 完成: weight_records.ai_detected 已添加";
+            }
+        }
+        setVersion(3);
+    }
+
     // 未来新增迁移在此追加:
-    // if (version < 3) { ... setVersion(3); }
+    // if (version < 4) { ... setVersion(4); }
 }
 
 void DatabaseManager::createTables()
@@ -208,6 +225,8 @@ void DatabaseManager::createWeightRecordsTable()
             category_name   TEXT    NOT NULL,
             record_time     TEXT    NOT NULL,
             operator_name   TEXT    DEFAULT '',
+            ingr_id         TEXT    DEFAULT '',
+            ai_detected     INTEGER DEFAULT 0,
 
             -- 双摄像头图片
             has_main_image  INTEGER DEFAULT 0,

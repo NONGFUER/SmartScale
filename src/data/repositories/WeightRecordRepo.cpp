@@ -16,15 +16,16 @@ int WeightRecordRepo::insert(const WeightRecord &record)
     QSqlQuery q(m_db.database());
     q.prepare(R"(
         INSERT INTO weight_records (
-            weight, category_name, ingr_id, record_time, operator_name,
+            weight, category_name, ingr_id, ai_detected, record_time, operator_name,
             has_main_image, main_image_path,
             has_sub_image, sub_image_path,
             synced, cloud_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )");
     q.addBindValue(record.weight);
     q.addBindValue(record.categoryName);
     q.addBindValue(record.ingrId);
+    q.addBindValue(record.aiDetected ? 1 : 0);
     q.addBindValue(record.recordTime);
     q.addBindValue(record.operatorName);
     q.addBindValue(record.hasMainImage ? 1 : 0);
@@ -57,6 +58,7 @@ bool WeightRecordRepo::update(const WeightRecord &record)
             weight = ?,
             category_name = ?,
             ingr_id = ?,
+            ai_detected = ?,
             record_time = ?,
             operator_name = ?,
             has_main_image = ?,
@@ -71,6 +73,7 @@ bool WeightRecordRepo::update(const WeightRecord &record)
     q.addBindValue(record.weight);
     q.addBindValue(record.categoryName);
     q.addBindValue(record.ingrId);
+    q.addBindValue(record.aiDetected ? 1 : 0);
     q.addBindValue(record.recordTime);
     q.addBindValue(record.operatorName);
     q.addBindValue(record.hasMainImage ? 1 : 0);
@@ -238,6 +241,7 @@ WeightRecord WeightRecordRepo::fromQuery(QSqlQuery &q)
     r.weight       = q.value("weight").toDouble();
     r.categoryName = q.value("category_name").toString();
     r.ingrId       = q.value("ingr_id").toString();
+    r.aiDetected   = q.value("ai_detected").toInt() != 0;
     r.recordTime   = q.value("record_time").toString();
     r.operatorName = q.value("operator_name").toString();
     r.hasMainImage = q.value("has_main_image").toInt() != 0;

@@ -41,7 +41,8 @@ public:
                                const QString &operatorName = QString(),
                                const QString &mainImagePath = QString(),
                                const QString &subImagePath = QString(),
-                               const QString &ingrId = QString());
+                               const QString &ingrId = QString(),
+                               bool aiDetected = false);
 
     /** @brief 删除记录 (按列表索引) */
     Q_INVOKABLE void removeRecord(int index);
