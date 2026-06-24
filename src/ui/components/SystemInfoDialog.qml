@@ -14,7 +14,7 @@ Popup {
     id: root
 
     modal: true
-    dim: false                          // 遮罩由 Main.qml 的独立 Rectangle 控制
+    Overlay.modal: Rectangle { color: "#80000000" }   // 显式遮罩，强制 Qt 用此 Rectangle 替换默认 dimmer
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
 
@@ -135,11 +135,11 @@ Popup {
                 color: "#E2E8F0"
             }
 
-            InfoRow { label: "开机次数："; value: String(SystemInfo.bootCount) + " 次" }
+            InfoRow { label: "关机次数："; value: String(SystemInfo.bootCount) + " 次" }
             //InfoRow { label: "关机次数："; value: String(SystemInfo.shutdownCount) + " 次" }
-            InfoRow { label: "上次开机："; value: formatTime(SystemInfo.lastBootTime) }
+            //InfoRow { label: "上次开机："; value: formatTime(SystemInfo.lastBootTime) }
            // InfoRow { label: "上次关机："; value: formatTime(SystemInfo.lastShutdownTime) }
-            InfoRow { label: "本次开机："; value: formatTime(SystemInfo.currentBootTime) }
+            InfoRow { label: "上次关机："; value: formatTime(SystemInfo.currentBootTime) }
 
             // 分隔线
             Rectangle {

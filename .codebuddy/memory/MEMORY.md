@@ -20,6 +20,17 @@
   - 队列逻辑（show/_next/_dismiss/timer）独立于类型，可以照搬
 - **诊断套路**：若提示没弹出，先加日志串起 `C++ emit → QML Connections 收到 → window.toast() 调用 → _present() 执行` 四段链路，确认是渲染问题还是链路断点。链路全通但不可见，必是浮层类型问题。
 
+## 弹窗遮罩修复范式（Popup/Dialog）
+
+**症状**：弹窗打开后无黑色遮罩，背景透出，弹窗与下层页面粘连无层次。
+
+**通用修复（照搬即可）**：Popup/Dialog 设 `modal: true` + 显式 `Overlay.modal: Rectangle { color: "#80000000" }`，**删除 `dim: false`**。显式 Overlay.modal 强制 Qt 用此 Rectangle 替换默认（可能异常透明）的 dimmer。
+
+**根因模式（反复出现）**：`modal: true` + `dim: false` + 注释"遮罩由外部 Rectangle 控制" → 外部其实没画遮罩。这是从 LoginDialog 照搬的"外部遮罩"策略，但 LoginDialog 的遮罩是 Main.qml 手动画的 `loginOverlay` Rectangle（z:40），**不是** Qt 内置 dimmer；LoginDialog 用外部遮罩是为"避免 Qt 内部 modal 层遮挡虚拟键盘"。其他弹窗无此约束，不要照搬。
+
+**已修复**：CategoryCorrectionDialog（Dialog）、SystemInfoDialog（Popup）。
+**LoginDialog 例外**：保留 modal:false + 外部遮罩（虚拟键盘冲突），勿动。
+
 ## 版本号系统
 
 - 主版本号在 `CMakeLists.txt` 的 `project(SmartScale VERSION x.y.z)` 中定义
