@@ -746,18 +746,24 @@ Item {
                                         id: recognizeMA
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        cursorShape: root.aiRecognizing ? Qt.ArrowCursor : Qt.PointingHandCursor
                                         enabled: !root.aiRecognizing && WeightManager.netWeight > 0.01
-                                        onClicked: {
-                                            console.log("[WSP] 点击识别按钮，手动触发 AI 识别")
-                                            if (WeightManager.netWeight <= 0.01) {
-                                                window.toast("请先放置食材再识别", "warning", 2000)
-                                                return
-                                            }
-                                            root.aiRecognizing = true
-                                            window.toast("AI 识别中...", "info", 1500)
-                                            CameraController.captureVegetable(WeightManager.netWeight, root.currentPrediction)
+                                    onClicked: {
+                                        console.log("[WSP] 点击识别按钮，手动触发 AI 识别")
+                                        // 登录拦截：未登录则中止识别并引导登录
+                                        if (!BackendAuth.currentUser) {
+                                            console.warn("[WSP] 未登录，拦截识别操作，弹出登录窗口")
+                                            window.toast("请先登录后再识别", "warning", 2000)
+                                            window.showLogin()
+                                            return
                                         }
+                                        if (WeightManager.netWeight <= 0.05) {
+                                            window.toast("请先放置食材再识别", "warning", 2000)
+                                            return
+                                        }
+                                        root.aiRecognizing = true
+                                        window.toast("AI 识别中...", "info", 1500)
+                                        CameraController.captureVegetable(WeightManager.netWeight, root.currentPrediction)
+                                    }
                                     }
                                 }
 

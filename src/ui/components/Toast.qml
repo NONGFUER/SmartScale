@@ -116,13 +116,13 @@ Popup {
             anchors.centerIn: parent
             spacing: 10
 
-            Text {
-                id: iconText
-                font.pixelSize: 18
-                font.bold: true
-                color: "#FFFFFF"
-                anchors.verticalCenter: parent.verticalCenter
-            }
+            // Text {
+            //     id: iconText
+            //     font.pixelSize: 18
+            //     font.bold: true
+            //     color: "#FFFFFF"
+            //     anchors.verticalCenter: parent.verticalCenter
+            // }
 
             Text {
                 id: bubbleText
