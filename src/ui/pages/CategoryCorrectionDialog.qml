@@ -259,14 +259,83 @@ Dialog {
                     width: foodGridView.cellWidth - 16
                     height: foodGridView.cellHeight - 16
                     radius: 12
-                    color: dialogRoot.selectedLabel === modelData.en
-                           ? "#EBF2FF" : "#FFFFFF"
                     border.width: 1
                     border.color: dialogRoot.selectedLabel === modelData.en
-                                  ? "#4361EE" : (cardHover.containsHover ? "#B8D4FF" : "#E8ECF0")
-
-                    Behavior on color { ColorAnimation { duration: 140 } }
+                                  ? "#4361EE" : (cardHover.containsHover ? "#9DBBFF" : "#E2E8F0")
                     Behavior on border.color { ColorAnimation { duration: 140 } }
+
+                    // 卡片背景垂直渐变（顶亮底暗，模拟顶光照射）
+                    gradient: Gradient {
+                        GradientStop {
+                            position: 0.0
+                            color: dialogRoot.selectedLabel === modelData.en ? "#F0F6FF" : "#FFFFFF"
+                            Behavior on color { ColorAnimation { duration: 140 } }
+                        }
+                        GradientStop {
+                            position: 1.0
+                            color: dialogRoot.selectedLabel === modelData.en ? "#D6E4FF" : "#EEF2F7"
+                            Behavior on color { ColorAnimation { duration: 140 } }
+                        }
+                    }
+
+                    // hover 时卡片轻微上浮
+                    transform: Translate {
+                        id: cardLift
+                        y: cardHover.containsHover ? -2 : 0
+                        Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                    }
+
+                    // 顶部高光带（水平渐变：两端透明→中间白，呈弧面反光）
+                    Rectangle {
+                        anchors.top: parent.top
+                        anchors.topMargin: 2
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: parent.width - 20
+                        height: 2
+                        radius: 1
+                        gradient: Gradient {
+                            orientation: Qt.Horizontal
+                            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0) }
+                            GradientStop { position: 0.5; color: "#FFFFFF" }
+                            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0) }
+                        }
+                        opacity: (cardHover.containsHover
+                                  || dialogRoot.selectedLabel === modelData.en) ? 1.0 : 0.7
+                        Behavior on opacity { NumberAnimation { duration: 140 } }
+                    }
+
+                    // 底部暗影带（水平渐变：两端透明→中间深）
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 2
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: parent.width - 20
+                        height: 2
+                        radius: 1
+                        gradient: Gradient {
+                            orientation: Qt.Horizontal
+                            GradientStop { position: 0.0; color: Qt.rgba(0.106, 0.149, 0.231, 0) }
+                            GradientStop { position: 0.5; color: "#1B263B" }
+                            GradientStop { position: 1.0; color: Qt.rgba(0.106, 0.149, 0.231, 0) }
+                        }
+                        opacity: (cardHover.containsHover
+                                  || dialogRoot.selectedLabel === modelData.en) ? 0.3 : 0.16
+                        Behavior on opacity { NumberAnimation { duration: 140 } }
+                    }
+
+                    // 底部散光投影（随卡片上浮显现，模拟悬浮阴影）
+                    Rectangle {
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: -3
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: parent.width - 14
+                        height: 6
+                        radius: 3
+                        color: "#1B263B"
+                        opacity: cardHover.containsHover ? 0.18
+                                : (dialogRoot.selectedLabel === modelData.en ? 0.10 : 0.04)
+                        Behavior on opacity { NumberAnimation { duration: 140 } }
+                    }
 
                     Text {
                         anchors.centerIn: parent
