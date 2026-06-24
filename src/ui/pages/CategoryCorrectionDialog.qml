@@ -64,7 +64,7 @@ Dialog {
         var items = getActiveItems()
         for (var i = 0; i < items.length; i++) {
             if (items[i].en === selectedLabel)
-                return items[i].cn || items[i].cn
+                return items[i].cn || items[i].en || selectedLabel
         }
         return selectedLabel
     }
@@ -223,7 +223,7 @@ Dialog {
                         Text {
                             anchors.centerIn: parent
                             text: modelData.cn
-                            font.pixelSize: 32
+                            font.pixelSize: 15
                             font.family: "Microsoft YaHei"
                             color: dialogRoot.selectedLabel === modelData.en ? "#4C72F9" : "#1B263B"
                         }
@@ -262,7 +262,7 @@ Dialog {
                     Text {
                         anchors.centerIn: parent
                         text: "取消"
-                        font.pixelSize: 32
+                        font.pixelSize: 15
                         font.bold: true
                         color: "#64748B"
                     }

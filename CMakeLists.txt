@@ -60,7 +60,6 @@ qt_add_qml_module(appSmartScale
         src/ui/pages/LoginPage.qml             # 登录页面
         src/ui/pages/WorkstationPage.qml       # 主操作台页面
         src/ui/pages/SettingsPage.qml          # 设置页面
-        src/ui/pages/FoodSelectPage.qml        # 食品选择页面
         src/ui/components/StatusBar.qml
         src/ui/components/FoodItemCard.qml
         src/ui/components/LoginDialog.qml      # 登录弹窗

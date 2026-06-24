@@ -440,7 +440,7 @@ Item {
                                         Text {
                                             id: guideTextLabel
                                             anchors.centerIn: parent
-                                            text: "\u8BF7\u5C06\u83DC\u83D0\u653E\u7F6E\u4E8E\u6B64\u533A\u57DF"
+                                            text: "请将食材对准框内"
                                             font.pixelSize: 12
                                             color: "#FFFFFF"
                                         }
