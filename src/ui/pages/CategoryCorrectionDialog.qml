@@ -162,10 +162,27 @@ Dialog {
             }
         }
 
+        // ====== 分类标签 + 品类网格容器（统一背景，与顶部栏产生隔离感）=====
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.leftMargin: 22
+            Layout.rightMargin: 22
+            Layout.topMargin: 16
+            color: '#F2F7FF'
+            radius: 16
+            border.color: "#E2E8F0"
+            border.width: 1
+            clip: true
+
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: 0
+
         // ====== 分类标签行（可横向滚动）=====
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 18
+            Layout.topMargin: 12
             Layout.leftMargin: 22
             Layout.bottomMargin: 12
             spacing: 28
@@ -242,14 +259,14 @@ Dialog {
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: 32
+            Layout.margins: 16
             clip: true
 
             GridView {
                 id: foodGridView
                 anchors.fill: parent
                 cellWidth: (foodGridView.width - 40) / 5
-                cellHeight: 80
+                cellHeight: 160
                 clip: true
 
                 model: dialogRoot.getActiveItems()
@@ -354,6 +371,8 @@ Dialog {
                         }
                     }
                 }
+            }
+        }
             }
         }
 
