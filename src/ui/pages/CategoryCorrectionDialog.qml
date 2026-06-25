@@ -15,17 +15,18 @@ Dialog {
     signal selectModeToggled(bool isActive)
 
     x: (parent.width - width) / 2
-    y: (parent.height - height) / 2
+    // 键盘弹出时上移避让，避免搜索框被键盘遮挡
+    y: Math.min((parent.height - height) / 2,
+                parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
     width: Math.min(parent.width * 0.92, 1200)
     height: Math.min(parent.height * 0.88, 780)
     padding: 0
 
-    modal: true
+    // 非模态 + 外部遮罩（Main.qml 的 categoryOverlay），避免 Qt 内部 modal 层遮挡虚拟键盘
+    modal: false
     closePolicy: Popup.NoAutoClose
     title: ""
     z: 50
-
-    Overlay.modal: Rectangle { color: "#80000000" }
 
     background: Rectangle {
         color: "#FFFFFF"

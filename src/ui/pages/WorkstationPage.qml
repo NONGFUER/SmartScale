@@ -1072,6 +1072,27 @@ Item {
     // ==========================================
     //  品类选择弹窗（手动选择 + AI纠错 双模式）
     // ==========================================
+
+    // 品类弹窗外部遮罩（替代 modal:true，避免 Qt 内部 modal 层遮挡虚拟键盘）
+    // z 低于 correctionDialog(50)，远低于 window 级 inputPanel(99)
+    Rectangle {
+        id: categoryOverlay
+        anchors.fill: parent
+        color: "#000000"
+        opacity: correctionDialog.visible ? 0.5 : 0
+        visible: opacity > 0
+        z: 40
+
+        Behavior on opacity { NumberAnimation { duration: 200 } }
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {
+                // 点击遮罩不关闭弹窗（与 LoginDialog 行为一致，提示用户操作）
+            }
+        }
+    }
+
     CategoryCorrectionDialog {
         id: correctionDialog
 
