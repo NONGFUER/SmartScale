@@ -44,6 +44,39 @@ Dialog {
     property string selectedLabel: ""
     property string selectedIngrId: ""
     property int activeCategoryIndex: 0
+    property string searchText: ""        // 当前搜索关键词
+    property var searchResults: []        // 搜索结果列表（跨分类）
+
+    // 本地搜索：在所有分类的所有 item 里按 cn/en 模糊匹配
+    function doSearch(key) {
+        var trimmed = key.trim()
+        if (trimmed === "") {
+            dialogRoot.searchResults = []
+            return
+        }
+        var lower = trimmed.toLowerCase()
+        var results = []
+        var cats = getActiveCategories()
+        for (var c = 0; c < cats.length; c++) {
+            var items = cats[c].items || []
+            for (var i = 0; i < items.length; i++) {
+                var cn = (items[i].cn || "").toLowerCase()
+                var en = (items[i].en || "").toLowerCase()
+                if (cn.indexOf(lower) >= 0 || en.indexOf(lower) >= 0) {
+                    results.push(items[i])
+                }
+            }
+        }
+        dialogRoot.searchResults = results
+        console.log("[CategoryDialog] 搜索 '", trimmed, "' 命中", results.length, "项")
+    }
+
+    // GridView 当前应显示的数据源：搜索时用结果，否则用当前分类
+    function getDisplayItems() {
+        if (dialogRoot.searchText.trim() !== "")
+            return dialogRoot.searchResults
+        return getActiveItems()
+    }
 
     function getActiveCategories() {
         if (categorySelectMode)
@@ -134,6 +167,17 @@ Dialog {
                         color: "#1B263B"
                         verticalAlignment: TextInput.AlignVCenter
                         background: null
+                        // 实时本地搜索：输入即过滤
+                        onTextChanged: {
+                            dialogRoot.searchText = text
+                            dialogRoot.doSearch(text)
+                        }
+                        // 清空快捷
+                        Keys.onEscapePressed: {
+                            text = ""
+                            dialogRoot.searchText = ""
+                            dialogRoot.searchResults = []
+                        }
                     }
 
                     Rectangle {
@@ -156,7 +200,12 @@ Dialog {
                         MouseArea {
                             anchors.fill: parent
                             hoverEnabled: true
-                            onClicked: console.log("[CategoryDialog] 搜索:", catSearchInput.text)
+                            // 已是实时搜索，点击按钮只做焦点切换 + 日志
+                            onClicked: {
+                                dialogRoot.searchText = catSearchInput.text
+                                dialogRoot.doSearch(catSearchInput.text)
+                                console.log("[CategoryDialog] 搜索:", catSearchInput.text)
+                            }
                         }
                     }
                 }
@@ -187,6 +236,8 @@ Dialog {
             Layout.leftMargin: 22
             Layout.bottomMargin: 12
             spacing: 28
+            // 搜索中隐藏分类标签（避免与跨分类搜索结果混淆）
+            visible: dialogRoot.searchText.trim() === ""
 
             Flickable {
                 Layout.fillWidth: true
@@ -263,6 +314,25 @@ Dialog {
             Layout.margins: 16
             clip: true
 
+            // 搜索无结果时的空状态提示
+            Text {
+                anchors.centerIn: parent
+                visible: dialogRoot.searchText.trim() !== "" && dialogRoot.searchResults.length === 0
+                text: "未找到匹配的食材"
+                font.pixelSize: 24
+                color: "#9CA3AF"
+            }
+
+            // 搜索结果计数提示（顶部居中）
+            Text {
+                anchors.top: parent.top
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: dialogRoot.searchText.trim() !== "" && dialogRoot.searchResults.length > 0
+                text: "找到 " + dialogRoot.searchResults.length + " 个结果"
+                font.pixelSize: 16
+                color: "#6B7280"
+            }
+
             GridView {
                 id: foodGridView
                 anchors.fill: parent
@@ -270,7 +340,7 @@ Dialog {
                 cellHeight: 160
                 clip: true
 
-                model: dialogRoot.getActiveItems()
+                model: dialogRoot.getDisplayItems()
 
                 delegate: Rectangle {
                     id: foodCard
@@ -443,6 +513,8 @@ Dialog {
         selectedIngrId = ""
         activeCategoryIndex = 0
         catSearchInput.text = ""
+        searchText = ""            // 清空搜索状态
+        searchResults = []
 
         if (categorySelectMode)
             UserIngredientService.fetchIngredients()
