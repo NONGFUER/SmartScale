@@ -25,12 +25,24 @@ ApplicationWindow {
         loginDialog.open()
     }
 
+    property bool chineseInputMode: true  // true=拼音中文, false=纯英文
+
     Component.onCompleted: {
-        VirtualKeyboard.locale = "zh_CN"
-        VirtualKeyboard.availableLocales = ["zh_CN", "en_GB"]
-        VirtualKeyboard.inputMethodHints = Qt.ImhNoAutoUppercase
+        // 已自编译部署 Qt VirtualKeyboard Pinyin 插件到系统 Plugins/Pinyin/
+        // 延迟到事件循环空闲再设置，避开 InputPanel 初始化竞态（直接设会被覆盖）
+        Qt.callLater(function() {
+            VirtualKeyboardSettings.activeLocales = ["zh_CN", "en_GB"]  // 地球图标只显示中英
+            VirtualKeyboardSettings.locale = "zh_CN"  // 默认中文拼音
+        })
         // 启动时自动弹出登录弹窗
         loginDialog.open()
+    }
+
+    // 中英输入切换（供键盘右上角按钮调用）
+    function toggleInputMode() {
+        window.chineseInputMode = !window.chineseInputMode
+        VirtualKeyboardSettings.locale = window.chineseInputMode ? "zh_CN" : "en_GB"
+        console.log("[Main] 输入法切换:", window.chineseInputMode ? "中文拼音" : "英文")
     }
 
     // ===== 全屏背景图 =====
@@ -80,6 +92,36 @@ ApplicationWindow {
         y: parent.height
         anchors.left: parent.left
         anchors.right: parent.right
+
+        // 固定的中英切换按钮（盖在键盘右上角，避免误触内置语言选择器）
+        Rectangle {
+            id: langToggle
+            width: 60
+            height: 36
+            radius: 6
+            color: window.chineseInputMode ? "#4361EE" : "#E2E8F0"
+            anchors.right: parent.right
+            anchors.rightMargin: 8
+            anchors.top: parent.top
+            anchors.topMargin: 4
+            z: 100  // 高于键盘内部
+            visible: inputPanel.active
+            border.color: window.chineseInputMode ? "#4361EE" : "#9CA3AF"
+            border.width: 1
+
+            Text {
+                anchors.centerIn: parent
+                text: window.chineseInputMode ? "中" : "EN"
+                font.pixelSize: 18
+                font.bold: true
+                color: window.chineseInputMode ? "white" : "#1B263B"
+            }
+
+            MouseArea {
+                anchors.fill: parent
+                onClicked: window.toggleInputMode()
+            }
+        }
         
         states: State {
             name: "visible"

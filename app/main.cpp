@@ -30,14 +30,11 @@
 
 int main(int argc, char *argv[])
 {
-    // 虚拟键盘配置 - 严格限制只显示中英文
+    // 虚拟键盘配置
+    // 注意：Debian 13 的 Qt6 VirtualKeyboard 不打包 Pinyin 插件，
+    // 触摸屏键盘只能输入英文/数字/符号，无法输入中文（除非自编译 Pinyin 插件）。
     qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
-    qputenv("QT_VIRTUALKEYBOARD_LAYOUTS", "zh_CN;en_GB");
-    qputenv("QT_VIRTUALKEYBOARD_DEFAULT_LOCALE", "zh_CN");
-    qputenv("QT_VIRTUALKEYBOARD_AVAILABLE_LOCALES", "zh_CN;en_GB");
     qputenv("QT_VIRTUALKEYBOARD_STYLE", "default");
-    qputenv("QT_VIRTUALKEYBOARD_LANGUAGE_FILTER", "zh-CN,en-GB");
-    qputenv("QT_VIRTUALKEYBOARD_DISABLE", "0");
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");
 
     QGuiApplication app(argc, argv);

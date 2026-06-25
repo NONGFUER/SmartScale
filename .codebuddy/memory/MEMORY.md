@@ -2,6 +2,12 @@
 
 > 跨会话稳定约定与硬性规则。冲突时直接更新本文档，不另起条目。
 
+## 编译约束（强制 — 违反会导致主板宕机）
+
+- **禁止 AI 自行执行 `make` / `cmake --build` 等编译命令**。目标主板资源有限，并行编译（如 `make -j4`）会导致主板宕机。
+- 用户平时用 `make -j1` 手动编译。AI 改完代码后只需用 `read_lints` 验证语法，**不要触发构建**。
+- 若需验证编译，明确告知用户自行执行 `make -j1`，不要代劳。
+
 ## 触摸屏环境（强制）
 
 **目标设备是触摸屏，没有鼠标光标。**
@@ -72,3 +78,19 @@
 - 文件位置：`src/ui/Theme.qml`，singleton
 - 集中管理字体族（`fontFamilyUi`/`fontFamilyTitle`/`fontFamilyMono`）、字号（按用途语义命名：`fontSizeTitleLg`=24、`fontSizeBody`=16 等）、颜色（`colorTextPrimary` 等）
 - **新增 QML 字体/颜色一律走 Theme 引用，禁止硬编码**。已有文件按需逐步迁移
+
+## 虚拟键盘（VirtualKeyboard）
+
+- 项目使用 Qt6 官方 `QtQuick.VirtualKeyboard` 模块。
+- **Debian 13 (trixie) 的 Qt6 VirtualKeyboard 默认不打包 Pinyin 插件**（`Plugins/` 目录原本只有 Hangul/Hunspell/Thai）。已于 2026-06-25 自编译 v6.8.2 Pinyin 插件并部署到 `/usr/lib/aarch64-linux-gnu/qt6/qml/QtQuick/VirtualKeyboard/Plugins/Pinyin/`（`libqtvkbpinyinplugin.so` + qmldir + plugins.qmltypes），父级 Plugins/qmldir 已追加 `import ...Pinyin auto`。词典 `dict_pinyin.dat` 已作 rcc 内嵌进 .so，无需独立数据文件。
+- **自编译方法（如需重做）**：`git clone --depth 1 --branch v6.8.2 https://code.qt.io/qt/qtvirtualkeyboard.git`（GitHub 直连失败用 code.qt.io）→ 装 `qt6-base-private-dev` → `/usr/lib/qt6/bin/qt-cmake <src> -G Ninja -DCMAKE_BUILD_TYPE=Release`（必须用 qt-cmake 提供 BuildInternals 宏）→ `ninja -j1 qtvkbpinyinplugin`（主板 2GB 内存用 -j1）→ 拷贝 3 产物到 Plugins/Pinyin/ + 父级 qmldir 加 Pinyin import。
+- 核心代码在 `src/ui/Main.qml`：导入(:5-6)、`Component.onCompleted` 设 `locale="zh_CN"`、`InputPanel` 实例、右上角"中/EN"切换按钮调用 `toggleInputMode()`。
+- `InputPanel.active` 驱动主布局底部避让（`Main.qml:52`），各 Dialog 用 `inputPanel.active ? inputPanel.height + 20 : 0` 做 y 避让。
+- **API 速查**（Qt 6.8.2 实测）：
+  - `VirtualKeyboardSettings.locale`(rw) — 切换键盘布局/输入法
+  - `VirtualKeyboardSettings.activeLocales`(rw) — 限制语言选择器列表；**没拼音引擎时设了反而让列表为空**，装了拼音插件后可设 `["zh_CN","en_GB"]`
+  - `VirtualKeyboardSettings.availableLocales`(只读)
+  - `VirtualKeyboardSettings.visibleFunctionKeys`(rw) — 控制地球/隐藏按钮可见性，枚举 `KeyboardFunctionKeys.None=0/Hide=1/Language=2/All=3`
+  - **不存在** `languageFilterFunc`（曾编造过，已删除）
+- **环境变量**（main.cpp）：只需 `QT_IM_MODULE=qtvirtualkeyboard` + `QT_VIRTUALKEYBOARD_STYLE=default`。`QT_VIRTUALKEYBOARD_LAYOUTS` 值是布局名（chinese/english）不是 locale（zh_CN）；`QT_VIRTUALKEYBOARD_LANGUAGE_FILTER` 不是 Qt 标准变量——这两个不要设。
+- **验证拼音引擎是否真加载**：用 `nm -D libqtvkbpinyinplugin.so | grep -i pinyin` 看符号（不要用 strings，strings 里的 "Pinyin" 只是枚举常量名不可靠）。
