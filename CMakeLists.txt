@@ -63,6 +63,8 @@ qt_add_qml_module(appSmartScale
         src/ui/components/StatusBar.qml
         src/ui/components/FoodItemCard.qml
         src/ui/components/ActionButton.qml     # 仿品类网格质感的操作按钮组件
+        src/ui/components/RecordDetailDialog.qml   # 称重记录详情弹窗
+        src/ui/components/LogoutConfirmDialog.qml  # 退出登录确认弹窗
         src/ui/components/LoginDialog.qml      # 登录弹窗
         src/ui/pages/CategoryCorrectionDialog.qml  # 品类纠错弹窗
         src/ui/components/SystemInfoDialog.qml     # [测试] 系统调试信息弹窗
