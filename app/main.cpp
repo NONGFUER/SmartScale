@@ -48,7 +48,8 @@ int main(int argc, char *argv[])
     // 1. 初始化数据库 (必须在所有 Service 之前)
     // ============================================================
     auto &dbMgr = DatabaseManager::instance();
-    if (!dbMgr.initialize("data/smartscale.db")) {
+    QString dbPath = QCoreApplication::applicationDirPath() + "/data/smartscale.db";
+    if (!dbMgr.initialize(dbPath)) {
         qCritical() << "数据库初始化失败，程序无法启动";
         return -1;
     }
