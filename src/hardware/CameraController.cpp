@@ -14,6 +14,8 @@
 #include <QBuffer>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QCryptographicHash>
+#include <QPainterPath>
 #include "core/NetworkUtils.h"
 
 // 副摄像头配置 (IMX519 CSI)
@@ -397,6 +399,25 @@ void CameraController::drawWatermarkOverlay(QPainter &painter, int imgW, int img
     painter.setRenderHint(QPainter::Antialiasing);
     painter.setRenderHint(QPainter::TextAntialiasing);
 
+    // === 计算原图(未加水印)的 SHA256 存证哈希 ===
+    // 必须在绘制任何水印之前算，否则哈希会自我引用无法验证
+    QString hashDisplay;
+    {
+        QImage *imgPtr = dynamic_cast<QImage*>(painter.device());
+        if (imgPtr) {
+            QByteArray jpgBytes;
+            QBuffer buf(&jpgBytes);
+            buf.open(QIODevice::WriteOnly);
+            imgPtr->save(&buf, "JPG", 90);
+            buf.close();
+            QString hashFull = QCryptographicHash::hash(jpgBytes, QCryptographicHash::Sha256)
+                                   .toHex().toLower();
+            qDebug() << "[Watermark] 存证哈希(SHA256):" << hashFull;
+            // 完整 64 位哈希，卡片分三行显示
+            hashDisplay = hashFull;
+        }
+    }
+
     // 获取当前登录用户名，未登录则用占位符
     QString operatorName = (m_authService && !m_authService->currentUser().isEmpty())
                            ? m_authService->currentUser()
@@ -494,24 +515,102 @@ void CameraController::drawWatermarkOverlay(QPainter &painter, int imgW, int img
     }
 
     // =============================================
-    // 3) 左下角：用 history_icon.png 替代公章 + "现场照片"文字
+    // 3) 左下角：盾牌锁 + 密钥存证卡片（浅蓝渐变底板）
+    // 色号：主文字#1D3FA8 哈希#263FB0 标签#2448B4 边框#4D86E8(3px)
+    //       内边框#AFCBFF(1px) 虚线#8CB2F6(2px) 渐变背景#D8E3F3→#F4F8FF
+    //       盾牌描边#4E8BF0 锁头#243BA7
     // =============================================
     {
-        QString iconPath = QCoreApplication::applicationDirPath() + "/resources/img/shuiyin.png";
-        QImage sealIcon(iconPath);
+        // 卡片整体尺寸（按 1280x720 基准等比缩放）
+        int cardW = sx(330);
+        int cardH = sy(200);
+        int cardX = sx(15);
+        int cardY = imgH - cardH - sy(20);
 
-        if (!sealIcon.isNull()) {
-            int iconW = sx(320);
-            int iconH = sy(210);
-            int iconX = sx(0);
-            int iconY = imgH - iconH - sy(25);
-            QImage scaled = sealIcon.scaled(iconW, iconH,
+        QRect cardRect(cardX, cardY, cardW, cardH);
+        int r = sx(14); // 圆角半径
+
+        // 浅蓝渐变底板（上浅→下深）
+        QLinearGradient grad(cardX, cardY, cardX, cardY + cardH);
+        grad.setColorAt(0.0, QColor("#F4F8FF"));
+        grad.setColorAt(1.0, QColor("#D8E3F3"));
+        painter.setBrush(grad);
+        painter.setPen(Qt::NoPen);
+        painter.drawRoundedRect(cardRect, r, r);
+
+        // 内侧 1px 浅蓝高光描边（缩进 1.5px 避免被主边框覆盖）
+        QRect innerRect(cardRect.x() + sx(2), cardRect.y() + sy(2),
+                        cardRect.width() - sx(4), cardRect.height() - sy(4));
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(QColor("#AFCBFF"), sx(1)));
+        painter.drawRoundedRect(innerRect, qMax(r - sx(2), 0), qMax(r - sy(2), 0));
+
+        // 3px 高饱和蓝色主描边
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(QColor("#4D86E8"), sx(3)));
+        painter.drawRoundedRect(cardRect, r, r);
+
+        // ---- 左上角：盾牌锁图标（使用 lock.png 图片）----
+        QString lockIconPath = QCoreApplication::applicationDirPath() + "/resources/img/lock.png";
+        QImage lockIcon(lockIconPath);
+        if (!lockIcon.isNull()) {
+            int iconW = sy(68);
+            int iconH = sy(72);
+            QImage scaled = lockIcon.scaled(iconW, iconH,
                                            Qt::KeepAspectRatio,
                                            Qt::SmoothTransformation);
-            int ix = iconX + (iconW - scaled.width()) / 2;
-            int iy = iconY + (iconH - scaled.height()) / 2;
+            int ix = cardX + sx(14) + (iconW - scaled.width()) / 2;
+            int iy = cardY + sy(10) + (iconH - scaled.height()) / 2;
             painter.drawImage(ix, iy, scaled);
         }
+
+        // ---- 右侧文字区 ----
+        int iconAreaW = sy(72);   // 左侧图标区宽度（与图标绘制保持一致）
+        int txtX = cardX + iconAreaW + sx(12);
+        int txtW = cardW - iconAreaW - sx(36);
+
+        // 标题："本图像已通过" + "密钥存证"（24px 深蓝加粗黑体 SimHei）
+        painter.setPen(QColor("#1D3FA8"));
+        QFont fontTitle("SimHei", sFontSize(20), QFont::Bold);
+        painter.setFont(fontTitle);
+        int titleLineH = sy(30);
+        painter.drawText(txtX, cardY + sy(12), txtW, titleLineH,
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         QStringLiteral("本图像已通过"));
+        painter.drawText(txtX, cardY + sy(40), txtW, titleLineH,
+                         Qt::AlignLeft | Qt::AlignVCenter,
+                         QStringLiteral("密钥存证"));
+
+        // 2px 浅蓝虚线分隔线
+        int dashY = cardY + sy(72);
+        QPen dashPen(QColor("#8CB2F6"), sx(2), Qt::DashLine);
+        dashPen.setDashOffset(0);
+        painter.setPen(dashPen);
+        painter.drawLine(txtX, dashY, txtX + txtW - sx(10), dashY);
+
+        // "存证哈希:" 标签文字蓝 (#2448B4)
+        QFont fontLabel("SimHei", sFontSize(18));
+        painter.setPen(QColor("#2448B4"));
+        painter.setFont(fontLabel);
+        painter.drawText(txtX, dashY + sy(4), txtW, sy(22),
+                         Qt::AlignLeft | Qt::AlignTop,
+                         QStringLiteral("存证哈希:"));
+
+        // 完整哈希值（20-22px 深蓝加粗字体 #263FB0）
+        QFont fontHash("Consolas", sFontSize(16), QFont::Bold);
+        painter.setFont(fontHash);
+        painter.setPen(QColor("#263FB0"));
+        int hashLineH = sy(22);
+        int hashStartY = dashY + sy(28);
+        QString h1 = hashDisplay.mid(0, 22);
+        QString h2 = hashDisplay.mid(22, 22);
+        QString h3 = hashDisplay.mid(44);
+        painter.drawText(txtX, hashStartY, txtW, hashLineH,
+                         Qt::AlignLeft | Qt::AlignVCenter, h1);
+        painter.drawText(txtX, hashStartY + hashLineH, txtW, hashLineH,
+                         Qt::AlignLeft | Qt::AlignVCenter, h2);
+        painter.drawText(txtX, hashStartY + hashLineH * 2, txtW, hashLineH,
+                         Qt::AlignLeft | Qt::AlignVCenter, h3);
     }
 
     // =============================================
