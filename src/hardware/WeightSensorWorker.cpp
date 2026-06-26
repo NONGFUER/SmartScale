@@ -365,6 +365,123 @@ int WeightSensorWorker::modbusWriteCmd(uint16_t regAddr, uint16_t value)
 }
 
 // ============================================================================
+// 功能码 03: 读取设备序列号 SN (0x0031 起 8 个寄存器 = 16 字节 ASCII)
+//   请求帧: 01 03 00 31 00 08 15 C3
+//   响应帧: 01 03 10 [16B ASCII SN] CRC CRC  (21B)
+// 返回: 0=OK  -1=通信失败  -2=CRC错  -3=异常响应
+// ============================================================================
+
+int WeightSensorWorker::modbusReadSN(QString *sn)
+{
+    if (!m_serial || !m_serial->isOpen()) return -1;
+
+    // 组帧
+    uint8_t tx[8];
+    tx[0] = m_slaveAddr;
+    tx[1] = FUNC_READ;
+    tx[2] = (REG_SN_ADDR >> 8) & 0xFF;
+    tx[3] = REG_SN_ADDR & 0xFF;
+    tx[4] = (REG_SN_COUNT >> 8) & 0xFF;
+    tx[5] = REG_SN_COUNT & 0xFF;
+
+    uint16_t crc = crc16Modbus(tx, 6);
+    tx[6] = crc & 0xFF;
+    tx[7] = (crc >> 8) & 0xFF;
+
+    // 打印 TX
+    QByteArray txHex;
+    for (int i = 0; i < 8; i++) txHex.append(QString("%1 ").arg(tx[i], 2, 16, QChar('0')).toUpper().toUtf8());
+    qDebug().nospace() << "[Modbus] TX READ_SN: " << txHex.trimmed();
+
+    // 发送前清空接收缓冲区
+    m_serial->clear(QSerialPort::Input);
+
+    // 发送
+    qint64 written = m_serial->write((const char *)tx, 8);
+    if (written != 8) {
+        qWarning() << "[Modbus] SN 写入失败, expected=8 actual=" << written;
+        return -1;
+    }
+    if (!m_serial->flush()) return -1;
+
+    // 等待响应: 21B ≈ 24ms @ 9600bps + 从站处理时间
+    QElapsedTimer timer;
+    timer.start();
+
+    QByteArray rxBuf;
+    while (rxBuf.size() < SN_FRAME_LEN && timer.elapsed() < m_readTimeoutMs) {
+        if (m_serial->waitForReadyRead(SINGLE_WAIT_MS)) {
+            rxBuf += m_serial->readAll();
+        }
+    }
+
+    if (rxBuf.isEmpty()) {
+        qDebug() << "[Modbus] SN 无响应 (等待" << timer.elapsed() << "ms)";
+        return -1;
+    }
+    if (rxBuf.size() < SN_FRAME_LEN) {
+        QByteArray rxHex;
+        for (int i = 0; i < rxBuf.size(); i++) rxHex.append(QString("%1 ").arg((uint8_t)rxBuf[i], 2, 16, QChar('0')).toUpper().toUtf8());
+        qWarning() << "[Modbus] SN 数据不足: 期望" << SN_FRAME_LEN << "B 实际" << rxBuf.size() << "B -" << rxHex.trimmed();
+        return -1;
+    }
+    if (rxBuf.size() > SN_FRAME_LEN) {
+        qDebug() << "[Modbus] SN 收到" << rxBuf.size() << "B, 仅使用前" << SN_FRAME_LEN << "B (粘包)";
+    }
+
+    // CRC 校验
+    uint16_t calcCrc = crc16Modbus((const uint8_t *)rxBuf.data(), SN_FRAME_LEN - 2);
+    uint16_t recvCrc = ((uint8_t)rxBuf[SN_FRAME_LEN - 2]) | (((uint8_t)rxBuf[SN_FRAME_LEN - 1]) << 8);
+    if (calcCrc != recvCrc) {
+        qWarning() << "[Modbus] SN CRC错误: calc=0x" << QString::number(calcCrc, 16)
+                   << "recv=0x" << QString::number(recvCrc, 16);
+        return -2;
+    }
+
+    // 异常检查
+    if ((uint8_t)rxBuf[1] & 0x80) {
+        qWarning() << "[Modbus] SN 异常响应: 错误码=0x"
+                   << QString::number((uint8_t)rxBuf[2], 16);
+        return -3;
+    }
+
+    // 数据区: rxBuf[3..18] = 16 字节 ASCII (高位在前, 大端寄存器序)
+    QByteArray snBytes = rxBuf.mid(3, 16);
+    *sn = QString::fromLatin1(snBytes).trimmed();
+
+    // 打印 RX
+    QByteArray rxHex;
+    for (int i = 0; i < rxBuf.size(); i++) rxHex.append(QString("%1 ").arg((uint8_t)rxBuf[i], 2, 16, QChar('0')).toUpper().toUtf8());
+    qDebug().nospace() << "[Modbus] RX SN(" << rxBuf.size() << "B): " << rxHex.trimmed();
+
+    return 0;
+}
+
+// ============================================================================
+// 读 SN 槽 — 由 GUI 线程通过 QueuedConnection 触发
+// ============================================================================
+
+void WeightSensorWorker::doReadSN()
+{
+    if (!m_serial || !m_serial->isOpen()) {
+        qWarning() << "[WeightSensorWorker] 读 SN 失败: 串口未打开";
+        Q_EMIT snReady(QString());
+        return;
+    }
+
+    qDebug() << "[WeightSensorWorker] >>> 读取设备序列号...";
+    QString sn;
+    int ret = modbusReadSN(&sn);
+    if (ret == 0) {
+        qDebug() << "[WeightSensorWorker] SN 读取成功:" << sn;
+        Q_EMIT snReady(sn);
+    } else {
+        qWarning() << "[WeightSensorWorker] SN 读取失败, err=" << ret;
+        Q_EMIT snReady(QString());
+    }
+}
+
+// ============================================================================
 // 功能码 03: 读保持寄存器 (净重+状态+ADC)
 // 返回: 0=OK  -1=通信失败  -2=CRC错  -3=异常响应
 //

@@ -48,6 +48,8 @@ public Q_SLOTS:
     void doTare();
     /** 校准请求 (预留接口, cmd=2 半量程 / cmd=3 满量程, 仅 Feigong 路径有意义) */
     void doCalibrate(uint16_t cmd);
+    /** 读取设备序列号 SN (0x0031 起 8 个寄存器 = 16 字节 ASCII) */
+    void doReadSN();
 
 Q_SIGNALS:
     /** 称重数据就绪 (跨线程 → GUI) */
@@ -58,6 +60,8 @@ Q_SIGNALS:
     void calibrateDone(bool ok);
     /** 错误通知 (跨线程 → GUI) */
     void errorOccurred(const QString &msg);
+    /** 序列号读取完成 (跨线程 → GUI), 空字符串表示失败 */
+    void snReady(const QString &sn);
 
 private Q_SLOTS:
     /** 定时轮询槽 (由内部 QTimer 驱动) */
@@ -76,6 +80,8 @@ private:
 
     /** 功能码03: 读取净重+状态+ADC */
     int modbusReadWeight(int32_t *weight_g, uint16_t *status, int32_t *adc_raw);
+    /** 功能码03: 读取设备序列号 SN (0x0031 起 8 个寄存器 = 16 字节 ASCII) */
+    int modbusReadSN(QString *sn);
     /** 功能码06: 写单个寄存器 (去皮/校准) */
     int modbusWriteCmd(uint16_t regAddr, uint16_t value);
 
@@ -114,6 +120,13 @@ private:
     static constexpr uint16_t CMD_TARE       = 1;        // 去皮
     static constexpr uint16_t CMD_CALIB_HALF = 2;        // 半量程标定 (Feigong)
     static constexpr uint16_t CMD_CALIB_FULL = 3;        // 满量程标定 (Feigong)
+
+    // 序列号寄存器: 0x0031 起 8 个寄存器 = 16 字节 ASCII
+    // 请求帧: 01 03 00 31 00 08 15 C3   (8B)
+    // 响应帧: 01 03 10 [16B SN] CRC CRC (21B)
+    static constexpr uint16_t REG_SN_ADDR    = 0x0031;
+    static constexpr uint16_t REG_SN_COUNT   = 8;
+    static constexpr int      SN_FRAME_LEN   = 21;       // 1+1+1+16+2
 
     // ==================== 超时参数 (默认值, 可被环境变量覆盖) ====================
     static constexpr int DEFAULT_POLL_INTERVAL_MS = 200;

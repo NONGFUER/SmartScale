@@ -39,11 +39,19 @@ WeightSensor::WeightSensor(QObject *parent)
     // GUI → Worker: 校准请求 (QueuedConnection)
     connect(this, &WeightSensor::requestCalibrate,
             m_worker, &WeightSensorWorker::doCalibrate);
+    // GUI → Worker: 读 SN 请求 (QueuedConnection)
+    connect(this, &WeightSensor::requestReadSN,
+            m_worker, &WeightSensorWorker::doReadSN);
+    // Worker → GUI: SN 读取完成
+    connect(m_worker, &WeightSensorWorker::snReady,
+            this,     &WeightSensor::onSnReady);
 
     // 启动线程 → Worker 初始化串口 → 启动轮询定时器
     // 使用 QueuedConnection 确保 startPolling() 在 Worker 线程中执行
     connect(m_workerThread, &QThread::started, m_worker, [this]() {
         m_worker->startPolling();
+        // 启动后自动读取一次设备序列号
+        Q_EMIT requestReadSN();
     }, Qt::QueuedConnection);
 
     m_workerThread->start();
@@ -77,6 +85,7 @@ double WeightSensor::netWeight() const
     return m_netWeight;
 }
 bool WeightSensor::isStable()  const { return m_isStable; }
+QString WeightSensor::sn()     const { return m_sn; }
 
 // ============================================================================
 // Q_INVOKABLE 操作
@@ -119,6 +128,16 @@ void WeightSensor::calibrateFull()
 }
 
 // ============================================================================
+// 读取设备序列号 — 通过信号转发到 Worker 线程异步执行
+// ============================================================================
+
+void WeightSensor::readSN()
+{
+    qDebug() << "[WeightSensor] >>> 请求读取设备序列号...";
+    Q_EMIT requestReadSN();
+}
+
+// ============================================================================
 // 接收 Worker 的称重数据 — 在 GUI 线程执行滤波 + 稳定检测 + 属性更新
 // ============================================================================
 
@@ -156,6 +175,23 @@ void WeightSensor::onCalibrateDone(bool ok)
         qWarning() << "[WeightSensor] 校准失败 (来自 Worker)";
     }
     Q_EMIT calibrateDone(ok);
+}
+
+// ============================================================================
+// 接收 Worker 的 SN 读取结果 — 在 GUI 线程更新缓存并通知 QML
+// ============================================================================
+
+void WeightSensor::onSnReady(const QString &sn)
+{
+    if (sn.isEmpty()) {
+        qWarning() << "[WeightSensor] SN 读取失败 (来自 Worker)";
+        return;
+    }
+    if (sn != m_sn) {
+        m_sn = sn;
+        Q_EMIT snChanged();
+        qDebug() << "[WeightSensor] SN 已缓存:" << m_sn;
+    }
 }
 
 // ============================================================================

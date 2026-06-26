@@ -28,6 +28,7 @@ class WeightSensor : public QObject
     Q_OBJECT
     Q_PROPERTY(double netWeight READ netWeight NOTIFY weightChanged)
     Q_PROPERTY(bool isStable READ isStable NOTIFY stableChanged)
+    Q_PROPERTY(QString sn READ sn NOTIFY snChanged)
 
 public:
     explicit WeightSensor(QObject *parent = nullptr);
@@ -35,6 +36,7 @@ public:
 
     double netWeight() const;
     bool isStable() const;
+    QString sn() const;
 
     /** 去皮: 通过信号转发到 Worker 线程 */
     Q_INVOKABLE void tare();
@@ -44,6 +46,8 @@ public:
     Q_INVOKABLE void calibrateHalf();
     /** 满量程标定 (预留接口, Feigong 协议下有效) */
     Q_INVOKABLE void calibrateFull();
+    /** 读取设备序列号 SN (异步, 结果通过 snChanged 信号通知) */
+    Q_INVOKABLE void readSN();
 
 Q_SIGNALS:
     void weightChanged();
@@ -53,11 +57,15 @@ Q_SIGNALS:
     void tareDone(bool ok);
     /** 校准完成通知 (true=命令已确认, false=失败) */
     void calibrateDone(bool ok);
+    /** 序列号变更通知 (读取完成或失败时空字符串) */
+    void snChanged();
 
     /** 内部信号: 向 Worker 线程发送去皮请求 */
     void requestTare();
     /** 内部信号: 向 Worker 线程发送校准请求 (cmd=2 半量程 / cmd=3 满量程) */
     void requestCalibrate(uint16_t cmd);
+    /** 内部信号: 向 Worker 线程发送读取 SN 请求 */
+    void requestReadSN();
 
 private Q_SLOTS:
     /** 接收 Worker 的称重数据, 写入缓冲池 */
@@ -66,6 +74,8 @@ private Q_SLOTS:
     void onTareDone(bool ok);
     /** 接收 Worker 的校准结果 */
     void onCalibrateDone(bool ok);
+    /** 接收 Worker 的 SN 读取结果 */
+    void onSnReady(const QString &sn);
     /** 消费缓冲池数据 (低频定时器驱动) */
     void consumeBuffer();
 
@@ -86,6 +96,9 @@ private:
     static constexpr double ZERO_MAX_KG = 8.0;                // 归零(硬件去皮)允许的最大净重(kg)，超过则硬件不支持
     int  m_stableCount  = 0;
     bool m_triggered    = false; // 防止重复触发
+
+    // ==================== 设备序列号 ====================
+    QString m_sn;       // 设备序列号 (启动时读取一次缓存)
 
     // ==================== 缓冲池 (生产者-消费者) ====================
     WeightSample   m_buffer;                    // 最新数据缓存（覆盖写）

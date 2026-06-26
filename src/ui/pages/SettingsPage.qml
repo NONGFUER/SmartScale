@@ -99,7 +99,7 @@ Item {
                 // --- 序列号 ---
                 SettingItem {
                     label: "序列号:"
-                    value: "V-XXXXXX"
+                    value: WeightManager.sn.length > 0 ? WeightManager.sn : "----"
                     editable: false
                 }
 
