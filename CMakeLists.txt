@@ -36,7 +36,7 @@ else()
 endif()
 
 # Qt 组件
-find_package(Qt6 REQUIRED COMPONENTS Quick VirtualKeyboard Multimedia Sql Network SerialPort)
+find_package(Qt6 REQUIRED COMPONENTS Quick VirtualKeyboard Multimedia Sql Network SerialPort Concurrent)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -69,6 +69,8 @@ qt_add_qml_module(appSmartScale
         src/ui/pages/CategoryCorrectionDialog.qml  # 品类纠错弹窗
         src/ui/components/SystemInfoDialog.qml     # [测试] 系统调试信息弹窗
         src/ui/components/Toast.qml                # 全局 Toast 提示组件
+        src/ui/components/WifiListDialog.qml       # Wi-Fi 网络列表弹窗
+        src/ui/components/WifiPasswordDialog.qml   # Wi-Fi 密码输入弹窗
 
     # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
@@ -92,6 +94,7 @@ qt_add_qml_module(appSmartScale
         SOURCES src/services/CategoryService.h src/services/CategoryService.cpp
         SOURCES src/services/UserIngredientService.h src/services/UserIngredientService.cpp
         SOURCES src/services/SystemInfoService.h src/services/SystemInfoService.cpp       # [测试] 系统信息服务
+        SOURCES src/services/NetworkManagerService.h src/services/NetworkManagerService.cpp  # 网络管理服务 (WiFi + 4G)
 
         # --- 数据层: Models ---
         SOURCES src/data/models/WeightRecord.h src/data/models/WeightRecord.cpp
@@ -137,6 +140,7 @@ target_link_libraries(appSmartScale
         Qt6::Sql
         Qt6::Network
         Qt6::SerialPort
+        Qt6::Concurrent
         pthread
         onnxruntime
 )

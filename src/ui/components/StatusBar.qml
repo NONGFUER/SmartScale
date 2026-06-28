@@ -11,6 +11,8 @@ Rectangle {
     signal settingsRequested()
     // 点击调试按钮发出的信号（测试阶段）
     signal debugRequested()
+    // 点击 WiFi 图标发出的信号 — 打开网络选择弹窗
+    signal wifiRequested()
 
     RowLayout {
         anchors.fill: parent
@@ -87,6 +89,57 @@ Rectangle {
                         }
                     }
                     Component.onCompleted: requestPaint()
+                }
+            }
+
+            // Wi-Fi 图标（点击弹出网络选择弹窗）
+            Item {
+                width: 36; height: 28
+                Layout.alignment: Qt.AlignVCenter
+
+                Rectangle {
+                    id: wifiBg
+                    anchors.fill: parent
+                    radius: 4
+                    color: "transparent"
+
+                    states: State {
+                        name: "hovered"; when: wifiMouse.containsMouse
+                        PropertyChanges { target: wifiBg; color: "#25FFFFFF" }
+                    }
+                }
+
+                // WiFi 波形图标
+                Canvas {
+                    anchors.centerIn: parent
+                    width: 22; height: 18
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.strokeStyle = "#FFFFFF"
+                        ctx.lineWidth = 2.0
+                        ctx.lineCap = "round"
+                        ctx.lineJoin = "round"
+                        var cx = width / 2, cy = height - 2
+                        // 从外到内画三道弧 + 底部圆点
+                        if (true) { ctx.beginPath(); ctx.arc(cx, cy - 1, 9, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke() }
+                        if (true) { ctx.beginPath(); ctx.arc(cx, cy - 1, 6, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke() }
+                        if (true) { ctx.beginPath(); ctx.arc(cx, cy - 1, 3, Math.PI * 1.25, Math.PI * 1.75); ctx.stroke() }
+                        ctx.beginPath()
+                        ctx.arc(cx, cy, 1.5, 0, 2 * Math.PI)
+                        ctx.fillStyle = "#FFFFFF"
+                        ctx.fill()
+                    }
+                    Component.onCompleted: requestPaint()
+                }
+
+                MouseArea {
+                    id: wifiMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: {
+                        console.log("[StatusBar] WiFi 图标被点击")
+                        root.wifiRequested()
+                    }
                 }
             }
 
@@ -213,7 +266,7 @@ Rectangle {
     Text {
         anchors.centerIn: parent
         height: 60                              // 框铺满状态栏高度
-        text: "AI 视 觉 识 别 智 能 网 络 称"
+        text: "AI 视 觉 识 别 智 能 网 络 秤"
         font.family: "AlibabaPuHuiTi"
         font.pixelSize: 36
         font.bold: true

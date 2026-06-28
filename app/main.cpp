@@ -21,6 +21,7 @@
 #include "services/CategoryService.h"
 #include "services/UserIngredientService.h"   // USER 域食材服务
 #include "services/SystemInfoService.h"       // [测试] 系统调试信息服务
+#include "services/NetworkManagerService.h"   // 网络管理服务 (WiFi + 4G)
 
 // 数据层
 #include "data/DatabaseManager.h"
@@ -75,6 +76,9 @@ int main(int argc, char *argv[])
     // [测试] 系统调试信息服务 — 记录重启次数、开机/关机时间
     SystemInfoService *systemInfoService = new SystemInfoService(&app);
 
+    // 网络管理服务 — Wi-Fi 扫描/连接/断开 + 4G 开启/关闭
+    NetworkManagerService *networkManagerService = new NetworkManagerService(&app);
+
     // 语音播报注入 CameraController，AI推理完成后直接播报（省掉QML往返）
     cameraController->setVoiceSpeaker(voiceSpeaker);
     // 登录用户信息注入 CameraController（水印中显示操作员）
@@ -107,6 +111,7 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "UserIngredientService", userIngredientService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "VoiceSpeaker", voiceSpeaker);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "SystemInfo", systemInfoService);  // [测试] 系统信息
+    qmlRegisterSingletonInstance("App.Backend", 1, 0, "NetworkManager", networkManagerService);  // 网络管理 (WiFi + 4G)
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());
     qmlRegisterSingletonInstance<PState>("SmartScale.Tools", 1, 0, "PState", &PState::inst());
 

@@ -182,12 +182,78 @@ ApplicationWindow {
                     parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
     }
 
+    // Wi-Fi 网络列表弹窗
+    WifiListDialog {
+        id: wifiListDialog
+        x: (parent.width - width) / 2
+        y: Math.min((parent.height - height) / 2,
+                    parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+
+        onNetworkSelected: function(ssid, secured) {
+            console.log("[Main] 选中网络:", ssid, "加密:", secured)
+            if (secured) {
+                // 加密网络 → 打开密码输入弹窗
+                wifiPasswordDialog.openFor(ssid)
+            } else {
+                // 开放网络 → 直接连接
+                NetworkManager.connectWifi(ssid, "")
+            }
+        }
+    }
+
+    // Wi-Fi 密码输入弹窗
+    WifiPasswordDialog {
+        id: wifiPasswordDialog
+        x: (parent.width - width) / 2
+        y: Math.min((parent.height - height) / 2,
+                    parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+
+        onConnectRequested: function(ssid, password) {
+            NetworkManager.connectWifi(ssid, password)
+        }
+    }
+
     // 连接 StatusBar 调试信号 -> 弹窗打开
     Connections {
         target: statusBar
         function onDebugRequested() {
             console.log("[Main] 收到调试请求，打开系统信息弹窗")
             systemInfoDialog.open()
+        }
+    }
+
+    // 连接 StatusBar WiFi 信号 -> 打开网络列表弹窗
+    Connections {
+        target: statusBar
+        function onWifiRequested() {
+            console.log("[Main] 收到 WiFi 请求，打开网络列表弹窗")
+            wifiListDialog.open()
+        }
+    }
+
+    // Wi-Fi 连接结果处理（全局：关闭弹窗 + Toast 提示）
+    Connections {
+        target: NetworkManager
+
+        function onWifiConnectionSuccess(ssid) {
+            console.log("[Main] Wi-Fi 连接成功:", ssid)
+
+            // 关闭所有 WiFi 相关弹窗
+            wifiPasswordDialog.close()
+            wifiListDialog.close()
+
+            // 显示成功提示
+            window.toast("已成功连接到 " + ssid, "success")
+        }
+
+        function onWifiConnectionFailed(errorMsg) {
+            console.log("[Main] Wi-Fi 连接失败:", errorMsg)
+
+            // 如果密码弹窗已经关闭了，用全局 Toast 报错
+            // （密码弹窗内部也会显示错误信息）
+            if (!wifiPasswordDialog.visible) {
+                window.toast("连接失败: " + errorMsg, "error", 4000)
+            }
         }
     }
 

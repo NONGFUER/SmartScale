@@ -50,10 +50,17 @@
 - 遇到雪花 ID 字段（ingrId/emsId/cateId/recoId/userId/productId）一律 `qint64`/`QString`，禁止 `toInt()`
 - 详见 `.codebuddy/skills/id-type-safety/SKILL.md`
 
-## QML 文件注册
+## 网络管理服务（NetworkManagerService）
 
-- SmartScale 项目 `CMakeLists.txt` 用 `qt_add_qml_module` **显式列出** `QML_FILES`（非自动扫描）
-- 新建 QML 文件后**必须**手动追加到 `QML_FILES` 列表，否则运行时报 "xxx is not a type" 导致 Main.qml 白屏
+- 位置：`src/services/NetworkManagerService.h|.cpp`，QML 绑定名 `App.Backend::NetworkManager`
+- 统一管理 Wi-Fi 和 4G 网络，通过 nmcli (NetworkManager CLI) 和 mmcli (ModemManager CLI) 控制
+- **Wi-Fi 功能**：扫描、连接/断开、状态查询、信号强度、IP 地址
+- **4G 功能**：启用/禁用移动数据、运营商信息、信号强度、漫游检测
+- 权限检查：`checkPermissions()` 验证 nmcli 可执行性和用户权限
+- 状态轮询：每 10 秒自动刷新网络状态，通过 Q_PROPERTY + NOTIFY 实时同步到 UI
+- 入口位置：`SettingsPage.qml` 的「网络控制」区段，包含完整的交互界面
+
+## QML 文件注册
 
 ## QML 跨目录类型引用（WorkstationPage 白屏根因）
 
