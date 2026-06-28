@@ -45,8 +45,8 @@ Popup {
     closePolicy: Popup.CloseOnEscape
     padding: 0
 
-    width: 440
-    height: 300
+    width: 520
+    height: 360
 
     // 进入/退出动画
     enter: Transition {
@@ -63,7 +63,7 @@ Popup {
     // ========================================================================
     Rectangle {
         anchors.fill: parent
-        radius: 12
+        radius: 16
         color: "#FFFFFF"
         border.color: "#E2E8F0"
         border.width: 1
@@ -71,8 +71,8 @@ Popup {
         Rectangle {
             width: 6
             height: parent.height
-            radius: 12
-            color: "#F59E0B"  // 橙色边条表示需要认证
+            radius: 16
+            color: "transparent"
             anchors.left: parent.left
         }
     }
@@ -88,25 +88,11 @@ Popup {
         Rectangle {
             id: topBar
             Layout.fillWidth: true
-            height: 54
-            radius: 12
-            color: "#1A5CB5"
+            height: 68
+            radius: 16
+            color: "#FFFFFF"
 
-            layer.enabled: true
-            layer.effect: Item {
-                Rectangle {
-                    anchors.fill: parent
-                    color: "#1A5CB5"
-                    radius: 12
-                    Rectangle {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        height: parent.radius
-                        color: parent.color
-                    }
-                }
-            }
+            layer.enabled: false
 
             RowLayout {
                 anchors.centerIn: parent
@@ -115,14 +101,14 @@ Popup {
                 // 锁图标
                 Text {
                     text: "\uD83D\uDD11"
-                    font.pixelSize: 22
+                    font.pixelSize: 26
                 }
 
                 Text {
                     text: "Wi-Fi 网络要求认证"
-                    font.pixelSize: 17
+                    font.pixelSize: 20
                     font.bold: true
-                    color: "#FFFFFF"
+                    color: Theme.colorTextPrimary
                 }
             }
         }
@@ -130,17 +116,17 @@ Popup {
         // ------ 表单区域 ------
         ColumnLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 32
-            Layout.rightMargin: 32
-            Layout.topMargin: 24
-            Layout.bottomMargin: 16
-            spacing: 16
+            Layout.leftMargin: 36
+            Layout.rightMargin: 36
+            Layout.topMargin: 28
+            Layout.bottomMargin: 20
+            spacing: 18
 
             // 描述文字
             Text {
                 Layout.fillWidth: true
                 text: "访问 Wi-Fi 网络 \"" + root.targetSsid + "\" 需要密码或加密密钥。"
-                font.pixelSize: Theme.fontSizeBodySm
+                font.pixelSize: 15
                 color: Theme.colorTextSecondary
                 wrapMode: Text.Wrap
             }
@@ -152,16 +138,16 @@ Popup {
 
                 Text {
                     text: "密码(P)"
-                    font.pixelSize: Theme.fontSizeCaption
+                    font.pixelSize: 13
                     color: Theme.colorTextSecondary
                 }
 
                     TextField {
                         id: passwordField
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 40
+                        Layout.preferredHeight: 46
                         echoMode: showPasswordToggle.checked ? TextInput.Normal : TextInput.Password
-                        font.pixelSize: Theme.fontSizeBodySm
+                        font.pixelSize: 15
                         font.family: Theme.fontFamilyMono
                         leftPadding: 12
                         rightPadding: 36
@@ -182,13 +168,14 @@ Popup {
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.rightMargin: 8
-                            width: 28; height: 28; radius: 14
+                            width: 32; height: 32; radius: 16
                             color: showPasswordToggle.checked ? "#E0E7FF" : "transparent"
 
-                            Text {
+                            Image {
                                 anchors.centerIn: parent
-                                text: showPasswordToggle.checked ? "\U0001F441" : "\U0001F576\uFE0F"
-                                font.pixelSize: 15
+                                source: showPasswordToggle.checked ? "qrc:/eye-fill.png" : "qrc:/eye-close-fill.png"
+                                sourceSize: Qt.size(20, 20)
+                                cache: true
                             }
 
                             MouseArea {
@@ -237,7 +224,7 @@ Popup {
 
                 Text {
                     text: "显示密码(W)"
-                    font.pixelSize: Theme.fontSizeCaption
+                    font.pixelSize: 13
                     color: Theme.colorTextSecondary
 
                     MouseArea {
@@ -261,7 +248,7 @@ Popup {
         // ------ 底部按钮栏 ------
         Rectangle {
             Layout.fillWidth: true
-            height: 60
+            height: 72
             color: "#F8FAFC"
 
             RowLayout {
@@ -270,12 +257,12 @@ Popup {
 
                 // 取消按钮
                 Rectangle {
-                    width: 100; height: 36; radius: 8
+                    width: 110; height: 40; radius: 8
                     color: cancelMouse.containsMouse ? "#F1F5F9" : "#FFFFFF"
                     border.color: "#D1D5DB"
                     border.width: 1
 
-                    Text { anchors.centerIn: parent; text: "取消(C)"; font.pixelSize: 14; color: "#64748B" }
+                    Text { anchors.centerIn: parent; text: "取消(C)"; font.pixelSize: 15; color: "#64748B" }
 
                     MouseArea {
                         id: cancelMouse
@@ -287,7 +274,7 @@ Popup {
 
                 // 连接按钮
                 Rectangle {
-                    width: 120; height: 36; radius: 8
+                    width: 130; height: 40; radius: 8
                     gradient: Gradient {
                         GradientStop { position: 0.0; color: connectMouse.pressed ? "#2563EB" : (connectMouse.containsMouse ? "#4C72F9" : "#3B82F6") }
                         GradientStop { position: 1.0; color: connectMouse.pressed ? "#1D4ED8" : (connectMouse.containsMouse ? "#4BC8F6" : "#2563EB") }
@@ -303,14 +290,14 @@ Popup {
 
                         BusyIndicator {
                             running: NetworkManager.wifiStatus === NetworkManager.Connecting
-                            width: 16; height: 16
+                            width: 18; height: 18
                             visible: running
                         }
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             text: NetworkManager.wifiStatus === NetworkManager.Connecting ? "连接中..." : "连接(O)"
-                            font.pixelSize: 14
+                            font.pixelSize: 15
                             font.bold: true
                             color: "#FFFFFF"
                         }

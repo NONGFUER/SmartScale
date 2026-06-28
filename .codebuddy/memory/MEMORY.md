@@ -58,7 +58,18 @@
 - **4G 功能**：启用/禁用移动数据、运营商信息、信号强度、漫游检测
 - 权限检查：`checkPermissions()` 验证 nmcli 可执行性和用户权限
 - 状态轮询：每 10 秒自动刷新网络状态，通过 Q_PROPERTY + NOTIFY 实时同步到 UI
-- 入口位置：`SettingsPage.qml` 的「网络控制」区段，包含完整的交互界面
+- 入口位置：`SettingsPage.qml` 的「网络控制」区段 + 状态栏 WiFi 图标弹窗模式
+
+### nmcli 关键技术要点（踩坑记录）
+
+**合法字段（nmcli device show）**：GENERAL.*、CAPABILITIES、INTERFACE-FLAGS、WIFI-PROPERTIES、AP、WIRED-PROPERTIES 等。**不含 WIFI.SIGNAL / CONNECTIONS.WIFI-SSID**，使用会导致 exitCode=2 整个命令失败。
+- 查连接状态用：`GENERAL.STATE,GENERAL.CONNECTION,IP4.ADDRESS`
+- **GENERAL.CONNECTION ≠ 真实 SSID**：返回的是连接 profile 名（可能被 sanitize 截断中文/特殊字符），需额外用 `nmcli -t -f 802-11-wireless.ssid connection show <connName>` 反查真实 SSID
+- **nmcli -t 输出格式统一为 `field.name:value`**，必须取第一个冒号后的部分；且可能返回多行重复值，只取第一行即可
+- **WiFi 设备名不一定是 wlan0**：必须先通过 `nmcli -t -f DEVICE,TYPE device` 动态发现 type=wifi 的设备名
+- **两步连接法**：`connection add` (带 wifi-sec.key-mgmt wpa-psk) → `connection up <name>`，比一步 `device wifi connect` 更可靠避免 key-mgmt 缺失错误
+- **Qt 资源路径**：CMake `qt_add_resources PREFIX "/" FILES resources/icon/x.png` 映射为 `qrc:/x.png`（不含目录前缀）
+- **扫描权限**：需要 polkit 放行 `org.freedesktop.NetworkManager.wifi.scan`，否则报 "not authorized"
 
 ## QML 文件注册
 
