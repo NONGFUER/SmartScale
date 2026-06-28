@@ -1125,6 +1125,14 @@ Item {
     RecordDetailDialog {
         id: detailDialog
         record: root.currentDetailRecord
+        // 传入完整记录列表，供弹窗内左右滑动/箭头切换上下记录
+        recordList: WeightHistoryService ? WeightHistoryService.historyEntries : []
+        // 收到导航信号：切换 currentDetailRecord，详情内容随之刷新
+        onNavigateToRecord: function(index) {
+            if (index >= 0 && index < recordList.length) {
+                root.currentDetailRecord = recordList[index]
+            }
+        }
         onClosed: root.currentDetailRecord = null
     }
 

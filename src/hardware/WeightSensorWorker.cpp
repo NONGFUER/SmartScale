@@ -447,7 +447,31 @@ int WeightSensorWorker::modbusReadSN(QString *sn)
 
     // 数据区: rxBuf[3..18] = 16 字节 ASCII (高位在前, 大端寄存器序)
     QByteArray snBytes = rxBuf.mid(3, 16);
-    *sn = QString::fromLatin1(snBytes).trimmed();
+
+    // 异常数据处理：板子未烧录 SN 时寄存器全为 0xFF，解析后是 'ÿ' 乱码
+    // 1) 全 0xFF 视为未烧录
+    bool allFF = true;
+    for (int i = 0; i < snBytes.size(); ++i) {
+        if ((uint8_t)snBytes[i] != 0xFF) { allFF = false; break; }
+    }
+    if (allFF) {
+        qWarning() << "[Modbus] SN 未烧录(全 0xFF)，返回空串";
+        *sn = QString();
+        return 0;
+    }
+
+    // 2) 过滤含不可打印字符的非法数据
+    QString snStr = QString::fromLatin1(snBytes).trimmed();
+    for (int i = 0; i < snStr.size(); ++i) {
+        QChar ch = snStr.at(i);
+        if (!ch.isPrint()) {
+            qWarning() << "[Modbus] SN 含不可打印字符，返回空串: 0x"
+                       << QString::number(ch.unicode(), 16);
+            *sn = QString();
+            return 0;
+        }
+    }
+    *sn = snStr;
 
     // 打印 RX
     QByteArray rxHex;
