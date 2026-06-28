@@ -173,7 +173,7 @@ Popup {
 
                             Image {
                                 anchors.centerIn: parent
-                                source: showPasswordToggle.checked ? "qrc:/eye-fill.png" : "qrc:/eye-close-fill.png"
+                                source: showPasswordToggle.checked ? "qrc:/resources/icon/eye-fill.png" : "qrc:/resources/icon/eye-close-fill.png"
                                 sourceSize: Qt.size(20, 20)
                                 cache: true
                             }
@@ -262,7 +262,7 @@ Popup {
                     border.color: "#D1D5DB"
                     border.width: 1
 
-                    Text { anchors.centerIn: parent; text: "取消(C)"; font.pixelSize: 15; color: "#64748B" }
+                    Text { anchors.centerIn: parent; text: "取消"; font.pixelSize: 15; color: "#64748B" }
 
                     MouseArea {
                         id: cancelMouse
@@ -296,7 +296,7 @@ Popup {
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: NetworkManager.wifiStatus === NetworkManager.Connecting ? "连接中..." : "连接(O)"
+                            text: NetworkManager.wifiStatus === NetworkManager.Connecting ? "连接中..." : "连接"
                             font.pixelSize: 15
                             font.bold: true
                             color: "#FFFFFF"

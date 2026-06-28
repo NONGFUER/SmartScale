@@ -115,7 +115,7 @@ void NetworkManagerService::fetchWifiList()
     // 扫描请求完成后，获取可用网络列表
     QProcess listProc;
     listProc.start(kNmcliPath, QStringList()
-                   << "-t" << "-f" << "SSID,SIGNAL,SECURITY,BSSID"
+                   << "-t" << "-f" << "SSID,SIGNAL,FREQ,SECURITY,BSSID"
                    << "device" << "wifi" << "list"
                    << "--rescan" << "no");
 
@@ -153,18 +153,20 @@ void NetworkManagerService::parseWifiScanOutput(const QString &output)
 
     const auto lines = output.split('\n', Qt::SkipEmptyParts);
     for (const auto &line : lines) {
-        // 格式: SSID:SIGNAL:SECURITY:BSSID
+        // 格式: SSID:SIGNAL:FREQ:SECURITY:BSSID
         const auto fields = line.split(':');
         if (fields.size() >= 3) {
             QString ssid       = fields[0].trimmed();
             QString signalStr  = fields.size() > 1 ? fields[1].trimmed() : QStringLiteral("0");
-            QString security   = fields.size() > 2 ? fields[2].trimmed() : QString();
-            QString bssid      = fields.size() > 3 ? fields[3].trimmed() : QString();
+            QString freqStr    = fields.size() > 2 ? fields[2].trimmed() : QStringLiteral("0");
+            QString security   = fields.size() > 3 ? fields[3].trimmed() : QString();
+            QString bssid      = fields.size() > 4 ? fields[4].trimmed() : QString();
 
             if (ssid.isEmpty()) continue;
 
             bool isSecured = !security.isEmpty() && security != QStringLiteral("--");
             int signal     = signalQualityToPercent(signalStr);
+            int freq       = freqStr.toInt();  // MHz, e.g. 2412 or 5180
 
             QString key = ssid.toLower();  // 不区分大小写去重
 
@@ -172,6 +174,7 @@ void NetworkManagerService::parseWifiScanOutput(const QString &output)
                 QVariantMap network;
                 network["ssid"]         = ssid;
                 network["signal"]       = signal;
+                network["freq"]         = freq;   // 频率(MHz)，用于判断 5G/2.4G
                 network["secured"]      = isSecured;
                 network["bssid"]        = bssid;
                 network["securityType"] = security;

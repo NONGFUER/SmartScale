@@ -313,9 +313,9 @@ Popup {
                                 }
                             }
 
-                            // 额外信息（5G / 频段标签）
+                            // 频段标签（5G: 频率 > 4900 MHz）
                             Text {
-                                visible: !netDelegate.isCurrentNetwork && modelData.signal >= 70
+                                visible: !netDelegate.isCurrentNetwork && (modelData.freq || 0) > 4900
                                 text: "5G"
                                 font.pixelSize: 14
                                 font.bold: true

@@ -68,7 +68,7 @@
 - **nmcli -t 输出格式统一为 `field.name:value`**，必须取第一个冒号后的部分；且可能返回多行重复值，只取第一行即可
 - **WiFi 设备名不一定是 wlan0**：必须先通过 `nmcli -t -f DEVICE,TYPE device` 动态发现 type=wifi 的设备名
 - **两步连接法**：`connection add` (带 wifi-sec.key-mgmt wpa-psk) → `connection up <name>`，比一步 `device wifi connect` 更可靠避免 key-mgmt 缺失错误
-- **Qt 资源路径**：CMake `qt_add_resources PREFIX "/" FILES resources/icon/x.png` 映射为 `qrc:/x.png`（不含目录前缀）
+- **Qt 资源路径**：CMake `qt_add_resources PREFIX "/" FILES resources/icon/x.png` 实际映射为 `qrc:/resources/icon/x.png`（保留完整子目录路径，不是 `qrc:/x.png`）
 - **扫描权限**：需要 polkit 放行 `org.freedesktop.NetworkManager.wifi.scan`，否则报 "not authorized"
 
 ## QML 文件注册
