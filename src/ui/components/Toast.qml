@@ -73,7 +73,7 @@ Popup {
         if (type === "error") icon = "\u2715"  // ✕
         else if (type === "warning") icon = "!"
         else if (type === "success") icon = "\u2713"  // ✓
-        iconText.text = icon
+        // iconText 已移除（纯文字 toast），此处保留 icon 变量以备后续扩展
 
         hideTimer.interval = duration
         // 打开 Popup 触发入场
@@ -104,7 +104,7 @@ Popup {
 
     Rectangle {
         id: bubble
-        width: Math.min(Math.max(bubbleText.implicitWidth + iconText.implicitWidth + 56, 200),
+        width: Math.min(Math.max(bubbleText.implicitWidth + 40, 200),
                         root.parent ? root.parent.width - 80 : 600)
         height: 56
         radius: 12

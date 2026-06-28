@@ -763,8 +763,9 @@ Item {
                                             window.toast("请先放置食材再识别", "warning", 2000)
                                             return
                                         }
-                                        root.aiRecognizing = true
-                                        window.toast("AI 识别中...", "info", 1500)
+                root.aiRecognizing = true
+                aiRecognizeTimeout.restart()
+                window.toast("AI 识别中...", "info", 1500)
                                         CameraController.captureVegetable(WeightManager.netWeight, root.currentPrediction)
                                     }
                                     }
@@ -1023,6 +1024,7 @@ Item {
             // 手动"识别"按钮触发的流程完成：恢复按钮状态并反馈结果
             if (root.aiRecognizing) {
                 root.aiRecognizing = false
+                aiRecognizeTimeout.stop()
                 var chineseLabel = Translator.translate(predictedLabel)
                 if (PState.isValid(predictedLabel)) {
                     window.toast("识别完成：" + chineseLabel, "success", 2000)
@@ -1067,6 +1069,21 @@ Item {
        id: fadeTimer
        interval: 100
        onTriggered: flashEffect.opacity = 0.0
+    }
+
+    // 识别超时保护：若 15 秒内未收到 onAiRecognitionCompleted 回调，
+    // 自动重置 aiRecognizing 状态，防止按钮永久卡在 loading
+    Timer {
+        id: aiRecognizeTimeout
+        interval: 15000
+        repeat: false
+        onTriggered: {
+            if (root.aiRecognizing) {
+                console.warn("[WSP] AI 识别超时（15s），自动重置状态")
+                root.aiRecognizing = false
+                window.toast("识别超时，请重试", "warning", 2500)
+            }
+        }
     }
 
     // ==========================================
