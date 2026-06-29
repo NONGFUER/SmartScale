@@ -146,6 +146,7 @@ Popup {
                         id: passwordField
                         Layout.fillWidth: true
                         Layout.preferredHeight: 46
+                        inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhPreferLowercase  // 不自动大写首字母
                         echoMode: showPasswordToggle.checked ? TextInput.Normal : TextInput.Password
                         font.pixelSize: 15
                         font.family: Theme.fontFamilyMono

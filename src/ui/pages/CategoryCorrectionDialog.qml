@@ -166,6 +166,7 @@ Dialog {
                         font.pixelSize: 24
                         color: "#1B263B"
                         verticalAlignment: TextInput.AlignVCenter
+                        inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhPreferLowercase  // 不自动大写首字母
                         background: null
                         // 实时本地搜索：输入即过滤
                         onTextChanged: {

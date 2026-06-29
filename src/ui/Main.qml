@@ -25,7 +25,7 @@ ApplicationWindow {
         loginDialog.open()
     }
 
-    property bool chineseInputMode: true  // true=拼音中文, false=纯英文
+    property bool chineseInputMode: false  // true=拼音中文, false=纯英文（默认英文）
     property var _origConsoleError: null  // 保存原始 console.error（全局错误拦截用）
 
     Component.onCompleted: {
@@ -33,7 +33,7 @@ ApplicationWindow {
         // 延迟到事件循环空闲再设置，避开 InputPanel 初始化竞态（直接设会被覆盖）
         Qt.callLater(function() {
             VirtualKeyboardSettings.activeLocales = ["zh_CN", "en_GB"]  // 地球图标只显示中英
-            VirtualKeyboardSettings.locale = "zh_CN"  // 默认中文拼音
+            VirtualKeyboardSettings.locale = "en_GB"  // 默认英文
         })
         // 启动时自动弹出登录弹窗
         loginDialog.open()
@@ -120,7 +120,7 @@ ApplicationWindow {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: inputPanel.active ? inputPanel.top : parent.bottom
+        anchors.bottom: inputPanel.active ? keyboardContainer.top : parent.bottom
         spacing: 0
 
         onVisibleChanged: {
@@ -153,57 +153,70 @@ ApplicationWindow {
         }
     }
 
-    // 在 StackView 下方添加键盘面板
-    InputPanel {
-        id: inputPanel
+    // 在 StackView 下方添加键盘面板（包裹容器：裁剪缩放后多余区域）
+    Rectangle {
+        id: keyboardContainer
         z: 99
-        y: parent.height
         anchors.left: parent.left
         anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: inputPanel.active ? inputPanel.height * inputPanel.scale : 0
+        clip: true   // 裁剪掉缩小后顶部空白
+        color: "#1E1E2E"  // 与键盘深色背景一致，遮住露出的蓝色
 
-        // 固定的中英切换按钮（盖在键盘右上角，避免误触内置语言选择器）
-        Rectangle {
-            id: langToggle
-            width: 60
-            height: 36
-            radius: 6
-            color: window.chineseInputMode ? "#4361EE" : "#E2E8F0"
+        InputPanel {
+            id: inputPanel
+            y: 0
+            anchors.left: parent.left
             anchors.right: parent.right
-            anchors.rightMargin: 8
-            anchors.top: parent.top
-            anchors.topMargin: 4
-            z: 100  // 高于键盘内部
-            visible: inputPanel.active
-            border.color: window.chineseInputMode ? "#4361EE" : "#9CA3AF"
-            border.width: 1
+            anchors.bottom: parent.bottom
+            scale: 0.82
+            transformOrigin: Item.Bottom
 
-            Text {
-                anchors.centerIn: parent
-                text: window.chineseInputMode ? "中" : "EN"
-                font.pixelSize: 18
-                font.bold: true
-                color: window.chineseInputMode ? "white" : "#1B263B"
-            }
+            // 固定的中英切换按钮（盖在键盘右上角，避免误触内置语言选择器）
+            Rectangle {
+                id: langToggle
+                width: 80
+                height: 50
+                radius: 8
+                color: window.chineseInputMode ? "#4361EE" : "#E2E8F0"
+                anchors.right: parent.right
+                anchors.rightMargin: 8
+                anchors.top: parent.top
+                anchors.topMargin: 4
+                z: 100  // 高于键盘内部
+                visible: inputPanel.active
+                border.color: window.chineseInputMode ? "#4361EE" : "#9CA3AF"
+                border.width: 1
 
-            MouseArea {
-                anchors.fill: parent
-                onClicked: window.toggleInputMode()
+                Text {
+                    anchors.centerIn: parent
+                    text: window.chineseInputMode ? "中" : "EN"
+                    font.pixelSize: 24
+                    font.bold: true
+                    color: window.chineseInputMode ? "white" : "#1B263B"
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: window.toggleInputMode()
+                }
             }
-        }
-        
-        states: State {
-            name: "visible"
-            when: inputPanel.active
-            PropertyChanges {
-                target: inputPanel
-                y: parent.height - inputPanel.height // 弹出
+            
+            states: State {
+                name: "visible"
+                when: inputPanel.active
+                PropertyChanges {
+                    target: inputPanel
+                    y: parent.height - inputPanel.height // 弹出（相对于容器）
+                }
             }
-        }
-        transitions: Transition {
-            NumberAnimation {
-                properties: "y"
-                duration: 250
-                easing.type: Easing.InOutQuad
+            transitions: Transition {
+                NumberAnimation {
+                    properties: "y"
+                    duration: 250
+                    easing.type: Easing.InOutQuad
+                }
             }
         }
     }

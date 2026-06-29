@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import App.Backend 1.0
+import SmartScale
 
 /**
  * @brief 系统调试信息弹窗 — 独立组件，展示重启次数与开/关机时间
@@ -19,7 +20,7 @@ Popup {
     padding: 0
 
     width: 480
-    height: contentColumn.implicitHeight + topBar.height + 32
+    height: contentColumn.implicitHeight + topBar.height + btnBar.height + 32
 
     // 进入/退出动画
     enter: Transition {
@@ -30,23 +31,32 @@ Popup {
     }
 
     // ========================================================================
-    // 主体背景
+    // 主体背景（与 WifiListDialog 风格一致）
     // ========================================================================
     Rectangle {
-        id: background
         anchors.fill: parent
-        radius: 12
+        radius: 16
         color: "#FFFFFF"
         border.color: "#E2E8F0"
         border.width: 1
 
-        // 左侧彩色竖条装饰（与其他弹窗保持一致）
+        // 左侧透明竖条装饰（与 WifiListDialog 一致，无彩色）
         Rectangle {
             width: 6
-            height: parent.height
-            radius: 12
-            color: "#3B82F6"
+            height: parent.height - btnBar.height
+            radius: 16
+            color: "transparent"
             anchors.left: parent.left
+            anchors.top: parent.top
+        }
+
+        Rectangle {
+            width: 6
+            height: btnBar.height
+            radius: 16
+            color: "transparent"
+            anchors.left: parent.left
+            anchors.bottom: parent.bottom
         }
     }
 
@@ -58,37 +68,28 @@ Popup {
         anchors.fill: parent
         spacing: 0
 
-        // ------ 顶部渐变栏 ------
+        // ------ 顶部标题栏（与 WifiListDialog 风格一致：白色无渐变）------
         Rectangle {
             id: topBar
             Layout.fillWidth: true
-            height: 52
-            radius: 12
-            color: "#1A5CB5"
+            height: 72
+            radius: 16
+            color: "#FFFFFF"
 
-            // 顶部两个圆角遮罩：底部两角不需要圆角
-            layer.enabled: true
-            layer.effect: Item {
-                Rectangle {
-                    anchors.fill: parent
-                    color: "#1A5CB5"
-                    radius: 12
-                    Rectangle {
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        height: parent.radius
-                        color: parent.color
-                    }
-                }
-            }
-
-            Text {
+            RowLayout {
                 anchors.centerIn: parent
-                text: "\U0001F4CA 系统调试信息"
-                font.pixelSize: 18
-                font.bold: true
-                color: "#FFFFFF"
+                spacing: 12
+
+                Text {
+                    text: "\u{1F4CA}"
+                    font.pixelSize: 28
+                }
+                Text {
+                    text: "系统调试信息"
+                    font.pixelSize: 24
+                    font.bold: true
+                    color: Theme.colorTextPrimary
+                }
             }
         }
 
@@ -151,6 +152,7 @@ Popup {
 
         // ------ 底部按钮栏 ------
         Rectangle {
+            id: btnBar
             Layout.fillWidth: true
             height: 56
             color: "#F8FAFC"
