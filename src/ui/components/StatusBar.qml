@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import App.Backend 1.0
 
 Rectangle {
     id: root
@@ -11,8 +12,8 @@ Rectangle {
     signal settingsRequested()
     // 点击调试按钮发出的信号（测试阶段）
     signal debugRequested()
-    // 点击 WiFi 图标发出的信号 — 打开网络选择弹窗
-    signal wifiRequested()
+    // 点击网络图标发出的信号 — 根据状态打开 WiFi 或 4G 弹窗
+    signal networkRequested()
 
     RowLayout {
         anchors.fill: parent
@@ -66,82 +67,163 @@ Rectangle {
                 }
             }
 
-            // 信号强度图标（4格柱状）
+    // ===== 智能网络状态图标（根据当前连接状态自动切换） =====
+    // 逻辑: 4G开→显示4G+信号 | WiFi开4G关→显示WiFi波形 | 都关→断网图标
+    Item {
+        id: networkIconArea
+        width: 44; height: 32
+        Layout.alignment: Qt.AlignVCenter
+
+        // ---- 4G 图标 (cellularEnabled 时显示) ----
+        Item {
+            id: icon4g
+            anchors.fill: parent
+            visible: isCellularActive()
+
+            // "4G" 文字标签
+            Text {
+                anchors.left: parent.left
+                anchors.verticalCenter: parent.verticalCenter
+                text: isCellularRoaming() ? "R" : "4G"
+                font.pixelSize: isCellularRoaming() ? 11 : 13
+                font.bold: true
+                color: "#FFFFFF"
+            }
+
+            // 4G 信号强度柱（紧跟文字右侧）
             Item {
-                width: 20; height: 16
-                Layout.alignment: Qt.AlignVCenter
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: 18; height: 14
 
                 Canvas {
+                    id: canvas4g
                     anchors.fill: parent
                     onPaint: {
                         var ctx = getContext("2d")
-                        ctx.strokeStyle = "#FFFFFF"
-                        ctx.lineWidth = 1.5
-                        ctx.lineCap = "round"
-                        var barW = 3, gap = 2, baseY = height - 1
+                        ctx.fillStyle = "#FFFFFF"
+                        var sig = NetworkManager.cellularSignal || 0
+                        var barW = 3, gap = 1.5, baseY = height - 1
+                        var levels = [3, 6, 9, 12]
                         for (var i = 0; i < 4; i++) {
-                            var h = [5, 8, 11, 15][i]
-                            var x = i * (barW + gap) + 1
-                            ctx.beginPath()
-                            ctx.moveTo(x, baseY)
-                            ctx.lineTo(x, baseY - h)
-                            ctx.stroke()
+                            var x = i * (barW + gap)
+                            var h = (sig > (i * 25 + 10)) ? levels[i] : 0
+                            if (h > 0) {
+                                // QML Canvas 不支持 roundRect，用圆角矩形辅助函数绘制
+                                drawRoundedRect(ctx, x, baseY - h, barW, h, 1)
+                            }
                         }
                     }
                     Component.onCompleted: requestPaint()
-                }
-            }
-
-            // Wi-Fi 图标（点击弹出网络选择弹窗）
-            Item {
-                width: 36; height: 28
-                Layout.alignment: Qt.AlignVCenter
-
-                Rectangle {
-                    id: wifiBg
-                    anchors.fill: parent
-                    radius: 4
-                    color: "transparent"
-
-                    states: State {
-                        name: "hovered"; when: wifiMouse.containsMouse
-                        PropertyChanges { target: wifiBg; color: "#25FFFFFF" }
-                    }
-                }
-
-                // WiFi 波形图标
-                Canvas {
-                    anchors.centerIn: parent
-                    width: 22; height: 18
-                    onPaint: {
-                        var ctx = getContext("2d")
-                        ctx.strokeStyle = "#FFFFFF"
-                        ctx.lineWidth = 2.0
-                        ctx.lineCap = "round"
-                        ctx.lineJoin = "round"
-                        var cx = width / 2, cy = height - 2
-                        // 从外到内画三道弧 + 底部圆点
-                        if (true) { ctx.beginPath(); ctx.arc(cx, cy - 1, 9, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke() }
-                        if (true) { ctx.beginPath(); ctx.arc(cx, cy - 1, 6, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke() }
-                        if (true) { ctx.beginPath(); ctx.arc(cx, cy - 1, 3, Math.PI * 1.25, Math.PI * 1.75); ctx.stroke() }
-                        ctx.beginPath()
-                        ctx.arc(cx, cy, 1.5, 0, 2 * Math.PI)
-                        ctx.fillStyle = "#FFFFFF"
-                        ctx.fill()
-                    }
-                    Component.onCompleted: requestPaint()
-                }
-
-                MouseArea {
-                    id: wifiMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: {
-                        console.log("[StatusBar] WiFi 图标被点击")
-                        root.wifiRequested()
+                    // 4G 状态变化时重绘（用 id 引用，避免 parent 动态解析错误）
+                    Connections {
+                        target: NetworkManager
+                        function onCellularStatusChanged() { canvas4g.requestPaint() }
                     }
                 }
             }
+        }
+
+        // ---- WiFi 图标 (WiFi已连接且4G未激活时显示) ----
+        Item {
+            id: iconWifi
+            anchors.fill: parent
+            visible: !isCellularActive() && NetworkManager.wifiStatus === NetworkManager.Connected
+
+            Canvas {
+                anchors.centerIn: parent
+                width: 24; height: 20
+                onPaint: {
+                    var ctx = getContext("2d")
+                    ctx.strokeStyle = "#FFFFFF"
+                    ctx.lineWidth = 2.2
+                    ctx.lineCap = "round"
+                    ctx.lineJoin = "round"
+                    var cx = width / 2, cy = height - 2
+                    ctx.beginPath(); ctx.arc(cx, cy - 1, 9, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke()
+                    ctx.beginPath(); ctx.arc(cx, cy - 1, 6, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke()
+                    ctx.beginPath(); ctx.arc(cx, cy - 1, 3, Math.PI * 1.25, Math.PI * 1.75); ctx.stroke()
+                    ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, 2 * Math.PI)
+                    ctx.fillStyle = "#FFFFFF"; ctx.fill()
+                }
+                Component.onCompleted: requestPaint()
+            }
+
+            // WiFi 信号强度小点（右下角）
+            Rectangle {
+                anchors.right: parent.right; anchors.bottom: parent.bottom
+                width: 7; height: 7; radius: 3.5
+                color: NetworkManager.wifiSignal > 60 ? "#4ADE80" :
+                       NetworkManager.wifiSignal > 30 ? "#FACC15" : "#F87171"
+
+                // WiFi 状态变化时更新颜色
+                Connections {
+                    target: NetworkManager
+                    function onWifiStatusChanged() { parent.visible = (NetworkManager.wifiStatus === NetworkManager.Connected) }
+                }
+            }
+        }
+
+        // ---- 断网图标 (都未连接时显示) ----
+        Item {
+            id: iconDisconnected
+            anchors.fill: parent
+            visible: !isCellularActive() && NetworkManager.wifiStatus !== NetworkManager.Connected
+
+            // 斜杠划掉的信号波形
+            Canvas {
+                anchors.centerIn: parent
+                width: 24; height: 20
+                onPaint: {
+                    var ctx = getContext("2d")
+                    ctx.strokeStyle = "#8899AA"
+                    ctx.lineWidth = 2.0
+                    ctx.lineCap = "round"
+                    ctx.lineJoin = "round"
+                    var cx = width / 2, cy = height - 2
+                    // 淡色波形
+                    ctx.globalAlpha = 0.45
+                    ctx.beginPath(); ctx.arc(cx, cy - 1, 9, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke()
+                    ctx.beginPath(); ctx.arc(cx, cy - 1, 6, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke()
+                    ctx.beginPath(); ctx.arc(cx, cy - 1, 3, Math.PI * 1.25, Math.PI * 1.75); ctx.stroke()
+                    ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, 2 * Math.PI)
+                    ctx.fillStyle = "#8899AA"; ctx.fill()
+                    ctx.globalAlpha = 1.0
+                    // 斜杠
+                    ctx.strokeStyle = "#EF4444"
+                    ctx.lineWidth = 2.5
+                    ctx.beginPath()
+                    ctx.moveTo(2, 2)
+                    ctx.lineTo(width - 2, height - 2)
+                    ctx.stroke()
+                }
+                Component.onCompleted: requestPaint()
+            }
+        }
+
+        // 点击区域 — 统一打开网络弹窗
+        MouseArea {
+            id: networkMouse
+            anchors.fill: parent
+            hoverEnabled: true
+
+            property bool hovered: containsMouse
+
+            Rectangle {
+                anchors.fill: parent
+                radius: 4
+                color: networkMouse.hovered ? "#25FFFFFF" : "transparent"
+                visible: networkMouse.hovered
+            }
+
+            onClicked: {
+                console.log("[StatusBar] 网络图标被点击, 当前状态:"
+                            , "wifi=" + NetworkManager.wifiStatus
+                            , "4g=" + NetworkManager.cellularStatus)
+                root.networkRequested()
+            }
+        }
+    }
 
             // 调试按钮（测试阶段，放在设置齿轮左侧）
             Item {
@@ -286,5 +368,46 @@ Rectangle {
             timeText.text = currentDate.toLocaleTimeString(Qt.locale(), "hh:mm:ss")
             dateText.text = currentDate.toLocaleDateString(Qt.locale(), "yyyy-MM-dd")
         }
+    }
+
+    // ===== 网络状态判断辅助函数 =====
+
+    /** @brief 判断 4G 是否处于激活状态（搜索中/已注册/已连接/漫游） */
+    function isCellularActive() {
+        var s = NetworkManager.cellularStatus
+        return s >= NetworkManager.CellSearching && s <= NetworkManager.CellRoaming
+    }
+
+    /** @brief 判断 4G 是否处于漫游状态 */
+    function isCellularRoaming() {
+        return NetworkManager.cellularStatus === NetworkManager.CellRoaming
+    }
+
+    /**
+     * @brief 在 Canvas 上下文中绘制圆角矩形（QML Canvas 不支持 roundRect）
+     * @param ctx   - Canvas 2D context
+     * @param x, y  - 左上角坐标
+     * @param w, h  - 宽高
+     * @param r     - 圆角半径
+     */
+    function drawRoundedRect(ctx, x, y, w, h, r) {
+        if (r <= 0) {
+            ctx.fillRect(x, y, w, h)
+            return
+        }
+        // 限制半径不超过半边长
+        r = Math.min(r, Math.min(w / 2, h / 2))
+        ctx.beginPath()
+        ctx.moveTo(x + r, y)
+        ctx.lineTo(x + w - r, y)
+        ctx.arcTo(x + w, y, x + w, y + r, r)
+        ctx.lineTo(x + w, y + h - r)
+        ctx.arcTo(x + w, y + h, x + w - r, y + h, r)
+        ctx.lineTo(x + r, y + h)
+        ctx.arcTo(x, y + h, x, y + h - r, r)
+        ctx.lineTo(x, y + r)
+        ctx.arcTo(x, y, x + r, y, r)
+        ctx.closePath()
+        ctx.fill()
     }
 }

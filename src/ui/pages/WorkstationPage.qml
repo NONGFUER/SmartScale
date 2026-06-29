@@ -561,13 +561,43 @@ Item {
                             }
                         }
 
-                        // 用户名称 + 岗位标签
-                        ColumnLayout {
-                            spacing: 4
-                            Layout.alignment: Qt.AlignVCenter
+                        // 用户名称 + 岗位标签（用普通 Item 包裹，避免内部使用 anchors 时触发 Layout 警告）
+                        // 外层 RowLayout 只管理这一个 Item 的布局，内部的 ColumnLayout + MouseArea 用 anchors 定位
+                        Item {
+                            Layout.preferredHeight: 64
+                            implicitWidth: userInfoColumn.implicitWidth
 
+                            ColumnLayout {
+                                id: userInfoColumn
+                                anchors.fill: parent
+                                spacing: 4
+
+                                Text {
+                                    text: BackendAuth.currentUser || "未登录"
+                                    font.pixelSize: 22
+                                    font.bold: true
+                                    color: "#1E293B"
+                                }
+
+                                // 蓝色背景岗位标签
+                                Rectangle {
+                                    width: 60; height: 24; radius: 4
+                                    color: "#DBEAFE"
+                                    visible: BackendAuth.currentUser !== "" && BackendAuth.currentUser !== undefined
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: "操作员"
+                                        font.pixelSize: 12
+                                        color: "#2563EB"
+                                    }
+                                }
+                            }
+
+                            // 点击区域覆盖整个用户信息区域（Item 不是 Layout，anchors 安全）
                             MouseArea {
                                 anchors.fill: parent
+                                z: 1
                                 hoverEnabled: true
                                 onClicked: {
                                     if (BackendAuth.currentUser) {
@@ -575,27 +605,6 @@ Item {
                                     } else {
                                         window.showLogin()
                                     }
-                                }
-                            }
-
-                            Text {
-                                text: BackendAuth.currentUser || "未登录"
-                                font.pixelSize: 22
-                                font.bold: true
-                                color: "#1E293B"
-                            }
-
-                            // 蓝色背景岗位标签
-                            Rectangle {
-                                width: 60; height: 24; radius: 4
-                                color: "#DBEAFE"
-                                visible: BackendAuth.currentUser !== "" && BackendAuth.currentUser !== undefined
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "操作员"
-                                    font.pixelSize: 12
-                                    color: "#2563EB"
                                 }
                             }
                         }

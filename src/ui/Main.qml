@@ -213,6 +213,14 @@ ApplicationWindow {
         }
     }
 
+    // 4G 移动数据控制弹窗
+    CellularDialog {
+        id: cellularDialog
+        x: (parent.width - width) / 2
+        y: Math.min((parent.height - height) / 2,
+                    parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+    }
+
     // 连接 StatusBar 调试信号 -> 弹窗打开
     Connections {
         target: statusBar
@@ -222,11 +230,11 @@ ApplicationWindow {
         }
     }
 
-    // 连接 StatusBar WiFi 信号 -> 打开网络列表弹窗
+    // 连接 StatusBar 网络图标信号 -> 打开网络列表弹窗（统一入口）
     Connections {
         target: statusBar
-        function onWifiRequested() {
-            console.log("[Main] 收到 WiFi 请求，打开网络列表弹窗")
+        function onNetworkRequested() {
+            console.log("[Main] 收到网络请求，打开 Wi-Fi 列表弹窗")
             wifiListDialog.open()
         }
     }
@@ -267,5 +275,17 @@ ApplicationWindow {
     // 暴露给子页面调用
     function toast(message, type, duration) {
         globalToast.show(message, type, duration)
+    }
+
+    // 打开 Wi-Fi 列表弹窗（供 SettingsPage 等子页面调用）
+    function openWifiDialog() {
+        console.log("[Main] openWifiDialog()")
+        wifiListDialog.open()
+    }
+
+    // 打开 4G 移动数据控制弹窗（供 SettingsPage 等子页面调用）
+    function openCellularDialog() {
+        console.log("[Main] openCellularDialog()")
+        cellularDialog.open()
     }
 }

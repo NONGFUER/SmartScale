@@ -35,6 +35,10 @@ class NetworkManagerService : public QObject
     Q_PROPERTY(int            cellularSignal   READ cellularSignal   NOTIFY cellularStatusChanged)
     Q_PROPERTY(QString        cellularOperator READ cellularOperator NOTIFY cellularStatusChanged)
     Q_PROPERTY(QString        cellularIpAddress READ cellularIpAddr  NOTIFY cellularStatusChanged)
+    /** @brief 是否检测到任何 4G 硬件（modem 或网络接口模式） */
+    Q_PROPERTY(bool            hasCellularHardware READ hasCellularHardware NOTIFY cellularHardwareChanged)
+    /** @brief 最后的错误信息（QML 可绑定） */
+    Q_PROPERTY(QString         lastError           READ lastError           NOTIFY lastErrorChanged)
 
 public:
     enum class WifiStatus {
@@ -72,6 +76,7 @@ public:
     int            cellularSignal()   const { return m_cellularSignal; }
     QString        cellularOperator() const { return m_cellularOperator; }
     QString        cellularIpAddr()   const { return m_cellularIpAddress; }
+    bool            hasCellularHardware() const { return m_hasCellularHardware; }
 
     // ===== Wi-Fi 操作 =====
     /** @brief 扫描可用 Wi-Fi 网络（异步，结果通过 networksUpdated 信号通知） */
@@ -105,7 +110,7 @@ public:
     Q_INVOKABLE bool checkPermissions();
 
     /** @brief 获取最后的错误信息 */
-    Q_INVOKABLE QString lastError() const { return m_lastError; }
+    QString lastError() const { return m_lastError; }
 
 Q_SIGNALS:
     // Wi-Fi 信号
@@ -120,6 +125,10 @@ Q_SIGNALS:
     void cellularEnabled();
     void cellularDisabled();
     void cellularOperationFailed(const QString &errorMsg);
+    /** @brief 4G 硬件检测状态变化（用于 UI 更新开关可用状态） */
+    void cellularHardwareChanged(bool hasHardware);
+    /** @brief 错误信息变化（用于 QML 绑定刷新） */
+    void lastErrorChanged();
 
 private Q_SLOTS:
     void onWifiScanFinished(int exitCode, QProcess::ExitStatus exitStatus);
@@ -134,8 +143,16 @@ private:
     bool hasNetworkManager() const;
     bool hasModemManager() const;
 
+    /** @brief 动态发现 WiFi 设备名（兼容 wlan0/wlp2s0/mlan0 等不同命名） */
+    QString discoverWifiDevice() const;
+
+    /** @brief 在多个候选路径中查找第一个存在的可执行文件 */
+    static QString findExecutable(const char *paths[]);
+
     void parseWifiScanOutput(const QString &output);
     void updateCellularStatusFromMmcli(const QString &output);
+    /** @brief 从 nmcli device show 输出解析 4G 状态（以太网模式） */
+    void updateCellularStatusFromNmcli(const QString &output, const QString &device);
 
     int signalQualityToPercent(const QString &qualityStr) const;
 
@@ -147,10 +164,35 @@ private:
     /** @brief 通过 mmcli 禁用 4G */
     void disableCellularViaModem();
 
+    /** @brief 通过 nmcli 连接启用 4G（以太网模式） */
+    void enableCellularViaDevice();
+
+    /** @brief 通过 nmcli 断开禁用 4G（以太网模式） */
+    void disableCellularViaDevice();
+
+    /** @brief 动态发现 4G 调制解调器索引，返回字符串（如 "0"），失败返回空串 */
+    QString discoverModemIndex() const;
+
+    /**
+     * @brief 发现 4G 网络接口设备名（适用于 4G 模块以以太网模式工作的场景）
+     *
+     * 检测策略（按优先级）：
+     *   1. 遍历 nmcli device 列表，查找类型为 ethernet 且连接配置名含 gsm/mobile/cellular 关键字的设备
+     *   2. fallback：检查已知常见 4G 接口名（eth1, usb0, enx* 等）
+     * 返回设备名（如 "eth1"），失败返回空串
+     */
+    QString discoverCellularDevice() const;
+
     /** @brief 内部设置 Wi-Fi 状态（触发信号） */
     void setWifiStatus(WifiStatus status);
     /** @brief 内部设置 4G 状态（触发信号） */
     void setCellularStatus(CellularStatus status);
+
+    /** @brief 内部设置错误信息（触发信号，供 QML 绑定） */
+    void setLastError(const QString &error);
+
+    /** @brief 更新 4G 硬件检测状态（仅在值变化时发射信号） */
+    void updateHasCellularHardware(bool hasHardware);
 
     /** @brief 清理 SSID 中的特殊字符，生成合法的 nmcli 连接名 */
     QString sanitizeConnectionName(const QString &ssid) const;
@@ -171,6 +213,12 @@ private:
     QString        m_cellularOperator;
     QString        m_cellularIpAddress;
 
+    /** @brief 检测到的 4G 网络接口设备名（如 "eth1"），用于以太网模式的 4G 模块 */
+    mutable QString m_cellularDeviceName;
+
+    /** @brief 是否检测到任何 4G 硬件（modem 或网络接口模式） */
+    bool           m_hasCellularHardware = false;
+
     QString        m_lastError;
     bool           m_pendingCellularOp = false;  // true=启用, false=禁用
 
@@ -180,6 +228,10 @@ private:
 
     // 异步进程（每次操作复用）
     QProcess      *m_process         = nullptr;
+
+    // 工具实际路径（构造时从候选列表中解析，兼容不同发行版）
+    QString        m_nmcliPath;
+    QString        m_mmcliPath;
 
     // 状态轮询定时器（每 10 秒刷新一次状态）
     QTimer        *m_statusPollTimer = nullptr;

@@ -120,14 +120,14 @@ Popup {
                 spacing: 14
 
                 // 状态指示
-                Row {
+                RowLayout {
                     spacing: 8
                     Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
 
                     Rectangle {
                         id: statusDot
                         width: 14; height: 14; radius: 7
-                        y: (parent.height - height) / 2
                         color: {
                             switch (NetworkManager.wifiStatus) {
                             case NetworkManager.Connected:   return "#22C55E";
@@ -141,7 +141,6 @@ Popup {
 
                     Text {
                         id: statusText
-                        anchors.verticalCenter: parent.verticalCenter
                         font.pixelSize: 17
                         color: Theme.colorTextSecondary
                         text: {
@@ -397,28 +396,68 @@ Popup {
             height: 76
             color: "#F8FAFC"
 
-            Button {
-                id: closeBtn
-                text: "关闭"
+            RowLayout {
                 anchors.centerIn: parent
-                implicitWidth: 140
-                implicitHeight: 46
+                spacing: 20
 
-                background: Rectangle {
-                    radius: 8
-                    color: closeBtn.hovered ? "#2563EB" : "#3B82F6"
+                // 断开连接按钮（仅 WiFi 已连接时可用）
+                Button {
+                    id: disconnectBtn
+                    text: "断开连接"
+                    implicitWidth: 130
+                    implicitHeight: 46
+                    // 始终占位，断开后置灰禁用而非隐藏，避免布局跳动
+                    enabled: NetworkManager.wifiStatus === NetworkManager.Connected
+                    opacity: enabled ? 1.0 : 0.4
+
+                    background: Rectangle {
+                        radius: 8
+                        color: disconnectBtn.enabled ?
+                               (disconnectBtn.hovered ? "#FEE2E2" : "#FEEAEA") :
+                               "#F1F5F9"
+                        border.color: disconnectBtn.enabled ? "#EF4444" : "#E2E8F0"
+                        border.width: 1.2
+                    }
+
+                    contentItem: Text {
+                        text: disconnectBtn.text
+                        font.pixelSize: 16
+                        font.bold: true
+                        color: disconnectBtn.enabled ? "#EF4444" : "#94A3B8"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    hoverEnabled: true
+                    onClicked: {
+                        console.log("[WifiList] 断开当前 Wi-Fi 连接")
+                        NetworkManager.disconnectWifi()
+                    }
                 }
 
-                contentItem: Text {
-                    text: closeBtn.text
-                    font.pixelSize: 17
-                    font.bold: true
-                    color: "#FFFFFF"
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
+                // 关闭按钮
+                Button {
+                    id: closeBtn
+                    text: "关闭"
+                    implicitWidth: 140
+                    implicitHeight: 46
 
-                onClicked: root.close()
+                    background: Rectangle {
+                        radius: 8
+                        color: closeBtn.hovered ? "#2563EB" : "#3B82F6"
+                    }
+
+                    contentItem: Text {
+                        text: closeBtn.text
+                        font.pixelSize: 17
+                        font.bold: true
+                        color: "#FFFFFF"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    onClicked: root.close()
+                }
             }
         }
     }

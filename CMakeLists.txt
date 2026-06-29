@@ -71,6 +71,7 @@ qt_add_qml_module(appSmartScale
         src/ui/components/Toast.qml                # 全局 Toast 提示组件
         src/ui/components/WifiListDialog.qml       # Wi-Fi 网络列表弹窗
         src/ui/components/WifiPasswordDialog.qml   # Wi-Fi 密码输入弹窗
+        src/ui/components/CellularDialog.qml        # 4G 移动数据控制弹窗
 
     # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
