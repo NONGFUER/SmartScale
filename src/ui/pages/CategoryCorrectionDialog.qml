@@ -182,7 +182,7 @@ Dialog {
                     }
 
                     Rectangle {
-                        Layout.preferredWidth: 72
+                        Layout.preferredWidth: 80
                         Layout.preferredHeight: 42
                         radius: 17
                         gradient: Gradient {
@@ -191,12 +191,43 @@ Dialog {
                             GradientStop { position: 1.0; color: "#1D4ED8" }
                         }
 
-                        Text {
+                        Row {
                             anchors.centerIn: parent
-                            text: "搜索"
-                            font.pixelSize: 24
-                            font.bold: true
-                            color: "white"
+                            spacing: 4
+
+                            // 搜索图标（放大镜）
+                            Item {
+                                width: 18; height: 18
+                                anchors.verticalCenter: parent.verticalCenter
+                                Canvas {
+                                    anchors.fill: parent
+                                    onPaint: {
+                                        var ctx = getContext("2d")
+                                        ctx.clearRect(0, 0, width, height)
+                                        ctx.strokeStyle = "#FFFFFF"
+                                        ctx.lineWidth = 2
+                                        ctx.lineCap = "round"
+                                        // 圆圈部分（放大镜头部）
+                                        ctx.beginPath()
+                                        ctx.arc(7, 7, 5.5, 0, Math.PI * 2)
+                                        ctx.stroke()
+                                        // 手柄部分
+                                        ctx.beginPath()
+                                        ctx.moveTo(11, 11)
+                                        ctx.lineTo(16.5, 16.5)
+                                        ctx.stroke()
+                                    }
+                                    Component.onCompleted: requestPaint()
+                                }
+                            }
+
+                            Text {
+                                text: "搜索"
+                                font.pixelSize: 22
+                                font.bold: true
+                                color: "white"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
                         }
                         MouseArea {
                             anchors.fill: parent
@@ -207,6 +238,55 @@ Dialog {
                                 dialogRoot.doSearch(catSearchInput.text)
                                 console.log("[CategoryDialog] 搜索:", catSearchInput.text)
                             }
+                        }
+                    }
+
+                    // 添加食材按钮（与搜索按钮同风格）
+                    Rectangle {
+                        Layout.preferredWidth: 120
+                        Layout.preferredHeight: 42
+                        radius: 17
+                        gradient: Gradient {
+                            orientation: Gradient.Horizontal
+                            GradientStop { position: 0.0; color: "#3B82F6" }
+                            GradientStop { position: 1.0; color: "#1D4ED8" }
+                        }
+
+                        Row {
+                            anchors.centerIn: parent
+                            spacing: 4
+
+                            // 添加图标（圆圈内 +）
+                            Rectangle {
+                                width: 18; height: 18; radius: 9
+                                color: "transparent"
+                                border.width: 2
+                                border.color: "#FFFFFF"
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "+"
+                                    font.pixelSize: 14
+                                    font.bold: true
+                                    color: "#FFFFFF"
+                                }
+                            }
+
+                            Text {
+                                text: "添加食材"
+                                font.pixelSize: 20
+                                font.bold: true
+                                color: "white"
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: console.log("点击添加食材图标")
                         }
                     }
                 }
