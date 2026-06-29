@@ -544,18 +544,18 @@ Item {
                     // ==================== 顶部区（紧凑）：用户信息 ====================
                     RowLayout {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 64
-                        spacing: 12
+                        Layout.preferredHeight: 72
+                        spacing: 14
 
                         // 圆形头像
                         Rectangle {
-                            width: 48; height: 48; radius: 24
+                            width: 54; height: 54; radius: 27
                             color: "#3B82F6"
 
                             Text {
                                 anchors.centerIn: parent
                                 text: BackendAuth.currentUser ? BackendAuth.currentUser.charAt(0).toUpperCase() : "?"
-                                font.pixelSize: 24
+                                font.pixelSize: 27
                                 font.bold: true
                                 color: "#FFFFFF"
                             }
@@ -564,31 +564,31 @@ Item {
                         // 用户名称 + 岗位标签（用普通 Item 包裹，避免内部使用 anchors 时触发 Layout 警告）
                         // 外层 RowLayout 只管理这一个 Item 的布局，内部的 ColumnLayout + MouseArea 用 anchors 定位
                         Item {
-                            Layout.preferredHeight: 64
+                            Layout.preferredHeight: 72
                             implicitWidth: userInfoColumn.implicitWidth
 
                             ColumnLayout {
                                 id: userInfoColumn
                                 anchors.fill: parent
-                                spacing: 4
+                                spacing: 5
 
                                 Text {
                                     text: BackendAuth.currentUser || "未登录"
-                                    font.pixelSize: 22
+                                    font.pixelSize: 25
                                     font.bold: true
                                     color: "#1E293B"
                                 }
 
                                 // 蓝色背景岗位标签
                                 Rectangle {
-                                    width: 60; height: 24; radius: 4
+                                    width: 68; height: 28; radius: 5
                                     color: "#DBEAFE"
                                     visible: BackendAuth.currentUser !== "" && BackendAuth.currentUser !== undefined
 
                                     Text {
                                         anchors.centerIn: parent
-                                        text: "操作员"
-                                        font.pixelSize: 12
+                                        text: "登录账号"
+                                        font.pixelSize: 14
                                         color: "#2563EB"
                                     }
                                 }

@@ -71,7 +71,7 @@ Rectangle {
     // 逻辑: 4G开→显示4G+信号 | WiFi开4G关→显示WiFi波形 | 都关→断网图标
     Item {
         id: networkIconArea
-        width: 44; height: 32
+        width: 46; height: 46
         Layout.alignment: Qt.AlignVCenter
 
         // ---- 4G 图标 (cellularEnabled 时显示) ----
@@ -85,7 +85,7 @@ Rectangle {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: isCellularRoaming() ? "R" : "4G"
-                font.pixelSize: isCellularRoaming() ? 11 : 13
+                font.pixelSize: isCellularRoaming() ? 15 : 17
                 font.bold: true
                 color: "#FFFFFF"
             }
@@ -94,7 +94,7 @@ Rectangle {
             Item {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                width: 18; height: 14
+                width: 22; height: 18
 
                 Canvas {
                     id: canvas4g
@@ -103,8 +103,8 @@ Rectangle {
                         var ctx = getContext("2d")
                         ctx.fillStyle = "#FFFFFF"
                         var sig = NetworkManager.cellularSignal || 0
-                        var barW = 3, gap = 1.5, baseY = height - 1
-                        var levels = [3, 6, 9, 12]
+                        var barW = 3.5, gap = 2, baseY = height - 1
+                        var levels = [4, 8, 12, 16]
                         for (var i = 0; i < 4; i++) {
                             var x = i * (barW + gap)
                             var h = (sig > (i * 25 + 10)) ? levels[i] : 0
@@ -114,7 +114,6 @@ Rectangle {
                         }
                     }
                     Component.onCompleted: requestPaint()
-                    // 4G 状态变化时重绘（用 id 引用，避免 parent 动态解析错误）
                     Connections {
                         target: NetworkManager
                         function onCellularStatusChanged() { canvas4g.requestPaint() }
@@ -129,7 +128,6 @@ Rectangle {
             anchors.fill: parent
             visible: NetworkManager.wifiStatus === NetworkManager.Connected
 
-            // 断网调试：追踪状态变化
             Connections {
                 target: NetworkManager
                 function onWifiStatusChanged() {
@@ -142,34 +140,48 @@ Rectangle {
                 }
             }
 
-            Canvas {
+            Item {
+                id: wifiIconGroup
                 anchors.centerIn: parent
-                width: 24; height: 20
-                onPaint: {
-                    var ctx = getContext("2d")
-                    ctx.strokeStyle = "#FFFFFF"
-                    ctx.lineWidth = 2.2
-                    ctx.lineCap = "round"
-                    ctx.lineJoin = "round"
-                    var cx = width / 2, cy = height - 2
-                    ctx.beginPath(); ctx.arc(cx, cy - 1, 9, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke()
-                    ctx.beginPath(); ctx.arc(cx, cy - 1, 6, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke()
-                    ctx.beginPath(); ctx.arc(cx, cy - 1, 3, Math.PI * 1.25, Math.PI * 1.75); ctx.stroke()
-                    ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, 2 * Math.PI)
-                    ctx.fillStyle = "#FFFFFF"; ctx.fill()
+
+                Canvas {
+                    id: wifiCanvas
+                    width: 30; height: 30
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.verticalCenter: parent.verticalCenter
+                    onPaint: {
+                        var ctx = getContext("2d")
+                        ctx.strokeStyle = "#FFFFFF"
+                        ctx.lineWidth = 2.4
+                        ctx.lineCap = "round"
+                        // 标准 WiFi 图标：底部圆心为信号源，三条弧线向上扇形展开
+                        var cx = width / 2
+                        var baseY = height - 5   // 圆点 Y 坐标（靠近底部，留余量）
+                        // 三条弧线（从外到内）— 圆心在 baseY，弧向上凸起
+                        var radii = [11.5, 7.5, 4]
+                        for (var i = 0; i < radii.length; i++) {
+                            ctx.beginPath()
+                            ctx.arc(cx, baseY, radii[i],
+                                    -Math.PI * 0.78, -Math.PI * 0.22)
+                            ctx.stroke()
+                        }
+                        // 底部实心圆点（信号源）
+                        ctx.beginPath()
+                        ctx.arc(cx, baseY, 2.3, 0, 2 * Math.PI)
+                        ctx.fillStyle = "#FFFFFF"
+                        ctx.fill()
+                    }
+                    Component.onCompleted: requestPaint()
                 }
-                Component.onCompleted: requestPaint()
-            }
 
-            // WiFi 信号强度小点（右下角）
-            Rectangle {
-                anchors.right: parent.right; anchors.bottom: parent.bottom
-                width: 7; height: 7; radius: 3.5
-                color:  "#4ADE80" 
-
-// WiFi 状态变化时更新颜色: 已移除多余的 parent.visible 控制
-// iconWifi (第131行) 已有绑定 visible: NetworkManager.wifiStatus === NetworkManager.Connected
-// 子节点无需重复控制可见性，且 parent 在 Connections 作用域内解析不可靠
+                // WiFi 信号强度小点（紧贴图标右下角）
+                Rectangle {
+                    anchors.left: wifiCanvas.right; anchors.top: wifiCanvas.bottom
+                    anchors.leftMargin: -4
+                    anchors.topMargin: -10
+                    width: 9; height: 9; radius: 4.5
+                    color: "#4ADE80"
+                }
             }
         }
 
@@ -179,31 +191,36 @@ Rectangle {
             anchors.fill: parent
             visible: !isCellularActive() && NetworkManager.wifiStatus !== NetworkManager.Connected
 
-            // 斜杠划掉的信号波形
             Canvas {
                 anchors.centerIn: parent
-                width: 24; height: 20
+                width: 30; height: 30
                 onPaint: {
                     var ctx = getContext("2d")
-                    ctx.strokeStyle = "#8899AA"
-                    ctx.lineWidth = 2.0
                     ctx.lineCap = "round"
-                    ctx.lineJoin = "round"
-                    var cx = width / 2, cy = height - 2
-                    // 淡色波形
+                    // 标准 WiFi 波形（与已连接图标一致的几何）
+                    var cx = width / 2
+                    var baseY = height - 5
+                    // 淡色弧线
                     ctx.globalAlpha = 0.45
-                    ctx.beginPath(); ctx.arc(cx, cy - 1, 9, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke()
-                    ctx.beginPath(); ctx.arc(cx, cy - 1, 6, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke()
-                    ctx.beginPath(); ctx.arc(cx, cy - 1, 3, Math.PI * 1.25, Math.PI * 1.75); ctx.stroke()
-                    ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, 2 * Math.PI)
+                    ctx.strokeStyle = "#8899AA"
+                    ctx.lineWidth = 2.4
+                    var radii = [11.5, 7.5, 4]
+                    for (var i = 0; i < radii.length; i++) {
+                        ctx.beginPath()
+                        ctx.arc(cx, baseY, radii[i],
+                                -Math.PI * 0.78, -Math.PI * 0.22)
+                        ctx.stroke()
+                    }
+                    ctx.beginPath()
+                    ctx.arc(cx, baseY, 2.3, 0, 2 * Math.PI)
                     ctx.fillStyle = "#8899AA"; ctx.fill()
                     ctx.globalAlpha = 1.0
-                    // 斜杠
+                    // 红色斜杠划掉
                     ctx.strokeStyle = "#EF4444"
-                    ctx.lineWidth = 2.5
+                    ctx.lineWidth = 2.6
                     ctx.beginPath()
-                    ctx.moveTo(2, 2)
-                    ctx.lineTo(width - 2, height - 2)
+                    ctx.moveTo(3, 3)
+                    ctx.lineTo(width - 3, height - 3)
                     ctx.stroke()
                 }
                 Component.onCompleted: requestPaint()
@@ -236,13 +253,13 @@ Rectangle {
 
             // 调试按钮（测试阶段，放在设置齿轮左侧）
             Item {
-                width: 40; height: 40
+                width: 46; height: 46
                 Layout.alignment: Qt.AlignVCenter
 
                     Rectangle {
                         id: debugBg
                         anchors.fill: parent
-                        radius: 4
+                        radius: 6
                         color: "transparent"
 
                         states: State {
@@ -254,22 +271,20 @@ Rectangle {
                     // 调试图标 (bug / 终端风格)
                     Canvas {
                         anchors.centerIn: parent
-                        width: 24; height: 24
+                        width: 30; height: 30
                         onPaint: {
                             var ctx = getContext("2d")
                             ctx.strokeStyle = "#FFFFFF"
-                            ctx.lineWidth = 2.2
+                            ctx.lineWidth = 2.6
                             ctx.lineCap = "round"
                             ctx.lineJoin = "round"
                             var cx = width / 2, cy = height / 2
-                            // 终端窗口外形
-                            ctx.strokeRect(cx - 9, cy - 6, 18, 12)
-                            // 提示符 "_"
+                            ctx.strokeRect(cx - 11, cy - 7.5, 22, 15)
                             ctx.beginPath()
-                            ctx.moveTo(cx - 5, cy + 3)
-                            ctx.lineTo(cx, cy + 3)
-                            ctx.moveTo(cx + 4, cy)
-                            ctx.lineTo(cx + 4, cy + 5)
+                            ctx.moveTo(cx - 6, cy + 4)
+                            ctx.lineTo(cx, cy + 4)
+                            ctx.moveTo(cx + 5, cy)
+                            ctx.lineTo(cx + 5, cy + 6)
                             ctx.stroke()
                         }
                         Component.onCompleted: requestPaint()
@@ -288,14 +303,13 @@ Rectangle {
 
                 // 设置齿轮图标
                 Item {
-                    width: 40; height: 40
+                    width: 46; height: 46
                     Layout.alignment: Qt.AlignVCenter
 
-                    // 悬停背景
                     Rectangle {
                         id: gearBg
                         anchors.fill: parent
-                        radius: 4
+                        radius: 6
                         color: "transparent"
 
                         states: State {
@@ -308,16 +322,16 @@ Rectangle {
                     Canvas {
                         id: gearIcon
                         anchors.centerIn: parent
-                        width: 26; height: 26
+                        width: 30; height: 30
                         onPaint: {
                             var ctx = getContext("2d")
                             ctx.strokeStyle = "#FFFFFF"
-                            ctx.lineWidth = 2.4
+                            ctx.lineWidth = 2.6
                             ctx.lineCap = "round"
                             ctx.lineJoin = "round"
                             var cx = width / 2, cy = height / 2
                             ctx.beginPath()
-                            var r = 9, teeth = 8
+                            var r = 10, teeth = 8
                             for (var i = 0; i < teeth; i++) {
                                 var a1 = (i / teeth) * 2 * Math.PI - Math.PI / 2
                                 var a2 = ((i + 0.35) / teeth) * 2 * Math.PI - Math.PI / 2
@@ -333,13 +347,12 @@ Rectangle {
                             }
                             ctx.closePath(); ctx.stroke()
                             ctx.beginPath()
-                            ctx.arc(cx, cy, 4, 0, 2 * Math.PI)
+                            ctx.arc(cx, cy, 4.5, 0, 2 * Math.PI)
                             ctx.stroke()
                         }
                         Component.onCompleted: requestPaint()
                     }
 
-                    // 点击区域放在最后，确保在最上层接收事件
                     MouseArea {
                         id: setGearMouse
                         anchors.fill: parent
