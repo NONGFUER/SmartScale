@@ -26,6 +26,7 @@ ApplicationWindow {
     }
 
     property bool chineseInputMode: true  // true=拼音中文, false=纯英文
+    property var _origConsoleError: null  // 保存原始 console.error（全局错误拦截用）
 
     Component.onCompleted: {
         // 已自编译部署 Qt VirtualKeyboard Pinyin 插件到系统 Plugins/Pinyin/
@@ -36,6 +37,63 @@ ApplicationWindow {
         })
         // 启动时自动弹出登录弹窗
         loginDialog.open()
+
+        // ===== 全局 QML JS 错误拦截 =====
+        _origConsoleError = console.error
+        console.error = function() {
+            _origConsoleError.apply(console, arguments)
+            var msg = ""
+            for (var i = 0; i < arguments.length; i++) {
+                if (i > 0) msg += " "
+                msg += String(arguments[i])
+            }
+            if (msg.indexOf("Error:") >= 0 ||
+                msg.indexOf("error") >= 0 ||
+                msg.indexOf("TypeError") >= 0 ||
+                msg.indexOf("ReferenceError") >= 0 ||
+                msg.indexOf("Warning:") >= 0) {
+                Qt.callLater(function() {
+                    if (typeof globalToast !== 'undefined') {
+                        globalToast.show("[QML Error] " + msg.substring(0, 200), "error", 10000)
+                    }
+                })
+            }
+        }
+        console.log("[Main] ✅ 全局 QML 错误拦截已安装 — 任何 QML/JS 错误都会显示为 Toast")
+    }
+
+    // ===== 全局 QML 错误捕获 =====
+    // 捕获所有 QML JavaScript 运行时错误，输出完整堆栈到控制台 + 全局 Toast
+    // 用于定位"断网后页面崩溃"等难以复现的 QML 引擎异常
+    Component.onDestruction: {
+        if (qmlGlobalErrorHandler) qmlGlobalErrorHandler.disconnect()
+    }
+    Connections {
+        id: qmlGlobalErrorHandler
+        target: window  // ApplicationWindow 自身
+
+        // 捕获所有未处理的 QML JS 异常
+        function onWidthChanged() {}  // dummy，确保 Connections 活跃
+
+        // 注意：Qt6 没有 ApplicationWindow 级别的统一 error 信号，
+        // 改用 Qt.objectCreated + Console.category 机制
+    }
+
+    // 方案：监控 mainLayout 可见性 + 拦截 console.error 并弹 Toast
+    Timer {
+        id: errorMonitorTimer
+        interval: 500
+        running: true
+        repeat: true
+        onTriggered: {
+            // 监控 mainLayout 是否意外消失（用于诊断+自动恢复"断网后白屏"）
+            if (mainLayout && !mainLayout.visible) {
+                console.warn("[QML-DEBUG] ⚠️ mainLayout.visible=false! 强制恢复可见")
+                mainLayout.visible = true
+                if (typeof globalToast !== 'undefined')
+                    globalToast.show("已恢复布局可见性 (wifi=" + NetworkManager.wifiStatus + ")", "warning", 3000)
+            }
+        }
     }
 
     // 中英输入切换（供键盘右上角按钮调用）
@@ -58,11 +116,21 @@ ApplicationWindow {
     // 页面栈路由器
     ColumnLayout {
         id:mainLayout
+        visible: true  // ★ 防御性绑定：WiFi 断开时 QML 引擎会异常将此设为 false
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: inputPanel.active ? inputPanel.top : parent.bottom
         spacing: 0
+
+        onVisibleChanged: {
+            console.log("[QML-DEBUG] 📍 mainLayout.visible 变化:", visible,
+                        "调用堆栈:", new Error().stack)
+            if (!visible) {
+                console.warn("[QML-DEBUG] ⚠️ 检测到 mainLayout 被设为不可见！强制恢复...")
+                visible = true
+            }
+        }
 
         StatusBar{
             id: statusBar

@@ -239,7 +239,8 @@ Popup {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 12
-                    visible: NetworkManager.cellularIpAddr && NetworkManager.cellularIpAddr.length > 3
+                    visible: NetworkManager.cellularIpAddr !== undefined
+                             && NetworkManager.cellularIpAddr.length > 3
 
                     Text {
                         text: "\uD83D\uDCC1 IP:"
@@ -279,7 +280,7 @@ Popup {
                         Layout.alignment: Qt.AlignHCenter
                     }
                     Text {
-                        text: NetworkManager.lastError() || "请检查硬件连接或 ModemManager 是否运行"
+                        text: NetworkManager.lastError || "请检查硬件连接或 ModemManager 是否运行"
                         font.pixelSize: 14
                         color: "#B45309"
                         Layout.alignment: Qt.AlignHCenter
@@ -380,7 +381,7 @@ Popup {
             Text {
                 Layout.fillWidth: true
                 visible: NetworkManager.cellularStatus === NetworkManager.CellError
-                text: "\u26A0 " + (NetworkManager.lastError() || "4G 操作失败")
+                text: "\u26A0 " + (NetworkManager.lastError || "4G 操作失败")
                 font.pixelSize: 15
                 color: "#EF4444"
                 wrapMode: Text.Wrap

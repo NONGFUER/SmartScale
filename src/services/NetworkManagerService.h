@@ -5,8 +5,10 @@
 #include <QStringList>
 #include <QProcess>
 #include <QTimer>
+#include <QElapsedTimer>
 #include <QVariantMap>
 #include <QRegularExpression>
+#include <functional>
 
 /**
  * @brief 网络管理服务 — 统一管理 Wi-Fi 和 4G 网络
@@ -52,13 +54,13 @@ public:
     Q_ENUM(WifiStatus)
 
     enum class CellularStatus {
-        Unknown     = 0,
-        Disabled    = 1,
-        Searching   = 2,
-        Registered  = 3,
-        Connected   = 4,
-        Roaming     = 5,
-        Error       = 6
+        CellUnknown   = 0,
+        CellDisabled  = 1,
+        CellSearching = 2,
+        CellRegistered = 3,
+        CellConnected = 4,
+        CellRoaming   = 5,
+        CellError     = 6
     };
     Q_ENUM(CellularStatus)
 
@@ -140,6 +142,15 @@ private Q_SLOTS:
 
 private:
     // === 内部方法 ===
+    /**
+     * @brief 确保在主线程执行属性更新（跨线程时自动通过 QMetaObject 投递）
+     *
+     * 解决 QtConcurrent::run 工作线程直接修改 Q_PROPERTY + emit 信号
+     * 导致的竞态条件，该竞态会导致 QML 绑定引擎异常、子树渲染崩溃。
+     */
+    template<typename Func>
+    void runOnMainThread(Func&& func);
+
     bool hasNetworkManager() const;
     bool hasModemManager() const;
 
@@ -208,7 +219,7 @@ private:
     QVariantList  m_availableNetworks; // [{ssid, signal, secured, bssid}, ...]
     bool           m_isScanning       = false;
 
-    CellularStatus m_cellularStatus  = CellularStatus::Unknown;
+    CellularStatus m_cellularStatus  = CellularStatus::CellUnknown;
     int            m_cellularSignal  = 0;          // 0-100
     QString        m_cellularOperator;
     QString        m_cellularIpAddress;
@@ -225,6 +236,9 @@ private:
     // 两步连接法：创建配置 → 激活 之间的中间状态
     QString        m_pendingSsid;                 // 正在连接的 SSID
     QString        m_pendingConnectionName;       // 已创建但尚未激活的连接名称
+
+    // 用户主动断开 WiFi 后的防回退保护（防止轮询定时器读取 nmcli 缓存状态刷回 Connected）
+    QElapsedTimer  m_disconnectTime;              // 断开操作成功时记录时间点，无效表示未处于保护窗口
 
     // 异步进程（每次操作复用）
     QProcess      *m_process         = nullptr;

@@ -75,60 +75,73 @@ Rectangle {
         Layout.alignment: Qt.AlignVCenter
 
         // ---- 4G 图标 (cellularEnabled 时显示) ----
-        Item {
-            id: icon4g
-            anchors.fill: parent
-            visible: isCellularActive()
+        // Item {
+        //     id: icon4g
+        //     anchors.fill: parent
+        //     visible: isCellularActive()
 
-            // "4G" 文字标签
-            Text {
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                text: isCellularRoaming() ? "R" : "4G"
-                font.pixelSize: isCellularRoaming() ? 11 : 13
-                font.bold: true
-                color: "#FFFFFF"
-            }
+        //     // "4G" 文字标签
+        //     Text {
+        //         anchors.left: parent.left
+        //         anchors.verticalCenter: parent.verticalCenter
+        //         text: isCellularRoaming() ? "R" : "4G"
+        //         font.pixelSize: isCellularRoaming() ? 11 : 13
+        //         font.bold: true
+        //         color: "#FFFFFF"
+        //     }
 
-            // 4G 信号强度柱（紧跟文字右侧）
-            Item {
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                width: 18; height: 14
+        //     // 4G 信号强度柱（紧跟文字右侧）
+        //     Item {
+        //         anchors.right: parent.right
+        //         anchors.verticalCenter: parent.verticalCenter
+        //         width: 18; height: 14
 
-                Canvas {
-                    id: canvas4g
-                    anchors.fill: parent
-                    onPaint: {
-                        var ctx = getContext("2d")
-                        ctx.fillStyle = "#FFFFFF"
-                        var sig = NetworkManager.cellularSignal || 0
-                        var barW = 3, gap = 1.5, baseY = height - 1
-                        var levels = [3, 6, 9, 12]
-                        for (var i = 0; i < 4; i++) {
-                            var x = i * (barW + gap)
-                            var h = (sig > (i * 25 + 10)) ? levels[i] : 0
-                            if (h > 0) {
-                                // QML Canvas 不支持 roundRect，用圆角矩形辅助函数绘制
-                                drawRoundedRect(ctx, x, baseY - h, barW, h, 1)
-                            }
-                        }
-                    }
-                    Component.onCompleted: requestPaint()
-                    // 4G 状态变化时重绘（用 id 引用，避免 parent 动态解析错误）
-                    Connections {
-                        target: NetworkManager
-                        function onCellularStatusChanged() { canvas4g.requestPaint() }
-                    }
-                }
-            }
-        }
+        //         Canvas {
+        //             id: canvas4g
+        //             anchors.fill: parent
+        //             onPaint: {
+        //                 var ctx = getContext("2d")
+        //                 ctx.fillStyle = "#FFFFFF"
+        //                 var sig = NetworkManager.cellularSignal || 0
+        //                 var barW = 3, gap = 1.5, baseY = height - 1
+        //                 var levels = [3, 6, 9, 12]
+        //                 for (var i = 0; i < 4; i++) {
+        //                     var x = i * (barW + gap)
+        //                     var h = (sig > (i * 25 + 10)) ? levels[i] : 0
+        //                     if (h > 0) {
+        //                         // QML Canvas 不支持 roundRect，用圆角矩形辅助函数绘制
+        //                         drawRoundedRect(ctx, x, baseY - h, barW, h, 1)
+        //                     }
+        //                 }
+        //             }
+        //             Component.onCompleted: requestPaint()
+        //             // 4G 状态变化时重绘（用 id 引用，避免 parent 动态解析错误）
+        //             Connections {
+        //                 target: NetworkManager
+        //                 function onCellularStatusChanged() { canvas4g.requestPaint() }
+        //             }
+        //         }
+        //     }
+        // }
 
-        // ---- WiFi 图标 (WiFi已连接且4G未激活时显示) ----
+        // ---- WiFi 图标 (WiFi已连接时显示) ----
         Item {
             id: iconWifi
             anchors.fill: parent
-            visible: !isCellularActive() && NetworkManager.wifiStatus === NetworkManager.Connected
+            visible: NetworkManager.wifiStatus === NetworkManager.Connected
+
+            // 断网调试：追踪状态变化
+            Connections {
+                target: NetworkManager
+                function onWifiStatusChanged() {
+                    console.log("[StatusBar-DBG] onWifiStatusChanged:",
+                                "status=", NetworkManager.wifiStatus,
+                                "ssid='", NetworkManager.wifiSsid, "'",
+                                "signal=", NetworkManager.wifiSignal,
+                                "ip=", NetworkManager.wifiIpAddress,
+                                "iconWifi.visible=", iconWifi.visible)
+                }
+            }
 
             Canvas {
                 anchors.centerIn: parent
@@ -165,41 +178,41 @@ Rectangle {
         }
 
         // ---- 断网图标 (都未连接时显示) ----
-        Item {
-            id: iconDisconnected
-            anchors.fill: parent
-            visible: !isCellularActive() && NetworkManager.wifiStatus !== NetworkManager.Connected
+        // Item {
+        //     id: iconDisconnected
+        //     anchors.fill: parent
+        //     visible: !isCellularActive() && NetworkManager.wifiStatus !== NetworkManager.Connected
 
-            // 斜杠划掉的信号波形
-            Canvas {
-                anchors.centerIn: parent
-                width: 24; height: 20
-                onPaint: {
-                    var ctx = getContext("2d")
-                    ctx.strokeStyle = "#8899AA"
-                    ctx.lineWidth = 2.0
-                    ctx.lineCap = "round"
-                    ctx.lineJoin = "round"
-                    var cx = width / 2, cy = height - 2
-                    // 淡色波形
-                    ctx.globalAlpha = 0.45
-                    ctx.beginPath(); ctx.arc(cx, cy - 1, 9, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke()
-                    ctx.beginPath(); ctx.arc(cx, cy - 1, 6, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke()
-                    ctx.beginPath(); ctx.arc(cx, cy - 1, 3, Math.PI * 1.25, Math.PI * 1.75); ctx.stroke()
-                    ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, 2 * Math.PI)
-                    ctx.fillStyle = "#8899AA"; ctx.fill()
-                    ctx.globalAlpha = 1.0
-                    // 斜杠
-                    ctx.strokeStyle = "#EF4444"
-                    ctx.lineWidth = 2.5
-                    ctx.beginPath()
-                    ctx.moveTo(2, 2)
-                    ctx.lineTo(width - 2, height - 2)
-                    ctx.stroke()
-                }
-                Component.onCompleted: requestPaint()
-            }
-        }
+        //     // 斜杠划掉的信号波形
+        //     Canvas {
+        //         anchors.centerIn: parent
+        //         width: 24; height: 20
+        //         onPaint: {
+        //             var ctx = getContext("2d")
+        //             ctx.strokeStyle = "#8899AA"
+        //             ctx.lineWidth = 2.0
+        //             ctx.lineCap = "round"
+        //             ctx.lineJoin = "round"
+        //             var cx = width / 2, cy = height - 2
+        //             // 淡色波形
+        //             ctx.globalAlpha = 0.45
+        //             ctx.beginPath(); ctx.arc(cx, cy - 1, 9, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke()
+        //             ctx.beginPath(); ctx.arc(cx, cy - 1, 6, Math.PI * 1.2, Math.PI * 1.8); ctx.stroke()
+        //             ctx.beginPath(); ctx.arc(cx, cy - 1, 3, Math.PI * 1.25, Math.PI * 1.75); ctx.stroke()
+        //             ctx.beginPath(); ctx.arc(cx, cy, 1.5, 0, 2 * Math.PI)
+        //             ctx.fillStyle = "#8899AA"; ctx.fill()
+        //             ctx.globalAlpha = 1.0
+        //             // 斜杠
+        //             ctx.strokeStyle = "#EF4444"
+        //             ctx.lineWidth = 2.5
+        //             ctx.beginPath()
+        //             ctx.moveTo(2, 2)
+        //             ctx.lineTo(width - 2, height - 2)
+        //             ctx.stroke()
+        //         }
+        //         Component.onCompleted: requestPaint()
+        //     }
+        // }
 
         // 点击区域 — 统一打开网络弹窗
         MouseArea {
@@ -372,10 +385,10 @@ Rectangle {
 
     // ===== 网络状态判断辅助函数 =====
 
-    /** @brief 判断 4G 是否处于激活状态（搜索中/已注册/已连接/漫游） */
+    /** @brief 判断 4G 是否处于激活状态（有数据连接：已连接/漫游） */
     function isCellularActive() {
         var s = NetworkManager.cellularStatus
-        return s >= NetworkManager.CellSearching && s <= NetworkManager.CellRoaming
+        return s === NetworkManager.CellConnected || s === NetworkManager.CellRoaming
     }
 
     /** @brief 判断 4G 是否处于漫游状态 */
