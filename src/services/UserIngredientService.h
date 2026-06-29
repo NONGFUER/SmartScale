@@ -47,11 +47,16 @@ public:
     /** @brief AI 场景: 按电子秤编码 emsCd 查找食材，返回 {ingrId,ingrNm,emsId,...} */
     Q_INVOKABLE QVariantMap findByEmsCd(const QString &emsCd) const;
 
+    /** @brief 创建新食材（ingrCd 用随机编码），成功后自动刷新本地列表 */
+    Q_INVOKABLE void createIngredient(const QString &ingrNm, const QString &cateId, const QString &cateNm);
+
 Q_SIGNALS:
     void itemsChanged();
     void loadingChanged();
     void fetchSuccess();
     void fetchFailed(const QString &errorMsg);
+    void createSuccess(const QString &ingrId, const QString &ingrNm);
+    void createFailed(const QString &errorMsg);
 
 private Q_SLOTS:
     void onNetworkReply(QNetworkReply *reply);

@@ -642,15 +642,27 @@ Dialog {
     AddIngredientDialog {
         id: addIngredientDialog
         onConfirmed: function(name, categoryIndex, categoryId) {
+            // 此信号已不再由确认按钮触发（改用 C++ API），
+            // 保留兼容以防外部手动调用 confirmed
+        }
+    }
+
+    Connections {
+        target: UserIngredientService
+        function onCreateSuccess(ingrId, ingrNm) {
+            console.log("[CategoryDialog] 食材创建成功:", ingrNm, "ingrId=", ingrId)
+            // 切换到新食材所在的分类
             var cats = UserIngredientService.categories
-            if (categoryIndex >= 0 && categoryIndex < cats.length && categoryId !== "") {
-                var cat = cats[categoryIndex]
-                console.log("[CategoryDialog] 添加食材:", name,
-                            "分类:", cat.cateNm || "",
-                            "cateId=", categoryId,
-                            "index=", categoryIndex)
-                // TODO: 调用后端 API 创建食材（传 name + categoryId），
-                //       成功后刷新列表并自动选中新食材
+            for (var i = 0; i < cats.length; i++) {
+                var items = cats[i].items || []
+                for (var j = 0; j < items.length; j++) {
+                    if (String(items[j].id) === String(ingrId)) {
+                        dialogRoot.activeCategoryIndex = i
+                        dialogRoot.selectedLabel = items[j].en || ""
+                        dialogRoot.selectedIngrId = ingrId
+                        return
+                    }
+                }
             }
         }
     }

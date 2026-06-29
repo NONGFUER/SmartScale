@@ -140,8 +140,8 @@ ApplicationWindow {
         Connections {
             target: statusBar
             function onSettingsRequested() {
-                console.log("[Main] 收到设置请求，跳转设置页")
-                stackView.push("pages/SettingsPage.qml")
+                console.log("[Main] 收到设置请求，打开设置弹窗")
+                settingsDialog.open()
             }
         }
 
@@ -351,6 +351,11 @@ ApplicationWindow {
     Toast {
         id: globalToast
         z: 9999
+    }
+
+    // 设置弹窗（设备信息 + 软件版本）
+    SettingsDialog {
+        id: settingsDialog
     }
 
     // 暴露给子页面调用

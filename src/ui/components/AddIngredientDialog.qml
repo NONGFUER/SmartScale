@@ -25,6 +25,7 @@ Dialog {
     property string ingredientName: ""
     property int selectedCategoryIndex: -1       // 当前选中分类的下标
     property string selectedCategoryId: ""        // 当前选中分类的 cateId
+    property string selectedCategoryName: ""       // 当前选中分类的 cateNm
 
     x: (parent.width - width) / 2
     y: (parent.height - height) / 2
@@ -252,9 +253,9 @@ Dialog {
                         onClicked: {
                             catCombo.currentIndex = index
                             dialogRoot.selectedCategoryIndex = index
-                            // 从原始对象中提取 cateId
                             var cat = UserIngredientService.categories[index]
                             dialogRoot.selectedCategoryId = (cat && cat.cateId !== undefined) ? String(cat.cateId) : ""
+                            dialogRoot.selectedCategoryName = (cat && cat.cateNm !== undefined) ? cat.cateNm : ""
                             catCombo.popup.close()
                         }
                     }
@@ -264,8 +265,10 @@ Dialog {
                             dialogRoot.selectedCategoryIndex = currentIndex
                             var cat = UserIngredientService.categories[currentIndex]
                             dialogRoot.selectedCategoryId = (cat && cat.cateId !== undefined) ? String(cat.cateId) : ""
+                            dialogRoot.selectedCategoryName = (cat && cat.cateNm !== undefined) ? cat.cateNm : ""
                         } else {
                             dialogRoot.selectedCategoryId = ""
+                            dialogRoot.selectedCategoryName = ""
                         }
                     }
                 }
@@ -345,8 +348,10 @@ Dialog {
                     cursorShape: confirmBtn.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onClicked: {
                         if (!confirmBtn.enabled) return
-                        dialogRoot.confirmed(ingredientName.trim(), selectedCategoryIndex, selectedCategoryId)
-                        dialogRoot.close()
+                        // 调用 C++ 服务创建食材（ingrCd 由后端/服务端随机生成）
+                        UserIngredientService.createIngredient(
+                            ingredientName.trim(), selectedCategoryId,
+                            selectedCategoryName || "")
                     }
                 }
             }
@@ -357,7 +362,20 @@ Dialog {
         ingredientName = ""
         selectedCategoryIndex = -1
         selectedCategoryId = ""
+        selectedCategoryName = ""
         nameInput.text = ""
         catCombo.currentIndex = -1
+    }
+
+    Connections {
+        target: UserIngredientService
+        function onCreateSuccess(ingrId, ingrNm) {
+            console.log("[AddIngredient] 创建成功:", ingrNm, "ingrId=", ingrId)
+            dialogRoot.close()
+        }
+        function onCreateFailed(errorMsg) {
+            console.log("[AddIngredient] 创建失败:", errorMsg)
+            // TODO: 显示错误提示 Toast
+        }
     }
 }

@@ -29,6 +29,7 @@ namespace NetworkUtils {
         inline constexpr const char *USER_WEIGHT_CREATE     = "/api/user/WeightRecord/create";
         inline constexpr const char *USER_WEIGHT_UPDATE_IMG = "/api/user/WeightRecord/update-img";
         inline constexpr const char *USER_INGR_PAGED        = "/api/user/UserIngr/paged";
+        inline constexpr const char *USER_INGR_CREATE       = "/api/user/UserIngr/create";
     }
 
     /**

@@ -12,6 +12,7 @@
 #include <QFile>
 #include <QDir>
 #include <QDateTime>
+#include <QUuid>
 
 UserIngredientService::UserIngredientService(QObject *parent)
     : QObject(parent)
@@ -60,15 +61,60 @@ void UserIngredientService::fetchIngredients()
     reply->setProperty("requestType", "userIngrFetch");
 }
 
+// ============================================================
+//  创建新食材（POST /api/user/UserIngr/create）
+// ============================================================
+void UserIngredientService::createIngredient(const QString &ingrNm, const QString &cateId, const QString &cateNm)
+{
+    if (m_loading) return;
+    if (!m_authService || m_authService->token().isEmpty()) {
+        qWarning() << "[UserIngr] 未登录，无法创建食材";
+        Q_EMIT createFailed("未登录");
+        return;
+    }
+
+    m_loading = true;
+    Q_EMIT loadingChanged();
+
+    // 生成随机编码作为 ingrCd：取 UUID 去掉连字符，截取前 12 位小写
+    QString ingrCd = QUuid::createUuid().toString(QUuid::WithoutBraces).left(12).toLower();
+
+    auto request = NetworkUtils::createUserApiRequest(
+        NetworkUtils::Api::USER_INGR_CREATE, m_authService->token());
+
+    QJsonObject body;
+    body["ingrCd"] = ingrCd;
+    body["ingrNm"] = ingrNm;
+    body["custId"] = m_authService->custId();
+    body["cateId"] = cateId;       // 后端要字符串雪花 ID
+    body["cateNm"] = cateNm;
+    body["enable"] = true;          // 创建后立即启用
+
+    QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
+    qInfo() << "[UserIngr] 创建食材, payload:" << payload;
+
+    QNetworkReply *reply = m_networkMgr->post(request, payload);
+    reply->setProperty("requestType", "userIngrCreate");
+    reply->setProperty("pendingName", ingrNm);   // 成功回调用
+}
+
 void UserIngredientService::onNetworkReply(QNetworkReply *reply)
 {
     reply->deleteLater();
 
+    // 区分请求类型
+    QString requestType = reply->property("requestType").toString();
+
     if (reply->error() != QNetworkReply::NoError) {
         m_loading = false;
         Q_EMIT loadingChanged();
-        qWarning() << "[UserIngr] 网络错误:" << reply->errorString();
-        Q_EMIT fetchFailed(reply->errorString());
+        qWarning() << "[UserIngr] 网络错误:" << reply->errorString()
+                   << "requestType=" << requestType;
+        if (requestType == "userIngrCreate") {
+            Q_EMIT createFailed(reply->errorString());
+        } else {
+            Q_EMIT fetchFailed(reply->errorString());
+        }
         return;
     }
 
@@ -79,12 +125,66 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
     if (err.error != QJsonParseError::NoError || !doc.isObject()) {
         m_loading = false;
         Q_EMIT loadingChanged();
-        qWarning() << "[UserIngr] JSON 解析失败";
-        Q_EMIT fetchFailed("JSON 解析失败");
+        qWarning() << "[UserIngr] JSON 解析失败, requestType=" << requestType;
+        if (requestType == "userIngrCreate") {
+            Q_EMIT createFailed("JSON 解析失败");
+        } else {
+            Q_EMIT fetchFailed("JSON 解析失败");
+        }
         return;
     }
 
     QJsonObject root = doc.object();
+
+    // ========== 创建食材回复 ==========
+    if (requestType == "userIngrCreate") {
+        m_loading = false;
+        Q_EMIT loadingChanged();
+
+        bool success = root.value("success").toBool(false);
+        if (!success) {
+            QString msg = root.value("message").toString("创建失败");
+            qWarning() << "[UserIngr] 创建食材失败:" << msg;
+            Q_EMIT createFailed(msg);
+            return;
+        }
+
+        QJsonObject dataObj = root.value("data").toObject();
+        QString ingrId   = dataObj.value("ingrId").toVariant().toString();
+        QString ingrCd   = dataObj.value("ingrCd").toString().toLower();
+        QString ingrNm   = dataObj.value("ingrNm").toString();
+        QString newCateId  = dataObj.value("cateId").toVariant().toString();
+        QString newCateNm  = dataObj.value("cateNm").toString();
+        bool enableBool = dataObj.value("enable").toBool(false);
+        QString enable  = enableBool ? QStringLiteral("true") : QStringLiteral("false");
+
+        qInfo() << "[UserIngr] 创建食材成功: ingrId=" << ingrId << "ingrCd=" << ingrCd << "ingrNm=" << ingrNm;
+
+        // 追加到本地列表（避免立即重新拉取）
+        QVariantMap item;
+        item["en"]     = ingrCd;
+        item["cn"]     = ingrNm;
+        item["id"]     = ingrId;
+        item["cateId"] = newCateId;
+        item["cateNm"] = newCateNm;
+        item["emsId"]  = "0";
+        item["emsCd"]  = "";
+        item["enable"] = enable;
+        m_items.append(item);
+
+        m_ingrMap[ingrCd] = ingrId;
+        m_ingrNameMap[ingrNm] = ingrId;
+
+        rebuildCategories();
+        saveToCache();
+        FoodTranslator::instance()->updateFromApi(m_items);
+
+        Q_EMIT itemsChanged();
+        Q_EMIT createSuccess(ingrId, ingrNm);
+        return;
+    }
+
+    // ========== 拉取食材列表回复 (userIngrFetch) ==========
 
     // 查找 items 数组: data.items 或 items
     QJsonArray items;

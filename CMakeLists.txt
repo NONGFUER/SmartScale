@@ -59,7 +59,8 @@ qt_add_qml_module(appSmartScale
         src/ui/Main.qml
         src/ui/pages/LoginPage.qml             # 登录页面
         src/ui/pages/WorkstationPage.qml       # 主操作台页面
-        src/ui/pages/SettingsPage.qml          # 设置页面
+        src/ui/pages/SettingsPage.qml          # 设置页面（已废弃，保留兼容）
+        src/ui/components/SettingsDialog.qml    # 设置弹窗组件（替代 SettingsPage）
         src/ui/components/StatusBar.qml
         src/ui/components/FoodItemCard.qml
         src/ui/components/ActionButton.qml     # 仿品类网格质感的操作按钮组件
