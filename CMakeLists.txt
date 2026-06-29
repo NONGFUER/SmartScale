@@ -72,6 +72,7 @@ qt_add_qml_module(appSmartScale
         src/ui/components/WifiListDialog.qml       # Wi-Fi 网络列表弹窗
         src/ui/components/WifiPasswordDialog.qml   # Wi-Fi 密码输入弹窗
         src/ui/components/CellularDialog.qml        # 4G 移动数据控制弹窗
+        src/ui/components/AddIngredientDialog.qml   # 添加食材弹窗
 
     # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp

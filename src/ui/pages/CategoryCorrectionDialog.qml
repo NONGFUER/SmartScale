@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Effects
 import App.Backend 1.0
 import SmartScale.Tools 1.0
+import "../components"
 
 Dialog {
     id: dialogRoot
@@ -286,7 +287,7 @@ Dialog {
                             anchors.fill: parent
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: console.log("点击添加食材图标")
+                            onClicked: addIngredientDialog.open()
                         }
                     }
                 }
@@ -633,5 +634,24 @@ Dialog {
     onRejected: {
         if (categorySelectMode)
             selectModeToggled(false)
+    }
+
+    // ==========================================
+    //  添加食材弹窗（独立组件）
+    // ==========================================
+    AddIngredientDialog {
+        id: addIngredientDialog
+        onConfirmed: function(name, categoryIndex, categoryId) {
+            var cats = UserIngredientService.categories
+            if (categoryIndex >= 0 && categoryIndex < cats.length && categoryId !== "") {
+                var cat = cats[categoryIndex]
+                console.log("[CategoryDialog] 添加食材:", name,
+                            "分类:", cat.cateNm || "",
+                            "cateId=", categoryId,
+                            "index=", categoryIndex)
+                // TODO: 调用后端 API 创建食材（传 name + categoryId），
+                //       成功后刷新列表并自动选中新食材
+            }
+        }
     }
 }
