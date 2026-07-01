@@ -112,7 +112,9 @@ Item {
                                         MouseArea {
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            onClicked: console.log("查看更多历史记录...")
+                                            cursorShape: Qt.PointingHandCursor
+                                            // [入口] 点击打开称重记录查询弹窗
+                                            onClicked: searchDialog.open()
                                         }
                                     }
                                 }
@@ -1160,6 +1162,20 @@ Item {
             }
         }
         onClosed: root.currentDetailRecord = null
+    }
+
+    // ==========================================
+    //  称重记录搜索弹窗（独立组件）
+    // ==========================================
+    // 入口：历史记录区域右上角"更多 >"按钮 (searchDialog.open())
+    // 点击卡片"查看"时将记录传给详情弹窗展示大图
+    WeightRecordSearchDialog {
+        id: searchDialog
+        onViewRecord: function(record) {
+            // 用户点击搜索结果卡片的"查看"，选中该记录并打开详情弹窗
+            root.currentDetailRecord = record
+            detailDialog.open()
+        }
     }
 
     // ==========================================
