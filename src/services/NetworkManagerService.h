@@ -211,6 +211,12 @@ private:
     /** @brief 从 nmcli -t 输出中提取纯 SSID（剥离 "field.name:" 前缀） */
     static QString extractSsidValue(const QString &rawOutput);
 
+    /** @brief 查找指定 SSID 的现有 nmcli 连接名，返回连接名（空串表示不存在） */
+    QString findExistingConnection(const QString &ssid) const;
+
+    /** @brief 删除指定的 nmcli 连接配置 */
+    void deleteConnection(const QString &connName);
+
     // === 成员变量 ===
     WifiStatus     m_wifiStatus      = WifiStatus::Unknown;
     QString        m_wifiSsid;
@@ -236,6 +242,7 @@ private:
     // 两步连接法：创建配置 → 激活 之间的中间状态
     QString        m_pendingSsid;                 // 正在连接的 SSID
     QString        m_pendingConnectionName;       // 已创建但尚未激活的连接名称
+    QString        m_pendingPassword;              // 缓存正在连接的 WiFi 密码（用于失败时自动重建）
 
     // 用户主动断开 WiFi 后的防回退保护（防止轮询定时器读取 nmcli 缓存状态刷回 Connected）
     QElapsedTimer  m_disconnectTime;              // 断开操作成功时记录时间点，无效表示未处于保护窗口

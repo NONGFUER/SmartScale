@@ -265,6 +265,7 @@ void NetworkManagerService::connectWifi(const QString &ssid, const QString &pass
              << "加密:" << !password.isEmpty();
 
     m_pendingSsid = ssid;
+    m_pendingPassword = password;   // 缓存密码，用于失败时自动重建连接
     m_pendingConnectionName.clear();
 
     // 动态发现 WiFi 设备名
@@ -276,6 +277,36 @@ void NetworkManagerService::connectWifi(const QString &ssid, const QString &pass
     }
 
     setWifiStatus(WifiStatus::Connecting);
+
+    // ★ 先检查是否已存在该 SSID 的连接配置，避免重复创建导致重名问题
+    QString existingConn = findExistingConnection(ssid);
+    if (!existingConn.isEmpty()) {
+        qDebug() << "[NetworkManager] 找到已有连接配置:" << existingConn << "，尝试直接复用激活";
+
+        m_pendingConnectionName = existingConn;
+
+        // 直接激活已有连接（跳过 connection add 步骤）
+        QStringList args;
+        args << "connection" << "up" << existingConn;
+
+        disconnect(m_process, nullptr, this, nullptr);
+        connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+                this, &NetworkManagerService::onWifiConnectFinished);
+
+        m_process->start(m_nmcliPath, args);
+
+        // 连接超时保护
+        QTimer::singleShot(kConnectTimeoutMs, this, [this]() {
+            if (m_wifiStatus == WifiStatus::Connecting) {
+                m_process->kill();
+                setLastError(QStringLiteral("连接超时"));
+                setWifiStatus(WifiStatus::Error);
+                Q_EMIT wifiConnectionFailed(m_lastError);
+            }
+        });
+
+        return;  // ← 提前返回，不创建新连接（失败时会进入 onWifiConnectFinished 处理）
+    }
 
     // 两步法：先创建连接配置（connection add），再激活（connection up）
     // 比 "device wifi connect" 更可靠，能正确处理 key-mgmt 属性
@@ -388,6 +419,60 @@ QString NetworkManagerService::extractSsidValue(const QString &rawOutput)
     return (idx >= 0) ? s.mid(idx + 1).trimmed() : s;
 }
 
+QString NetworkManagerService::findExistingConnection(const QString &ssid) const
+{
+    QProcess proc;
+    proc.start(m_nmcliPath, QStringList()
+               << "-t"
+               << "-f" << "NAME,TYPE,802-11-wireless.ssid"
+               << "connection" << "show");
+
+    if (!proc.waitForFinished(3000)) {
+        qWarning() << "[NetworkManager] findExistingConnection: nmcli 查询超时";
+        return QString();
+    }
+
+    const auto lines = QString::fromUtf8(proc.readAllStandardOutput()).split('\n', Qt::SkipEmptyParts);
+    for (const auto &line : lines) {
+        auto parts = line.split(':');
+        if (parts.size() >= 3) {
+            QString connName = parts[0].trimmed();
+            QString connType = parts[1].trimmed().toLower();
+            QString connSsid = parts[2].trimmed();
+
+            // 只匹配 wifi 类型的连接，且 SSID 一致
+            if (connType == QStringLiteral("wifi") && connSsid == ssid) {
+                qDebug() << "[NetworkManager] 找到已有连接配置:" << connName << "(SSID:" << ssid << ")";
+                return connName;
+            }
+        }
+    }
+
+    qDebug() << "[NetworkManager] 未找到 SSID" << ssid << "的现有连接配置";
+    return QString();  // 未找到
+}
+
+void NetworkManagerService::deleteConnection(const QString &connName)
+{
+    qDebug() << "[NetworkManager] 删除旧连接配置:" << connName;
+
+    QProcess proc;
+    proc.start(m_nmcliPath, QStringList()
+               << "connection" << "delete" << connName);
+
+    if (proc.waitForFinished(5000)) {
+        if (proc.exitCode() == 0) {
+            qDebug() << "[NetworkManager] 已成功删除连接:" << connName;
+        } else {
+            qWarning() << "[NetworkManager] 删除连接失败:"
+                       << QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+        }
+    } else {
+        qWarning() << "[NetworkManager] 删除连接超时:" << connName;
+        proc.kill();
+    }
+}
+
 void NetworkManagerService::onWifiConnectFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     Q_UNUSED(exitStatus)
@@ -411,6 +496,24 @@ void NetworkManagerService::onWifiConnectFinished(int exitCode, QProcess::ExitSt
         if (errOutput.contains(QStringLiteral("Secrets were required")) ||
             errOutput.contains("no valid connections")) {
             setLastError(QStringLiteral("密码错误或认证失败"));
+
+            // ★ 如果是复用旧连接导致的认证失败，删除旧连接并重新创建
+            if (!m_pendingConnectionName.isEmpty()) {
+                qDebug() << "[NetworkManager] 检测到认证失败，删除旧连接配置并重建:"
+                         << m_pendingConnectionName;
+                deleteConnection(m_pendingConnectionName);
+
+                // 延迟重新触发连接（给 nmcli 时间清理）
+                QTimer::singleShot(500, this, [this]() {
+                    if (!m_pendingSsid.isEmpty()) {
+                        qDebug() << "[NetworkManager] 使用缓存的密码重新创建连接:"
+                                 << m_pendingSsid;
+                        connectWifi(m_pendingSsid, m_pendingPassword);
+                    }
+                });
+                return;  // 提前返回，等待后续重连
+            }
+
         } else if (errOutput.contains(QStringLiteral("not found"))) {
             setLastError(QStringLiteral("找不到该网络 (%1)").arg(m_wifiSsid));
         } else if (errOutput.contains("timeout")) {
