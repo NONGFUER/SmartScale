@@ -26,6 +26,7 @@ ApplicationWindow {
     }
 
     property bool chineseInputMode: false  // true=拼音中文, false=纯英文（默认英文）
+    property bool useHandwritingMode: false  // false=拼音, true=手写（默认拼音）
     property var _origConsoleError: null  // 保存原始 console.error（全局错误拦截用）
 
     Component.onCompleted: {
@@ -34,6 +35,10 @@ ApplicationWindow {
         Qt.callLater(function() {
             VirtualKeyboardSettings.activeLocales = ["zh_CN", "en_GB"]  // 地球图标只显示中英
             VirtualKeyboardSettings.locale = "en_GB"  // 默认英文
+            // 初始化手写输入法配置（如果 Handwriting 插件可用）
+            if (window.useHandwritingMode) {
+                window.switchToHandwriting()
+            }
         })
         // 启动时自动弹出登录弹窗
         loginDialog.open()
@@ -101,6 +106,45 @@ ApplicationWindow {
         window.chineseInputMode = !window.chineseInputMode
         VirtualKeyboardSettings.locale = window.chineseInputMode ? "zh_CN" : "en_GB"
         console.log("[Main] 输入法切换:", window.chineseInputMode ? "中文拼音" : "英文")
+    }
+
+    // 手写/拼音输入法切换（供手写按钮调用）
+    function toggleInputMethod() {
+        window.useHandwritingMode = !window.useHandwritingMode
+        if (window.useHandwritingMode) {
+            window.switchToHandwriting()
+        } else {
+            window.switchToPinyin()
+        }
+        console.log("[Main] 输入方式切换:", window.useHandwritingMode ? "手写" : "拼音")
+    }
+
+    // 切换到手写输入法
+    function switchToHandwriting() {
+        try {
+            VirtualKeyboardSettings.inputMethod = "qthandwriting"  // Qt Handwriting 插件标识符
+            // 手写模式下自动切换到中文（因为主要用于中文输入）
+            if (!window.chineseInputMode) {
+                window.chineseInputMode = true
+                VirtualKeyboardSettings.locale = "zh_CN"
+            }
+            console.log("[Main] ✅ 已切换到手写输入法")
+        } catch (e) {
+            console.error("[Main] ❌ 切换到手写失败:", e.message)
+            // 回退到拼音模式
+            window.useHandwritingMode = false
+            window.globalToast.show("手写插件未安装，请先部署 Handwriting 插件", "error", 5000)
+        }
+    }
+
+    // 切换回拼音输入法
+    function switchToPinyin() {
+        try {
+            VirtualKeyboardSettings.inputMethod = ""  // 清空使用默认（拼音/QML键盘）
+            console.log("[Main] ✅ 已切换回拼音输入法")
+        } catch (e) {
+            console.error("[Main] ❌ 切换回拼音失败:", e.message)
+        }
     }
 
     // ===== 全屏背景图 =====
@@ -174,6 +218,35 @@ ApplicationWindow {
             transformOrigin: Item.Bottom
 
             // 固定的中英切换按钮（盖在键盘右上角，避免误触内置语言选择器）
+            Rectangle {
+                id: inputMethodToggle  // 手写/拼音切换按钮
+                width: 80
+                height: 50
+                radius: 8
+                color: window.useHandwritingMode ? "#10B981" : "#6366F1"
+                anchors.right: langToggle.left
+                anchors.rightMargin: 8
+                anchors.top: parent.top
+                anchors.topMargin: 4
+                z: 100  // 高于键盘内部
+                visible: inputPanel.active && window.chineseInputMode  // 只在中文模式下显示
+                border.color: window.useHandwritingMode ? "#059669" : "#4F46E5"
+                border.width: 1
+
+                Text {
+                    anchors.centerIn: parent
+                    text: window.useHandwritingMode ? "✍手写" : "拼音"
+                    font.pixelSize: 18
+                    font.bold: true
+                    color: "white"
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: window.toggleInputMethod()
+                }
+            }
+
             Rectangle {
                 id: langToggle
                 width: 80
