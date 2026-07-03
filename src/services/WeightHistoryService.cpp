@@ -228,7 +228,7 @@ QByteArray WeightHistoryService::buildUploadJson(const WeightRecord &record)
     }
     json["ingrId"] = ok ? QJsonValue(qlonglong(ingrIdVal)) : 0;
     json["custId"] = m_authService ? m_authService->custId() : 0;
-    json["devId"]  = 2;//m_authService ? m_authService->devId() : 0;
+    json["devId"] = m_authService ? m_authService->productId() : QString();
     json["val"]    = static_cast<int>(record.weight * 1000);
     json["aiDet"]  = record.aiDetected;
     //json["img"]    = record.mainImagePath;
@@ -594,7 +594,7 @@ void WeightHistoryService::createUserWeightRecord(const QString &ingrCd,
     qint64 ingrIdVal = m_ingredientSvc->getIngrId(ingrCd).toLongLong(&ok);
     json["ingrId"] = ok ? QJsonValue(qlonglong(ingrIdVal)) : 0;
     json["custId"] = m_authService->custId();
-    json["devId"]  = m_authService->devId();
+    json["devId"] = m_authService->productId();
     json["val"]    = static_cast<int>(weightKg * 1000);
     json["aiDet"]  = aiDetected;
     json["img"]    = QString();
