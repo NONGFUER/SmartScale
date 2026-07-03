@@ -40,8 +40,17 @@ ApplicationWindow {
                 window.switchToHandwriting()
             }
         })
-        // 启动时自动弹出登录弹窗
-        loginDialog.open()
+        // 启动时检查是否有记住的登录信息
+        if (BackendAuth.hasSavedLogin) {
+            console.log("[Main] 检测到保存的登录信息，自动登录...")
+            BackendAuth.autoLogin()
+        } else {
+            // 无保存信息，弹出登录弹窗
+            loginDialog.open()
+        }
+
+        // 监听自动登录失败事件，回退到手动登录弹窗
+        __autoLoginFailedConnection.target = BackendAuth
 
         // ===== 全局 QML JS 错误拦截 =====
         _origConsoleError = console.error
@@ -325,6 +334,20 @@ ApplicationWindow {
         x: (parent.width - width) / 2
         y: Math.min((parent.height - height) / 2,
                     parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+
+        // 自动登录失败时打开登录弹窗让用户手动输入
+        Connections {
+            id: __autoLoginFailedConnection
+            target: null  // 启用时由 Component.onCompleted 设置 target
+
+            function onLoginFailed(errorMsg) {
+                // 仅在自动登录场景下触发（此时弹窗未打开）
+                if (!loginDialog.visible && BackendAuth.hasSavedLogin) {
+                    console.log("[Main] 自动登录失败，打开登录弹窗:", errorMsg)
+                    Qt.callLater(function() { loginDialog.open() })
+                }
+            }
+        }
     }
 
     // 系统调试信息弹窗（独立组件，与工作台解耦）

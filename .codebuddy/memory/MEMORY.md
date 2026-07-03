@@ -50,6 +50,24 @@
 - 遇到雪花 ID 字段（ingrId/emsId/cateId/recoId/userId/productId）一律 `qint64`/`QString`，禁止 `toInt()`
 - 详见 `.codebuddy/skills/id-type-safety/SKILL.md`
 
+## Token 无感刷新协调器（2026-07-03 新增）
+
+**核心设计**：`AuthService` 内置全局刷新锁 `m_isRefreshing` + 统一完成信号 `tokenRefreshCompleted(bool,QString)`，所有 Service 通过此信号重发排队请求。
+
+**关键接口**（AuthService）：
+- `requestTokenRefresh()` — 带并发锁的统一刷新入口（替代直接调 `refreshToken()`）
+- `isRefreshingToken()` — 查询锁状态
+- `isUnauthorizedError(QNetworkReply*)` — 静态方法检测 401/403
+- `tokenRefreshCompleted(success, errMsg)` — 统一通知信号
+
+**已接入的 4 个 Service**：
+1. **WeightHistoryService** — 上传记录预检+401拦截+排队重发
+2. **UserIngredientService** — 拉取食材/创建食材 预检+401拦截+排队
+3. **CategoryService** — 拉取品类 预检+401拦截+排队
+4. **CameraController** — AI识别 预检+401拦截+图片缓存排队
+
+**防竞态机制**：每个 Service 有自己的 `m_refreshing` 标志 + AuthService 全局 `m_isRefreshing` 双层锁。连续失败计数 `m_refreshFailCount` 超过 2 次建议重新登录。
+
 ## 网络管理服务（NetworkManagerService）
 
 - 位置：`src/services/NetworkManagerService.h|.cpp`，QML 绑定名 `App.Backend::NetworkManager`

@@ -180,16 +180,36 @@ void WeightHistoryService::setAuthService(AuthService *authSvc)
 {
     m_authService = authSvc;
     if (m_authService) {
-        // 一次性连接：Token 刷新成功 → 重发待上传队列
+        // 旧信号：保持向后兼容（内部仍用 onTokenReadyForUpload 重发队列）
         connect(m_authService, &AuthService::tokenRefreshed,
                 this, &WeightHistoryService::onTokenReadyForUpload, Qt::UniqueConnection);
-        // Token 刷新失败 → 清空队列并报错
         connect(m_authService, &AuthService::tokenRefreshFailed,
                 this, [this](const QString &errMsg) {
             qWarning() << "[WHS] Token 刷新失败，待上传队列丢弃:" << errMsg;
             while (!m_pendingUploadQueue.isEmpty()) {
                 WeightRecord r = m_pendingUploadQueue.dequeue();
                 Q_EMIT cloudSyncFailed(r.id, "Token 刷新失败: " + errMsg);
+            }
+            m_refreshingToken = false;
+        }, Qt::UniqueConnection);
+
+        // 新统一信号：刷新完成后（成功或失败），重发所有排队请求
+        connect(m_authService, &AuthService::tokenRefreshCompleted,
+                this, [this](bool success, const QString &errMsg) {
+            if (success) {
+                qDebug() << "[WHS] 统一刷新完成，开始重发待上传记录"
+                         << m_pendingUploadQueue.size() << "条";
+                while (!m_pendingUploadQueue.isEmpty()) {
+                    WeightRecord r = m_pendingUploadQueue.dequeue();
+                    uploadSingleRecord(r);
+                }
+            } else {
+                qWarning() << "[WHS] 统一刷新失败，丢弃" 
+                           << m_pendingUploadQueue.size() << "条待上传记录";
+                while (!m_pendingUploadQueue.isEmpty()) {
+                    WeightRecord r = m_pendingUploadQueue.dequeue();
+                    Q_EMIT cloudSyncFailed(r.id, "Token 刷新失败: " + errMsg);
+                }
             }
             m_refreshingToken = false;
         }, Qt::UniqueConnection);
@@ -240,8 +260,8 @@ void WeightHistoryService::uploadSingleRecord(const WeightRecord &record)
 
         if (!m_refreshingToken) {
             m_refreshingToken = true;
-            qDebug() << "[WHS] 发起 Token 刷新请求...";
-            m_authService->refreshToken();
+            qDebug() << "[WHS] 发起 Token 刷新请求（通过协调器）...";
+            m_authService->requestTokenRefresh();
         }
         return;
     }
@@ -328,7 +348,25 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
         QByteArray errData = reply->readAll();
         QString errMsg = reply->errorString();
 
-        // === 诊断打印：403 详情 ===
+        // === 401/403 自动刷新重试 ===
+        if (AuthService::isUnauthorizedError(reply) && m_authService) {
+            qDebug() << "[WHS] 收到 401/401 未授权，触发 Token 刷新并重试 id=" << localId;
+            // 重新构造原始记录用于重试
+            if (m_repo) {
+                WeightRecord retryRec = m_repo->findById(localId);
+                if (retryRec.id > 0) {
+                    m_pendingUploadQueue.enqueue(retryRec);
+                }
+            }
+            if (!m_refreshingToken && !m_authService->isRefreshingToken()) {
+                m_refreshingToken = true;
+                m_authService->requestTokenRefresh();
+            }
+            reply->deleteLater();
+            return;
+        }
+
+        // === 诊断打印：其他错误详情 ===
         qCritical() << "[WHS-DIAG-ERR] ========== 上传失败诊断 id=" << localId << "==========";
         qCritical() << "[WHS-DIAG-ERR] HTTP状态码:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         qCritical() << "[WHS-DIAG-ERR] 错误枚举:" << reply->error() << errMsg;

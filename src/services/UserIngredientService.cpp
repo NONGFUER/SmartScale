@@ -28,6 +28,12 @@ UserIngredientService::UserIngredientService(QObject *parent)
 void UserIngredientService::setAuthService(AuthService *auth)
 {
     m_authService = auth;
+    // 接入统一 Token 刷新协调器：刷新完成后自动重发排队请求
+    if (m_authService) {
+        QObject::connect(m_authService, &AuthService::tokenRefreshCompleted,
+                         this, &UserIngredientService::onTokenRefreshCompleted,
+                         Qt::UniqueConnection);
+    }
 }
 
 void UserIngredientService::fetchIngredients()
@@ -35,6 +41,18 @@ void UserIngredientService::fetchIngredients()
     if (m_loading) return;
     if (!m_authService || m_authService->token().isEmpty()) {
         qWarning() << "[UserIngr] 未登录，无法拉取食材列表";
+        return;
+    }
+
+    // === Token 预检 ===
+    if (m_authService->isTokenExpiringSoon()) {
+        qDebug() << "[UserIngr] Token 即将过期，排队等待刷新后拉取";
+        PendingRequest req{PendingRequestType::Fetch};
+        m_pendingRequests.enqueue(req);
+        if (!m_refreshing && !m_authService->isRefreshingToken()) {
+            m_refreshing = true;
+            m_authService->requestTokenRefresh();
+        }
         return;
     }
 
@@ -73,6 +91,18 @@ void UserIngredientService::createIngredient(const QString &ingrNm, const QStrin
         return;
     }
 
+    // === Token 预检 ===
+    if (m_authService->isTokenExpiringSoon()) {
+        qDebug() << "[UserIngr] Token 即将过期，排队等待刷新后创建食材";
+        PendingRequest req{PendingRequestType::Create, ingrNm, cateId, cateNm};
+        m_pendingRequests.enqueue(req);
+        if (!m_refreshing && !m_authService->isRefreshingToken()) {
+            m_refreshing = true;
+            m_authService->requestTokenRefresh();
+        }
+        return;
+    }
+
     m_loading = true;
     Q_EMIT loadingChanged();
 
@@ -108,6 +138,25 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
     if (reply->error() != QNetworkReply::NoError) {
         m_loading = false;
         Q_EMIT loadingChanged();
+
+        // === 401/403 自动刷新重试 ===
+        if (AuthService::isUnauthorizedError(reply) && m_authService) {
+            qDebug() << "[UserIngr] 收到 401/403 未授权，触发 Token 刷新并重试"
+                     << "requestType=" << requestType;
+            // 将当前请求类型重新入队等待重试
+            PendingRequest pending{PendingRequestType::Fetch};
+            if (requestType == "userIngrCreate") {
+                pending.type = PendingRequestType::Create;
+                pending.createName = reply->property("pendingName").toString();
+            }
+            m_pendingRequests.enqueue(pending);
+            if (!m_refreshing && !m_authService->isRefreshingToken()) {
+                m_refreshing = true;
+                m_authService->requestTokenRefresh();
+            }
+            return;
+        }
+
         qWarning() << "[UserIngr] 网络错误:" << reply->errorString()
                    << "requestType=" << requestType;
         if (requestType == "userIngrCreate") {
@@ -434,4 +483,37 @@ void UserIngredientService::saveToCache()
 
     qInfo() << "[UserIngr] 缓存已写入:" << path
             << "(" << m_items.size() << "个食材," << m_categories.size() << "个分类)";
+}
+
+// ==========================================================================
+//  Token 刷新完成回调 — 重发排队请求
+// ==========================================================================
+
+void UserIngredientService::onTokenRefreshCompleted(bool success, const QString &errMsg)
+{
+    m_refreshing = false;
+
+    if (!success) {
+        qWarning() << "[UserIngr] Token 刷新失败，丢弃" << m_pendingRequests.size() << "条排队请求";
+        while (!m_pendingRequests.isEmpty()) {
+            PendingRequest req = m_pendingRequests.dequeue();
+            if (req.type == PendingRequestType::Create) {
+                Q_EMIT createFailed("Token 刷新失败: " + errMsg);
+            } else {
+                Q_EMIT fetchFailed("Token 刷新失败: " + errMsg);
+            }
+        }
+        return;
+    }
+
+    qDebug() << "[UserIngr] Token 刷新成功，重发" << m_pendingRequests.size() << "条排队请求";
+
+    while (!m_pendingRequests.isEmpty()) {
+        PendingRequest req = m_pendingRequests.dequeue();
+        if (req.type == PendingRequestType::Fetch) {
+            fetchIngredients();
+        } else if (req.type == PendingRequestType::Create) {
+            createIngredient(req.createName, req.createCateId, req.createCateNm);
+        }
+    }
 }

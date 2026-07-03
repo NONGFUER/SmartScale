@@ -125,6 +125,16 @@ CameraController::CameraController(QObject *parent)
     m_subProcess->start("rpicam-vid", subArgs);
 }
 
+void CameraController::setAuthService(AuthService *authSvc) {
+    m_authService = authSvc;
+    // 接入统一 Token 刷新协调器
+    if (m_authService) {
+        QObject::connect(m_authService, &AuthService::tokenRefreshCompleted,
+                         this, &CameraController::onTokenRefreshCompleted,
+                         Qt::UniqueConnection);
+    }
+}
+
 CameraController::~CameraController() {
     m_watchdogTimer->stop();
     if (m_mainCamera) m_mainCamera->stop();
@@ -823,10 +833,28 @@ void CameraController::postAiRecognize(const QImage &image, const QString &saveP
 {
     if (!m_networkMgr || !m_authService) return;
 
+    // === Token 预检 ===
+    QString token = m_authService->token();
+    if (token.isEmpty()) {
+        qWarning() << "[CameraController] 未登录，无法进行在线 AI 识别";
+        emitAiResult(PState::UNKNOWN, savePath, 0);
+        return;
+    }
+    if (m_authService->isTokenExpiringSoon()) {
+        qDebug() << "[CameraController] Token 即将过期，排队等待刷新后识别";
+        PendingAiRequest req{image, savePath};
+        m_pendingAiRequests.append(req);
+        if (!m_refreshingToken && !m_authService->isRefreshingToken()) {
+            m_refreshingToken = true;
+            m_authService->requestTokenRefresh();
+        }
+        return;
+    }
+
     // ① 用工具类创建请求（零样板）
     QNetworkRequest request = NetworkUtils::createMultipartApiRequest(
         NetworkUtils::Api::AI_RECOGNIZE_FILE,
-        m_authService->token(),
+        token,
         "image/jpeg"
     );
 
@@ -853,6 +881,7 @@ void CameraController::postAiRecognize(const QImage &image, const QString &saveP
     reply->setProperty("_reqType", "ai_recognize");
     reply->setProperty("_aiSavePath", savePath);
     reply->setProperty("_aiStartTime", QDateTime::currentMSecsSinceEpoch());
+    reply->setProperty("_aiOriginalImage", QVariant::fromValue(image));
 
     qInfo() << "[CameraController] AI识别已发送," << imageData.size() << "bytes";
 }
@@ -875,11 +904,25 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
     QString savePath = reply->property("_aiSavePath").toString();
     qint64 startTime = reply->property("_aiStartTime").toLongLong();
     qint64 elapsed = QDateTime::currentMSecsSinceEpoch() - startTime;
+    QImage originalImage = reply->property("_aiOriginalImage").value<QImage>();
 
     reply->deleteLater();
 
     // ---- 网络错误 ----
     if (reply->error() != QNetworkReply::NoError) {
+        // === 401/403 自动刷新重试 ===
+        if (AuthService::isUnauthorizedError(reply)) {
+            qDebug() << "[在线AI] 收到 401/403 未授权，触发 Token 刷新并重试"
+                     << "savePath=" << savePath;
+            PendingAiRequest req{originalImage.isNull() ? QImage(savePath) : originalImage, savePath};
+            m_pendingAiRequests.append(req);
+            if (!m_refreshingToken && m_authService && !m_authService->isRefreshingToken()) {
+                m_refreshingToken = true;
+                m_authService->requestTokenRefresh();
+            }
+            return;
+        }
+
         qWarning() << "[在线AI] 请求失败:" << reply->errorString()
                    << "HTTP状态:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         emitAiResult(PState::UNKNOWN, savePath, elapsed);
@@ -947,4 +990,33 @@ void CameraController::speakPredictedLabel(const QString &label)
     QString speakText = QString("识别到%1").arg(chineseName);
     QMetaObject::invokeMethod(m_voiceSpeaker, "speak", Qt::QueuedConnection,
                               Q_ARG(QString, speakText));
+}
+
+// ==========================================================================
+//  Token 刷新完成回调 — 重发排队请求
+// ==========================================================================
+
+void CameraController::onTokenRefreshCompleted(bool success, const QString &errMsg)
+{
+    m_refreshingToken = false;
+
+    if (!success) {
+        qWarning() << "[CameraController] Token 刷新失败，丢弃" << m_pendingAiRequests.size()
+                   << "条排队 AI 识别请求";
+        for (const auto &req : m_pendingAiRequests) {
+            emitAiResult(PState::UNKNOWN, req.savePath, 0);
+        }
+        m_pendingAiRequests.clear();
+        return;
+    }
+
+    qDebug() << "[CameraController] Token 刷新成功，重发"
+             << m_pendingAiRequests.size() << "条排队 AI 识别请求";
+
+    // 逐个重发（AI 识别通常不需要去重）
+    QList<PendingAiRequest> pending = m_pendingAiRequests;
+    m_pendingAiRequests.clear();
+    for (const auto &req : pending) {
+        postAiRecognize(req.image, req.savePath);
+    }
 }

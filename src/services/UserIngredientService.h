@@ -5,6 +5,7 @@
 #include <QString>
 #include <QVariantList>
 #include <QMap>
+#include <QQueue>
 
 class AuthService;
 class QNetworkAccessManager;
@@ -67,6 +68,18 @@ private:
     void saveToCache();                       // API 返回后写入本地 JSON (新结构)
     static QString cacheFilePath();
 
+    /** @brief Token 刷新完成后，重发排队的请求 */
+    void onTokenRefreshCompleted(bool success, const QString &errMsg);
+
+    /** @brief 排队等待刷新的请求类型 */
+    enum class PendingRequestType { Fetch, Create };
+    struct PendingRequest {
+        PendingRequestType type;
+        QString createName;   // 创建食材时的名称
+        QString createCateId; // 创建食材的分类ID
+        QString createCateNm; // 创建食材的分类名称
+    };
+
     AuthService *m_authService = nullptr;
     QNetworkAccessManager *m_networkMgr = nullptr;
     bool m_loading = false;
@@ -76,6 +89,10 @@ private:
     QMap<QString, QString> m_ingrMap;         // ingrCd → ingrId
     QMap<QString, QString> m_ingrNameMap;     // ingrNm(中文) → ingrId
     QMap<QString, QString> m_emsMap;          // emsCd → ingrId
+
+    // === Token 刷新协调 ===
+    QQueue<PendingRequest> m_pendingRequests;
+    bool m_refreshing = false;
 };
 
 #endif // USERINGREDIENTSERVICE_H

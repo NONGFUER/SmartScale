@@ -148,6 +148,59 @@ Dialog {
         }
 
        
+        // 记住登录复选框
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 36
+            Layout.topMargin: 4
+
+            RowLayout {
+                anchors.left: parent.left
+                spacing: 8
+
+                CheckBox {
+                    id: rememberCheck
+                    text: "记住登录"
+                    font.family: "Microsoft YaHei"
+                    font.pixelSize: 16
+                    checked: false
+
+                    onCheckedChanged: {
+                        BackendAuth.rememberLogin = checked
+                    }
+
+                    contentItem: Text {
+                        text: rememberCheck.text
+                        font: rememberCheck.font
+                        color: "#64748B"
+                        verticalAlignment: Text.AlignVCenter
+                        leftPadding: rememberCheck.indicator.width + rememberCheck.spacing
+                    }
+
+                    indicator: Rectangle {
+                        implicitWidth: 22
+                        implicitHeight: 22
+                        x: rememberCheck.leftPadding
+                        y: parent.height / 2 - height / 2
+                        radius: 4
+                        border.color: rememberCheck.checked ? "#4361EE" : "#CBD5E1"
+                        border.width: 1.5
+                        color: rememberCheck.checked ? "#4361EE" : "transparent"
+
+                        Rectangle {
+                            width: 12
+                            height: 12
+                            x: (parent.width - width) / 2
+                            y: (parent.height - height) / 2
+                            radius: 2
+                            color: "white"
+                            visible: rememberCheck.checked
+                        }
+                    }
+                }
+            }
+        }
+
 
         // 错误提示（带动画）
         Text {
@@ -263,6 +316,13 @@ Dialog {
                             errorText.opacity = 1
                             return
                         }
+                        // 如果有保存的登录信息且用户名匹配，直接使用保存的凭据自动登录
+                        if (BackendAuth.hasSavedLogin && userIn.text === BackendAuth.lastUserCode) {
+                            console.log("[LoginDialog] 使用记住的凭据登录")
+                            BackendAuth.autoLogin()
+                            return
+                        }
+                        // 需要手动输入密码
                         if (!pwdIn.text.trim()) {
                             errorText.text = "请输入密码"
                             errorAnim.start()
@@ -282,11 +342,21 @@ Dialog {
         
     }
 
-    // 打开时初始化，但不自动聚焦（用户手动点击输入框后才弹出虚拟键盘）
+    // 打开时初始化，自动填充保存的账号密码
     onOpened: {
-        userIn.text = ""
-        pwdIn.text = ""
         errorText.opacity = 0
+        // 如果有保存的登录信息，自动填充
+        if (BackendAuth.hasSavedLogin) {
+            userIn.text = BackendAuth.lastUserCode
+            // 密码从后端已保存，不需要前端显示（安全考虑）
+            rememberCheck.checked = true
+            BackendAuth.rememberLogin = true
+        } else {
+            userIn.text = ""
+            pwdIn.text = ""
+            // 如果之前勾选过"记住登录"但没有有效数据（如退出时清除）
+            rememberCheck.checked = BackendAuth.rememberLogin
+        }
     }
 
     // Enter 快捷键登录

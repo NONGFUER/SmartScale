@@ -62,12 +62,19 @@ private:
     /** @brief 解析云端返回的 JSON 数据 */
     bool parseCategoryResponse(const QByteArray &data);
 
+    /** @brief Token 刷新完成后，重发排队请求 */
+    void onTokenRefreshCompleted(bool success, const QString &errMsg);
+
     QNetworkAccessManager *m_networkMgr;
     AuthService *m_authService = nullptr;
 
     QVariantList m_categories;  // [{name: "叶菜类", items: [{en:"...",cn:"..."}, ...]}, ...]
     bool m_loading = false;
     QString m_errorText;
+
+    // === Token 刷新协调 ===
+    bool m_refreshing = false;
+    int m_pendingFetchCount = 0;  // 排队等待刷新的 fetchCategories 调用次数
 };
 
 #endif // CATEGORYSERVICE_H

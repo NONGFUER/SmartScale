@@ -18,17 +18,35 @@ CategoryService::CategoryService(QObject *parent)
 void CategoryService::setAuthService(AuthService *auth)
 {
     m_authService = auth;
+    // 接入统一 Token 刷新协调器
+    if (m_authService) {
+        QObject::connect(m_authService, &AuthService::tokenRefreshCompleted,
+                         this, &CategoryService::onTokenRefreshCompleted,
+                         Qt::UniqueConnection);
+    }
 }
 
 void CategoryService::fetchCategories()
 {
     if (m_loading) return;
+
+    // === Token 预检 ===
+    QString token = m_authService ? m_authService->token() : QString();
+    if (!token.isEmpty() && m_authService && m_authService->isTokenExpiringSoon()) {
+        qDebug() << "[CategoryService] Token 即将过期，排队等待刷新";
+        m_pendingFetchCount++;
+        if (!m_refreshing && !m_authService->isRefreshingToken()) {
+            m_refreshing = true;
+            m_authService->requestTokenRefresh();
+        }
+        return;
+    }
+
     m_loading = true;
     Q_EMIT loadingChanged();
     m_errorText.clear();
     Q_EMIT errorTextChanged();
 
-    QString token = m_authService ? m_authService->token() : QString();
     auto request = NetworkUtils::createApiRequest(NetworkUtils::Api::CATEGORY_LIST, token);
     // GET 请求
     qInfo() << "[CategoryService] 正在请求品类列表...";
@@ -44,6 +62,17 @@ void CategoryService::onNetworkReply(QNetworkReply *reply)
     Q_EMIT loadingChanged();
 
     if (reply->error() != QNetworkReply::NoError) {
+        // === 401/403 自动刷新重试 ===
+        if (AuthService::isUnauthorizedError(reply) && m_authService) {
+            qDebug() << "[CategoryService] 收到 401/403 未授权，触发 Token 刷新并重试";
+            m_pendingFetchCount++;
+            if (!m_refreshing && !m_authService->isRefreshingToken()) {
+                m_refreshing = true;
+                m_authService->requestTokenRefresh();
+            }
+            return;
+        }
+
         QString errMsg = QString("网络错误: %1").arg(reply->errorString());
         qWarning() << "[CategoryService]" << errMsg;
         m_errorText = errMsg;
@@ -217,4 +246,32 @@ QVariantList CategoryService::getItemsByCategory(const QString &categoryName) co
         }
     }
     return {};
+}
+
+// ==========================================================================
+//  Token 刷新完成回调 — 重发排队请求
+// ==========================================================================
+
+void CategoryService::onTokenRefreshCompleted(bool success, const QString &errMsg)
+{
+    m_refreshing = false;
+
+    if (!success) {
+        qWarning() << "[CategoryService] Token 刷新失败，丢弃" << m_pendingFetchCount << "条排队请求";
+        if (m_pendingFetchCount > 0) {
+            m_errorText = "Token 刷新失败: " + errMsg;
+            Q_EMIT errorTextChanged();
+            Q_EMIT fetchFailed(m_errorText);
+        }
+        m_pendingFetchCount = 0;
+        return;
+    }
+
+    qDebug() << "[CategoryService] Token 刷新成功，重发" << m_pendingFetchCount << "条排队请求";
+    // 只需重发一次 fetchCategories（多次排队合并为一次）
+    int count = m_pendingFetchCount;
+    m_pendingFetchCount = 0;
+    if (count > 0) {
+        fetchCategories();
+    }
 }

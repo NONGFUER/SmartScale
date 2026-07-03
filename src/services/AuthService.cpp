@@ -9,6 +9,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QDir>
+#include <QSettings>
 
 // ==========================================================================
 //  构造 / 析构
@@ -21,6 +22,7 @@ AuthService::AuthService(QObject *parent)
     connect(m_networkMgr, &QNetworkAccessManager::finished,
             this, &AuthService::onNetworkReply);
     loadProductFromCache();
+    loadLastLogin();  // 加载记住的登录信息
 }
 
 AuthService::~AuthService()
@@ -62,6 +64,12 @@ void AuthService::logout()
     m_custId = 0;
     m_devId = 0;
 
+    // 退出时清除保存的凭据（保留记住偏好设置）
+    if (!m_lastUserCode.isEmpty()) {
+        clearSavedLoginData();
+        Q_EMIT lastLoginChanged();
+    }
+
     Q_EMIT currentUserChanged();
     Q_EMIT tokenChanged();
     Q_EMIT userInfoChanged();
@@ -71,14 +79,50 @@ void AuthService::logout()
 
 void AuthService::refreshToken()
 {
-    // 防御：空或纯空白字符串都不允许发请求（避免后端报 "refreshToken field is required"）
+    // 委托到统一入口（带并发锁）
+    requestTokenRefresh();
+}
+
+// ==========================================================================
+//  Token 刷新协调器（无感刷新核心）
+// ==========================================================================
+
+void AuthService::requestTokenRefresh()
+{
+    // === 并发锁：防止多个调用方同时触发多次刷新请求 ===
+    if (m_isRefreshing) {
+        qDebug() << "[Auth] Token 刷新已在进行中，跳过重复请求"
+                 << "(failCount=" << m_refreshFailCount << ")";
+        return;
+    }
+
+    // 防御：空或纯空白字符串都不允许发请求
     if (m_refreshToken.trimmed().isEmpty()) {
         qWarning() << "[Auth] 刷新 Token 失败: RefreshToken 为空或纯空白"
                    << "len=" << m_refreshToken.length();
         Q_EMIT tokenRefreshFailed("未登录或无刷新令牌");
+        Q_EMIT tokenRefreshCompleted(false, "未登录或无刷新令牌");
         return;
     }
+
+    m_isRefreshing = true;
+    qDebug() << "[Auth] Token 刷新开始 (failCount=" << m_refreshFailCount << ")";
     tryRefreshToken();
+}
+
+bool AuthService::isRefreshingToken() const
+{
+    return m_isRefreshing;
+}
+
+bool AuthService::isUnauthorizedError(QNetworkReply *reply)
+{
+    if (!reply) return false;
+    int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    // HTTP 401 = Unauthorized（Token 过期或无效）
+    // 也兼容服务端返回 403 Forbidden（部分后端用 403 表示 Token 无效）
+    return (statusCode == 401 || statusCode == 403)
+           && reply->error() != QNetworkReply::NoError;
 }
 
 // ==========================================================================
@@ -246,7 +290,13 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
     if (reply->error() != QNetworkReply::NoError) {
         qWarning() << "[Auth] 网络错误:" << reply->errorString();
         if (isRefresh) {
-            Q_EMIT tokenRefreshFailed("网络连接失败");
+            m_refreshFailCount++;
+            m_isRefreshing = false;
+            QString errMsg = QStringLiteral("网络连接失败 (连续%1次)").arg(m_refreshFailCount);
+            Q_EMIT tokenRefreshFailed(errMsg);
+            Q_EMIT tokenRefreshCompleted(false, errMsg);
+            qDebug() << "[Auth] Token 刷新失败, 连续失败次数:" << m_refreshFailCount
+                     << "/" << kMaxRefreshFailures;
         } else {
             // 在线登录网络请求失败：直接报错，不再降级到离线
             qWarning() << "[Auth] 在线登录网络请求失败，直接返回错误";
@@ -279,11 +329,21 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
                           expiresAt, m_role, online,
                           !isRefresh); // Token 刷新不触发 loginSuccess/拉取产品
         if (isRefresh) {
+            // 刷新成功：解锁、重置失败计数、通知所有等待方
+            m_refreshFailCount = 0;
+            m_isRefreshing = false;
             Q_EMIT tokenRefreshed(newToken);
+            Q_EMIT tokenRefreshCompleted(true, QString());
+            qDebug() << "[Auth] Token 刷新成功, 新Token长度=" << newToken.length();
         }
     } else {
         if (isRefresh) {
+            m_refreshFailCount++;
+            m_isRefreshing = false;
+            qWarning() << "[Auth] Token 刷新业务失败:" << errMsg
+                       << "连续失败次数:" << m_refreshFailCount << "/" << kMaxRefreshFailures;
             Q_EMIT tokenRefreshFailed(errMsg);
+            Q_EMIT tokenRefreshCompleted(false, errMsg);
         } else {
             // 在线认证业务失败（服务端返回 success=false）：直接报错，不再降级到离线
             qWarning() << "[Auth] 在线认证业务失败，直接返回错误:" << errMsg;
@@ -447,6 +507,12 @@ void AuthService::handleAuthSuccess(const QString &username,
     Q_EMIT userInfoChanged();
     Q_EMIT modeChanged();
 
+    // 首次登录成功时，如果用户选择了"记住登录"则保存凭据
+    if (isInitialLogin && m_rememberLogin) {
+        saveLastLogin();
+        Q_EMIT lastLoginChanged();
+    }
+
     // 仅在首次登录时 emit loginSuccess 并拉取产品/食材；
     // Token 刷新跳过，避免上传过程中触发多余网络请求
     if (isInitialLogin) {
@@ -525,4 +591,84 @@ void AuthService::saveProductToCache() const
     file.write(QJsonDocument(obj).toJson(QJsonDocument::Compact));
     file.close();
     qDebug() << "[Auth] productId 已写入缓存:" << path;
+}
+
+// ==========================================================================
+//  记住登录功能
+//  存储: ~/.config/SmartScale/last_login.conf
+// ==========================================================================
+
+static const QString kLastLoginPath = QDir::homePath() + "/.config/SmartScale/last_login.conf";
+
+void AuthService::loadLastLogin()
+{
+    QSettings settings(kLastLoginPath, QSettings::IniFormat);
+    m_rememberLogin = settings.value("remember", false).toBool();
+    m_lastUserCode  = settings.value("userCode").toString();
+    m_lastPassword  = settings.value("password").toString();  // 简单 base64 编码存储
+
+    if (m_rememberLogin && !m_lastUserCode.isEmpty()) {
+        qInfo() << "[Auth] 加载记住登录: user=" << m_lastUserCode;
+    }
+}
+
+void AuthService::saveLastLogin()
+{
+    if (!m_rememberLogin) return;
+
+    QString dir = QDir::homePath() + "/.config/SmartScale";
+    QDir().mkpath(dir);
+
+    QSettings settings(kLastLoginPath, QSettings::IniFormat);
+    settings.setValue("remember", true);
+    settings.setValue("userCode", m_pendingUserCode);
+    settings.setValue("password", m_pendingPassword.toUtf8().toBase64());
+    settings.sync();
+
+    m_lastUserCode = m_pendingUserCode;
+    m_lastPassword = m_pendingPassword;
+    qInfo() << "[Auth] 记住登录已保存:" << m_lastUserCode;
+}
+
+void AuthService::clearSavedLoginData()
+{
+    QFile::remove(kLastLoginPath);
+    m_lastUserCode.clear();
+    m_lastPassword.clear();
+    qInfo() << "[Auth] 清除记住的登录信息";
+}
+
+void AuthService::setRememberLogin(bool remember)
+{
+    if (m_rememberLogin == remember) return;
+    m_rememberLogin = remember;
+    Q_EMIT rememberLoginChanged();
+}
+
+bool AuthService::hasSavedLogin() const
+{
+    return m_rememberLogin && !m_lastUserCode.isEmpty() && !m_lastPassword.isEmpty();
+}
+
+void AuthService::autoLogin()
+{
+    if (!hasSavedLogin()) {
+        qWarning() << "[Auth] 自动登录失败: 无保存的登录信息";
+        Q_EMIT loginFailed("无保存的登录信息");
+        return;
+    }
+
+    // 解码密码
+    QByteArray decoded = QByteArray::fromBase64(m_lastPassword.toUtf8());
+    QString password = QString::fromUtf8(decoded);
+
+    qInfo() << "[Auth] 使用记住的账号自动登录:" << m_lastUserCode;
+    login(m_lastUserCode, password);
+}
+
+void AuthService::clearSavedLogin()
+{
+    clearSavedLoginData();
+    setRememberLogin(false);
+    Q_EMIT lastLoginChanged();
 }

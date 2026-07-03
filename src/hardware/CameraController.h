@@ -37,7 +37,7 @@ public:
 
     VisionAIService* aiService() const { return m_aiService; }
     void setVoiceSpeaker(VoiceSpeaker *speaker) { m_voiceSpeaker = speaker; }
-    void setAuthService(AuthService *authSvc) { m_authService = authSvc; }
+    void setAuthService(AuthService *authSvc);
 
 Q_SIGNALS:
     void photoSaved(int cameraIndex, const QString &filePath);
@@ -120,6 +120,17 @@ private:
     mutable QMutex m_captureMetaMutex;
     QString m_watermarkLabel;      // captureVegetable 传入的标签（英文，用于水印）
     QString m_lastSavePath;        // 最后一次主摄保存路径（供独立 AI 识别上下文）
+
+    // === Token 刷新协调 ===
+    bool m_refreshingToken = false;
+    struct PendingAiRequest {
+        QImage image;
+        QString savePath;
+    };
+    QList<PendingAiRequest> m_pendingAiRequests;
+
+private:
+    void onTokenRefreshCompleted(bool success, const QString &errMsg);
 
     // 异步拍照任务
     class CaptureTask : public QRunnable {

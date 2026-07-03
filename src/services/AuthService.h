@@ -21,6 +21,9 @@ class AuthService : public QObject
     Q_PROPERTY(int custId READ custId NOTIFY userInfoChanged)
     Q_PROPERTY(int devId READ devId NOTIFY userInfoChanged)
     Q_PROPERTY(QString productId READ productId NOTIFY productIdChanged)
+    Q_PROPERTY(bool rememberLogin READ rememberLogin WRITE setRememberLogin NOTIFY rememberLoginChanged)
+    Q_PROPERTY(QString lastUserCode READ lastUserCode NOTIFY lastLoginChanged)
+    Q_PROPERTY(bool hasSavedLogin READ hasSavedLogin NOTIFY lastLoginChanged)
 
 public:
     explicit AuthService(QObject *parent = nullptr);
@@ -31,6 +34,24 @@ public:
 
     /** @brief 刷新 Token */
     Q_INVOKABLE void refreshToken();
+
+    /**
+     * @brief 统一 Token 刷新入口（带并发锁）
+     *
+     * 所有 Service 应调用此方法而非直接调用 refreshToken()。
+     * 内部维护刷新锁，防止多个调用方同时触发多次刷新请求。
+     * 刷新完成后通过 tokenRefreshCompleted 信号通知所有等待者。
+     */
+    Q_INVOKABLE void requestTokenRefresh();
+
+    /** @brief 查询是否正在执行 Token 刷新（供调用方判断是否需排队） */
+    bool isRefreshingToken() const;
+
+    /**
+     * @brief 检查 HTTP 回复是否为 401 Unauthorized
+     * @return true 表示 Token 过期需触发刷新
+     */
+    static bool isUnauthorizedError(QNetworkReply *reply);
 
     /** @brief 退出登录 */
     Q_INVOKABLE void logout();
@@ -56,17 +77,37 @@ public:
     /** @brief 产品 ID（登录后由 /api/ems/Product/by-sn 返回，缓存到本地） */
     QString productId() const { return m_productId; }
 
+    // === 记住登录功能 ===
+    bool rememberLogin() const { return m_rememberLogin; }
+    void setRememberLogin(bool remember);
+    QString lastUserCode() const { return m_lastUserCode; }
+    bool hasSavedLogin() const;
+    Q_INVOKABLE void autoLogin();  // 使用保存的凭据自动登录
+    Q_INVOKABLE void clearSavedLogin();  // 清除记住的登录信息
+
 Q_SIGNALS:
     void loginSuccess();
     void loginFailed(const QString &errorMsg);
     void tokenRefreshed(const QString &newToken);
     void tokenRefreshFailed(const QString &errorMsg);
+    /**
+     * @brief Token 刷新完成通知（统一信号，替代分散的 tokenRefreshed/Failed）
+     *
+     * 所有通过 requestTokenRefresh() 触发的刷新，无论成功失败都会发射此信号。
+     * 各 Service 应连接此信号以重发被拦截的请求。
+     *
+     * @param success  刷新是否成功
+     * @param errorMsg 失败原因（成功时为空字符串）
+     */
+    void tokenRefreshCompleted(bool success, const QString &errorMsg);
     void currentUserChanged();
     void logoutCompleted();
     void tokenChanged();
     void userInfoChanged();
     void modeChanged();
     void productIdChanged();
+    void rememberLoginChanged();
+    void lastLoginChanged();
 
 private Q_SLOTS:
     /** @brief 处理网络回复 */
@@ -113,6 +154,11 @@ private:
     void loadProductFromCache();
     void saveProductToCache() const;
 
+    // === 记住登录本地缓存读写 ===
+    void loadLastLogin();
+    void saveLastLogin();
+    void clearSavedLoginData();
+
     // === 成员变量 ===
     QNetworkAccessManager *m_networkMgr;
     UserRepo *m_userRepo = nullptr;
@@ -130,6 +176,16 @@ private:
     int m_custId = 0;
     int m_devId = 0;
     QString m_productId;          // 产品 ID（来自 /api/ems/Product/by-sn）
+
+    // === 记住登录 ===
+    bool m_rememberLogin = false;
+    QString m_lastUserCode;        // 保存的用户名
+    QString m_lastPassword;        // 保存的密码
+
+    // === Token 刷新协调器（无感刷新核心） ===
+    bool   m_isRefreshing = false;       // 全局刷新锁：防止并发重复请求
+    int    m_refreshFailCount = 0;       // 连续刷新失败计数，超过阈值建议重新登录
+    static constexpr int kMaxRefreshFailures = 2;  // 连续失败阈值
 };
 
 #endif // AUTHSERVICE_H
