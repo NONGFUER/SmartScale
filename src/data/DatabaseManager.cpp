@@ -167,6 +167,23 @@ void DatabaseManager::migrate()
 
     // 未来新增迁移在此追加:
     // if (version < 4) { ... setVersion(4); }
+
+    // v4: weight_records 新增 deleted 列 (软删除/撤回标记)
+    if (version < 4) {
+        qDebug() << "[DB] 执行迁移 v4: weight_records 增加 deleted 列";
+        QSqlQuery v4q(m_db);
+        v4q.exec("PRAGMA table_info(weight_records)");
+        QStringList cols4;
+        while (v4q.next()) cols4 << v4q.value(1).toString();
+        if (!cols4.contains("deleted")) {
+            if (!v4q.exec("ALTER TABLE weight_records ADD COLUMN deleted INTEGER DEFAULT 0")) {
+                qCritical() << "[DB] v4 ALTER TABLE 失败:" << v4q.lastError().text();
+            } else {
+                qDebug() << "[DB] v4 完成: weight_records.deleted 已添加";
+            }
+        }
+        setVersion(4);
+    }
 }
 
 void DatabaseManager::createTables()

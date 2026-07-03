@@ -69,6 +69,9 @@ public:
                                              double weightKg,
                                              bool aiDetected);
 
+    /** @brief 撤回称重记录 (软删除 + POST /api/user/WeightRecord/revoke) */
+    Q_INVOKABLE void revokeRecord(int recordId, int custId, const QString &cloudRecordId);
+
 Q_SIGNALS:
     void historyChanged();
     void statsChanged();
@@ -76,6 +79,7 @@ Q_SIGNALS:
     void cloudSyncFailed(int localId, const QString &errorMsg);
     void cloudSyncProgress(int done, int total);
     void userRecordCreated(bool success, const QString &msg);
+    void recordRevoked(bool success, const QString &errorMsg);  // 撤回结果通知
 
 private Q_SLOTS:
     void onCloudReply(QNetworkReply *reply);

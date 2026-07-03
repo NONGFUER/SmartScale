@@ -21,6 +21,7 @@ public:
     int insert(const WeightRecord &record);   // 返回新插入的 id, 失败返回 -1
     bool update(const WeightRecord &record);
     bool remove(int id);
+    bool softDelete(int id);                  // 软删除（撤回），设置 deleted=1
 
     // === 查询 ===
     WeightRecord findById(int id);

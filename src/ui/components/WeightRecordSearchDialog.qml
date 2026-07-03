@@ -39,6 +39,28 @@ Dialog {
     // ---- 对外信号 ----
     signal viewRecord(var record)
 
+    // ---- 撤回记录（软删除 + 云端 API）----
+    function revokeRecord(rec) {
+        if (!rec) return
+        var localId = rec.id || -1
+        var custId = BackendAuth.custId || 0
+        var cloudId = rec.cloudId || ""
+        console.log("[SearchDialog] 撤回记录: localId=" + localId, "custId=" + custId, "cloudId=" + cloudId)
+        WeightHistoryService.revokeRecord(localId, custId, cloudId)
+        // 立即从当前页移除该记录（乐观更新）
+        var newList = []
+        for (var i = 0; i < root.filteredRecords.length; i++) {
+            if (root.filteredRecords[i].id !== localId) {
+                newList.push(root.filteredRecords[i])
+            }
+        }
+        root.filteredRecords = newList
+        // 如果当前页变空且不是第一页，回退一页
+        if (root.pageRecords.length === 0 && root.currentPage > 1) {
+            root.currentPage--
+        }
+    }
+
     background: Rectangle {
         radius: 24
         color: "#FFFFFF"
@@ -451,6 +473,7 @@ Dialog {
                     height: GridView.view.cellHeight - 14
                     record: modelData
                     onViewClicked: function(rec) { root.viewRecord(rec) }
+                    onRevokeClicked: function(rec) { root.revokeRecord(rec) }
                 }
             }
         }
@@ -800,6 +823,7 @@ Dialog {
     component RecordCard: Rectangle {
         property var record: ({})
         signal viewClicked(var rec)
+        signal revokeClicked(var rec)
 
         id: cardRoot
         radius: 12
@@ -926,26 +950,54 @@ Dialog {
 
                     Item { Layout.fillHeight: true }
 
-                    // 查看按钮（尺寸增大更易点击）
-                    Rectangle {
+                    // 按钮行：撤回 + 查看
+                    RowLayout {
                         Layout.alignment: Qt.AlignRight
-                        Layout.preferredWidth: 72
-                        Layout.preferredHeight: 32
-                        radius: 8
-                        color: viewBtnHover.hovered ? "#EFF6FF" : "#F8FAFC"
-                        border.color: "#BFDBFE"
-                        border.width: 1
+                        spacing: 8
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: "查看"
-                            font.pixelSize: 15
-                            color: "#3B82F6"
+                        // 撤回按钮（红色边框，危险操作）
+                        Rectangle {
+                            Layout.preferredWidth: 56
+                            Layout.preferredHeight: 32
+                            radius: 8
+                            color: revokeHover.hovered ? "#FEF2F2" : "#F8FAFC"
+                            border.color: revokeHover.hovered ? "#FCA5A5" : "#FECACA"
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "撤回"
+                                font.pixelSize: 14
+                                font.bold: true
+                                color: "#DC2626"
+                            }
+
+                            HoverHandler { id: revokeHover }
+                            TapHandler {
+                                onTapped: cardRoot.revokeClicked(cardRoot.record)
+                            }
                         }
 
-                        HoverHandler { id: viewBtnHover }
-                        TapHandler {
-                            onTapped: cardRoot.onViewClicked(cardRoot.record)
+                        // 查看按钮
+                        Rectangle {
+                            Layout.preferredWidth: 72
+                            Layout.preferredHeight: 32
+                            radius: 8
+                            color: viewBtnHover.hovered ? "#EFF6FF" : "#F8FAFC"
+                            border.color: "#BFDBFE"
+                            border.width: 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "查看"
+                                font.pixelSize: 15
+                                color: "#3B82F6"
+                            }
+
+                            HoverHandler { id: viewBtnHover }
+                            TapHandler {
+                                onTapped: cardRoot.onViewClicked(cardRoot.record)
+                            }
                         }
                     }
                 }

@@ -108,6 +108,21 @@ bool WeightRecordRepo::remove(int id)
     return true;
 }
 
+bool WeightRecordRepo::softDelete(int id)
+{
+    QSqlQuery q(m_db.database());
+    q.prepare("UPDATE weight_records SET deleted = 1, updated_at = datetime('now','localtime') WHERE id = ?");
+    q.addBindValue(id);
+
+    if (!q.exec()) {
+        qCritical() << "[WeightRecordRepo] 软删除失败:" << q.lastError().text();
+        return false;
+    }
+
+    qDebug() << "[WeightRecordRepo] 软删除成功(撤回), id =" << id;
+    return true;
+}
+
 WeightRecord WeightRecordRepo::findById(int id)
 {
     QSqlQuery q(m_db.database());
@@ -130,7 +145,7 @@ QList<WeightRecord> WeightRecordRepo::queryAll()
 {
     QList<WeightRecord> list;
     QSqlQuery q(m_db.database());
-    q.exec("SELECT * FROM weight_records ORDER BY record_time DESC");
+    q.exec("SELECT * FROM weight_records WHERE deleted = 0 ORDER BY record_time DESC");
 
     while (q.next()) {
         list.append(fromQuery(q));
@@ -144,7 +159,7 @@ QList<WeightRecord> WeightRecordRepo::queryByDateRange(const QDate &from, const 
     QSqlQuery q(m_db.database());
     q.prepare(R"(
         SELECT * FROM weight_records
-        WHERE DATE(record_time) BETWEEN ? AND ?
+        WHERE DATE(record_time) BETWEEN ? AND ? AND deleted = 0
         ORDER BY record_time DESC
     )");
     q.addBindValue(from.toString("yyyy-MM-dd"));
@@ -166,7 +181,7 @@ QList<WeightRecord> WeightRecordRepo::queryByCategory(const QString &categoryNam
 {
     QList<WeightRecord> list;
     QSqlQuery q(m_db.database());
-    q.prepare("SELECT * FROM weight_records WHERE category_name = ? ORDER BY record_time DESC");
+    q.prepare("SELECT * FROM weight_records WHERE category_name = ? AND deleted = 0 ORDER BY record_time DESC");
     q.addBindValue(categoryName);
 
     if (!q.exec()) {
@@ -185,7 +200,7 @@ QList<WeightRecord> WeightRecordRepo::queryUnsynced()
 {
     QList<WeightRecord> list;
     QSqlQuery q(m_db.database());
-    q.exec("SELECT * FROM weight_records WHERE synced = 0 ORDER BY created_at ASC");
+    q.exec("SELECT * FROM weight_records WHERE synced = 0 AND deleted = 0 ORDER BY created_at ASC");
 
     while (q.next()) {
         list.append(fromQuery(q));
@@ -199,7 +214,7 @@ QVariantMap WeightRecordRepo::queryStatsForDate(const QDate &date)
     q.prepare(R"(
         SELECT COUNT(*) as cnt, COALESCE(SUM(weight), 0) as total
         FROM weight_records
-        WHERE DATE(record_time) = ?
+        WHERE DATE(record_time) = ? AND deleted = 0
     )");
     q.addBindValue(date.toString("yyyy-MM-dd"));
 
@@ -223,14 +238,14 @@ QVariantMap WeightRecordRepo::queryStatsForDate(const QDate &date)
 int WeightRecordRepo::totalCount()
 {
     QSqlQuery q(m_db.database());
-    q.exec("SELECT COUNT(*) FROM weight_records");
+    q.exec("SELECT COUNT(*) FROM weight_records WHERE deleted = 0");
     return q.next() ? q.value(0).toInt() : 0;
 }
 
 double WeightRecordRepo::totalWeight()
 {
     QSqlQuery q(m_db.database());
-    q.exec("SELECT COALESCE(SUM(weight), 0) FROM weight_records");
+    q.exec("SELECT COALESCE(SUM(weight), 0) FROM weight_records WHERE deleted = 0");
     return q.next() ? q.value(0).toDouble() : 0.0;
 }
 
@@ -250,6 +265,7 @@ WeightRecord WeightRecordRepo::fromQuery(QSqlQuery &q)
     r.subImagePath = q.value("sub_image_path").toString();
     r.synced       = q.value("synced").toInt() != 0;
     r.cloudId      = q.value("cloud_id").toString();
+    r.deleted      = q.value("deleted").toInt() != 0;
     r.createdAt    = QDateTime::fromString(q.value("created_at").toString(), Qt::ISODate);
     r.updatedAt    = QDateTime::fromString(q.value("updated_at").toString(), Qt::ISODate);
     return r;

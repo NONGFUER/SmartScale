@@ -335,8 +335,69 @@ void WeightHistoryService::syncAllToCloud()
     syncToCloud(-1);
 }
 
+// ============================================================
+//  撤回称重记录（软删除 + 云端 API 调用）
+// ============================================================
+
+void WeightHistoryService::revokeRecord(int recordId, int custId, const QString &cloudRecordId)
+{
+    qDebug() << "[WHS] 撤回记录请求: localId=" << recordId
+             << "custId=" << custId << "cloudId=" << cloudRecordId;
+
+    // 1. 先本地软删除（立即生效，无论网络是否成功）
+    if (m_repo && recordId > 0) {
+        m_repo->softDelete(recordId);
+    }
+
+    // 2. 刷新本地数据
+    refreshFromDb();
+    Q_EMIT historyChanged();
+    recalcStats();
+    Q_EMIT statsChanged();
+
+    // 3. 如果有云端 ID 且在线模式，调用远程撤回 API
+    if (m_authService && !m_authService->token().isEmpty()
+        && custId > 0 && !cloudRecordId.isEmpty()) {
+        QString token = m_authService->token();
+        QNetworkRequest request = NetworkUtils::createUserApiRequest(
+            NetworkUtils::Api::USER_WEIGHT_REVOKE, token);
+
+        // Body: { "pam1": custId, "pam2": cloudRecordId }
+        QJsonObject bodyObj;
+        bodyObj["pam1"] = custId;
+        bodyObj["pam2"] = cloudRecordId;
+        QByteArray bodyData = QJsonDocument(bodyObj).toJson(QJsonDocument::Compact);
+
+        qInfo() << "[WHS] 发送撤回请求到云端:" << bodyData;
+
+        QNetworkReply *reply = m_networkMgr->post(request, bodyData);
+        reply->setProperty("_isRevoke", true);
+        reply->setProperty("_localRecordId", recordId);
+    } else {
+        // 离线或无云端 ID：仅本地撤回完成
+        qDebug() << "[WHS] 仅本地撤回完成（离线模式或无云端ID）";
+        Q_EMIT recordRevoked(true, QString());
+    }
+}
+
 void WeightHistoryService::onCloudReply(QNetworkReply *reply)
 {
+    // === 处理撤回回复 ===
+    if (reply->property("_isRevoke").isValid() && reply->property("_isRevoke").toBool()) {
+        int localRecordId = reply->property("_localRecordId").toInt();
+        if (reply->error() != QNetworkReply::NoError) {
+            qWarning() << "[WHS] 撤回云端请求失败:" << reply->errorString()
+                       << "localId=" << localRecordId;
+            Q_EMIT recordRevoked(false, reply->errorString());
+        } else {
+            qInfo() << "[WHS] 撤回云端成功, localId=" << localRecordId
+                    << "响应:" << reply->readAll();
+            Q_EMIT recordRevoked(true, QString());
+        }
+        reply->deleteLater();
+        return;
+    }
+
     // 只处理云同步回复（带 localId 的），跳过用户记录创建等请求
     if (!reply->property("localId").isValid()) {
         return;
@@ -444,6 +505,21 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
             }
 
             m_repo->update(model);
+
+            // 同步更新内存缓存（QML 直接读取此数据）
+            for (int i = 0; i < m_historyEntries.size(); ++i) {
+                QVariantMap entry = m_historyEntries.at(i).toMap();
+                if (entry.value("id").toInt() == localId) {
+                    if (!remoteRecoId.isEmpty()) {
+                        entry["cloudId"] = remoteRecoId;
+                    }
+                    entry["synced"] = true;
+                    m_historyEntries[i] = entry;
+                    break;
+                }
+            }
+            Q_EMIT historyChanged();
+
             qDebug() << "[WHS] 记录 id=" << localId << "已标记为已同步, remoteRecoId=" << remoteRecoId << "custId=" << custId;
 
             // 如果有图片，上传到服务器

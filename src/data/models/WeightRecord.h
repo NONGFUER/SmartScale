@@ -28,6 +28,7 @@ public:
     // === 同步预留字段 ===
     bool synced = false;             // 是否已同步到云端
     QString cloudId;                 // 云端记录 ID
+    bool deleted = false;            // 软删除（撤回）标记
 
     // === 内部时间戳 ===
     QDateTime createdAt;             // 本地创建时间
