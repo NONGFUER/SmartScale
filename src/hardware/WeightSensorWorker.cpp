@@ -137,16 +137,26 @@ bool WeightSensorWorker::initSerial()
 
 void WeightSensorWorker::poll()
 {
+    // 命令执行中（去皮/校准/读SN）时跳过本轮轮询，避免抢串口
+    if (m_isBusy) return;
+
     int32_t weightG = 0;
     uint16_t statusWord = 0;
     int32_t adcRaw = 0;
 
+    QMutexLocker locker(&m_serialMutex);
     int ret = modbusReadWeight(&weightG, &statusWord, &adcRaw);
 
     if (ret == 0) {
+        m_consecutiveErrors = 0;  // 成功则重置错误计数
         Q_EMIT weightDataReady(weightG, statusWord, adcRaw);
+    } else {
+        m_consecutiveErrors++;
+        if (m_consecutiveErrors >= kMaxConsecutiveErrors) {
+            qWarning() << "[WeightSensorWorker] 连续" << m_consecutiveErrors << "次通信失败，尝试重启串口...";
+            restartSerial();
+        }
     }
-    // ret != 0 时静默丢弃, 不打扰 UI (连续失败可后续加计数告警)
 }
 
 // ============================================================================
@@ -161,12 +171,32 @@ void WeightSensorWorker::doTare()
         return;
     }
 
+    // 原子抢锁：期望 m_isBusy==false，成功则设为 true 并继续
+    // compare_exchange_strong 保证只有一个线程能通过（poll 或其他命令）
+    bool expected = false;
+    if (!m_isBusy.compare_exchange_strong(expected, true)) {
+        qDebug() << "[WeightSensorWorker] 去皮被跳过：前一个命令仍在执行中";
+        Q_EMIT tareDone(false);
+        return;
+    }
+    // ★ 此时 m_isBusy 已原子性地设为 true，poll() 必然看到 true 并跳过
+
     qDebug() << "[WeightSensorWorker] >>> 发送去皮命令...";
-    int ret = modbusWriteCmd(REG_CMD_ADDR, CMD_TARE);
+
+    int ret = -1;
+    {
+        QMutexLocker locker(&m_serialMutex);
+        ret = modbusWriteCmd(REG_CMD_ADDR, CMD_TARE);
+    }   // ← locker 析构 → 自动 unlock
+
+    m_isBusy.store(false, std::memory_order_release);  // 原子清除
+
     if (ret == 0) {
+        m_consecutiveErrors = 0;
         qDebug() << "[WeightSensorWorker] 去皮成功";
         Q_EMIT tareDone(true);
     } else {
+        m_consecutiveErrors++;
         qWarning() << "[WeightSensorWorker] 去皮失败, err=" << ret;
         Q_EMIT tareDone(false);
     }
@@ -194,15 +224,72 @@ void WeightSensorWorker::doCalibrate(uint16_t cmd)
         return;
     }
 
+    // 原子抢锁
+    bool expected = false;
+    if (!m_isBusy.compare_exchange_strong(expected, true)) {
+        qDebug() << "[WeightSensorWorker] 校准被跳过：前一个命令仍在执行中";
+        Q_EMIT calibrateDone(false);
+        return;
+    }
+
     qDebug() << "[WeightSensorWorker] >>> 发送校准命令, cmd=" << cmd;
-    int ret = modbusWriteCmd(REG_CMD_ADDR, cmd);
+
+    int ret = -1;
+    {
+        QMutexLocker locker(&m_serialMutex);
+        ret = modbusWriteCmd(REG_CMD_ADDR, cmd);
+    }   // ← locker 析构 → 自动 unlock
+
+    m_isBusy.store(false, std::memory_order_release);
+
     if (ret == 0) {
+        m_consecutiveErrors = 0;
         qDebug() << "[WeightSensorWorker] 校准命令已确认";
         Q_EMIT calibrateDone(true);
     } else {
+        m_consecutiveErrors++;
         qWarning() << "[WeightSensorWorker] 校准失败, err=" << ret;
         Q_EMIT calibrateDone(false);
     }
+}
+
+// ============================================================================
+// 串口自愈 — 连续 kMaxConsecutiveErrors 次通信失败后自动重启
+// ============================================================================
+
+void WeightSensorWorker::restartSerial()
+{
+    qWarning() << "[WeightSensorWorker] 正在重启串口...";
+
+    // 暂停轮询，防止重启期间 poll 抢串口
+    m_pollTimer->stop();
+
+    // 加锁保护整个重启过程
+    QMutexLocker locker(&m_serialMutex);
+
+    if (m_serial) {
+        if (m_serial->isOpen()) {
+            m_serial->close();
+            qInfo() << "[WeightSensorWorker] 串口已关闭";
+        }
+        delete m_serial;
+        m_serial = nullptr;
+    }
+
+    // 等待硬件释放
+    QThread::msleep(200);
+
+    // 重新初始化
+    if (initSerial()) {
+        qInfo() << "[WeightSensorWorker] 串口重启成功:" << m_portName;
+        m_consecutiveErrors = 0;   // 重置错误计数
+        m_isBusy.store(false, std::memory_order_release);  // 原子清除忙标志
+    } else {
+        qCritical() << "[WeightSensorWorker] 串口重启失败！将在下次尝试...";
+    }
+
+    // 恢复轮询
+    m_pollTimer->start(m_pollIntervalMs);
 }
 
 // ============================================================================
@@ -493,13 +580,31 @@ void WeightSensorWorker::doReadSN()
         return;
     }
 
+    // 原子抢锁
+    bool expected = false;
+    if (!m_isBusy.compare_exchange_strong(expected, true)) {
+        qDebug() << "[WeightSensorWorker] 读 SN 被跳过：前一个命令仍在执行中";
+        Q_EMIT snReady(QString());
+        return;
+    }
+
     qDebug() << "[WeightSensorWorker] >>> 读取设备序列号...";
+
     QString sn;
-    int ret = modbusReadSN(&sn);
+    int ret = -1;
+    {
+        QMutexLocker locker(&m_serialMutex);
+        ret = modbusReadSN(&sn);
+    }   // ← locker 析构 → 自动 unlock
+
+    m_isBusy.store(false, std::memory_order_release);
+
     if (ret == 0) {
+        m_consecutiveErrors = 0;
         qDebug() << "[WeightSensorWorker] SN 读取成功:" << sn;
         Q_EMIT snReady(sn);
     } else {
+        m_consecutiveErrors++;
         qWarning() << "[WeightSensorWorker] SN 读取失败, err=" << ret;
         Q_EMIT snReady(QString());
     }

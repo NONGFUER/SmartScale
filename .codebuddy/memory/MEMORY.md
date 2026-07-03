@@ -115,6 +115,13 @@
 - 集中管理字体族（`fontFamilyUi`/`fontFamilyTitle`/`fontFamilyMono`）、字号（按用途语义命名：`fontSizeTitleLg`=24、`fontSizeBody`=16 等）、颜色（`colorTextPrimary` 等）
 - **新增 QML 字体/颜色一律走 Theme 引用，禁止硬编码**。已有文件按需逐步迁移
 
+## 项目关键文件索引
+
+- **登录功能**: 核心逻辑在 `src/services/AuthService.h/.cpp`，UI 在 `src/ui/pages/LoginPage.qml` + `src/ui/components/LoginDialog.qml`，退出确认在 `LogoutConfirmDialog.qml`
+- **Modbus 串口**: `src/hardware/WeightSensorWorker.h/.cpp` (poll/doTare/doCalibrate/doReadSN)，QMutexLocker RAII 互斥保护 + 连续5次错误自动重启串口
+- **版本号**: CMakeLists.txt `project(SmartScale VERSION 2.13.2)` + `cmake .. -DBUILD_NUMBER=N`
+- **ONNX Runtime**: `3rdparty/onnxruntime-linux-aarch64-1.24.4/lib/` (libonnxruntime.so 等3个文件)
+
 ## 虚拟键盘（VirtualKeyboard）
 
 - 项目使用 Qt6 官方 `QtQuick.VirtualKeyboard` 模块。

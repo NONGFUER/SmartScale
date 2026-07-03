@@ -6,6 +6,8 @@
 #include <QSerialPort>
 #include <QByteArray>
 #include <QThread>
+#include <QMutex>
+#include <atomic>
 
 /**
  * @brief 串口 I/O 工作线程 — 承载所有阻塞式 Modbus 通信
@@ -90,6 +92,13 @@ private:
     bool initSerial();
     /** 从环境变量读取初始参数, 失败时使用默认值 */
     void loadConfigFromEnv();
+
+    // ==================== 互斥与自愈 ====================
+    QMutex m_serialMutex;              // 串口操作互斥锁
+    std::atomic<bool> m_isBusy{false};  // 命令执行中标志 (poll 跳过), 原子操作防竞态
+    int    m_consecutiveErrors = 0;    // 连续错误计数
+    void   restartSerial();            // 连续失败后重启串口
+    static constexpr int kMaxConsecutiveErrors = 5;  // 触发重启的阈值
 
     // ==================== 定时器 (Worker 线程内驱动) ====================
     QTimer *m_pollTimer;

@@ -25,6 +25,17 @@ Item {
     property bool currentAiDetected: false   // 当前品类是否由 AI 识别接口得出 (上传 aiDet 字段用)
     property bool pendingSaveAiDetected: false // 手动保存待写入的 aiDetected
 
+    // ==========================================
+    // 归零/去皮按钮防抖：冷却期内禁止重复点击
+    // ==========================================
+    property bool tareButtonLocked: false   // 冷却期锁定标志
+
+    Timer {
+        id: tareCooldownTimer
+        interval: 1000  // 1 秒冷却期
+        onTriggered: root.tareButtonLocked = false
+    }
+
     // 推理耗时相关属性
     property string lastInferenceTime: PState.NONE + " ms"
 
@@ -872,12 +883,16 @@ Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             text: "归零"
+                            enabled: !root.tareButtonLocked  // 冷却期禁用
                             onClicked: {
                                 console.log("[WSP] 点击归零按钮")
                                 if (WeightManager.netWeight > 8.0) {
                                     window.toast("无法归零", "error", 2000)
                                     return
                                 }
+                                // 启动冷却期，防止连击
+                                root.tareButtonLocked = true
+                                tareCooldownTimer.restart()
                                 WeightManager.zero()
                                 window.toast("归零执行中...", "info", 1500)
                             }
@@ -888,8 +903,12 @@ Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
                             text: "去皮"
+                            enabled: !root.tareButtonLocked  // 冷却期禁用
                             onClicked: {
                                 console.log("[WSP] 点击去皮按钮, 触发硬件去皮")
+                                // 启动冷却期，防止连击
+                                root.tareButtonLocked = true
+                                tareCooldownTimer.restart()
                                 WeightManager.tare()
                                 if (typeof window !== "undefined" && window.toast) {
                                     window.toast("去皮执行中...", "info", 1500)
