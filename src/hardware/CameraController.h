@@ -38,6 +38,7 @@ public:
     VisionAIService* aiService() const { return m_aiService; }
     void setVoiceSpeaker(VoiceSpeaker *speaker) { m_voiceSpeaker = speaker; }
     void setAuthService(AuthService *authSvc);
+    void setWeightSensor(class WeightSensor *ws) { m_weightSensor = ws; }
 
 Q_SIGNALS:
     void photoSaved(int cameraIndex, const QString &filePath);
@@ -92,6 +93,7 @@ private:
     VisionAIService* m_aiService = nullptr;
     VoiceSpeaker *m_voiceSpeaker = nullptr;
     AuthService *m_authService = nullptr;
+    class WeightSensor *m_weightSensor = nullptr;  // 用于获取设备 SN（水印文件名）
 
     QThreadPool *m_captureThreadPool = nullptr;
     QImage m_lastSubCaptureImage;

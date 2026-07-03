@@ -84,6 +84,16 @@ int main(int argc, char *argv[])
     // 登录用户信息注入 CameraController（水印中显示操作员）
     cameraController->setAuthService(authService);
 
+    // === 设备序列号注入 ===
+    authService->setDeviceSn(weightSensor->sn());          // 初始值（可能为空，异步读取后会更新）
+    cameraController->setWeightSensor(weightSensor);        // CameraController 直接访问 WeightSensor
+
+    // SN 异步读取完成后同步更新 AuthService
+    QObject::connect(weightSensor, &WeightSensor::snChanged,
+                     authService, [authService, weightSensor]() {
+                         authService->setDeviceSn(weightSensor->sn());
+                     });
+
     // 注入 AuthService 给 HistoryService（云同步需要 token/userId）
     historyService->setAuthService(authService);
 

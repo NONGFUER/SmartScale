@@ -137,7 +137,7 @@ void AuthService::tryOnlineLogin(const QString &userCode, const QString &passwor
     QJsonObject bodyObj;
     bodyObj["UserCode"] = userCode;
     bodyObj["Password"] = password;
-    bodyObj["Sn"]       = "";     // 设备序列号
+    bodyObj["Sn"]       = m_deviceSn;  // 设备序列号（由 WeightSensor 注入）
     bodyObj["Role"]     = 2;      // 角色类型
     bodyObj["Dev"]      = 4;      // 设备类型
     bodyObj["zone"]     = "Asia/Shanghai";     // 区域
@@ -202,11 +202,9 @@ void AuthService::tryFetchProductBySn()
     QNetworkRequest request = createApiRequest(NetworkUtils::Api::PRODUCT_BY_SN, m_token);
 
     // 后端 [FromBody] string sn 期望 JSON 字符串值（带引号），与 refresh-token 接口同模式
-    // 序列号先写死，后续接入设备读取时再替换
-    static const QString kFixedSn = QStringLiteral("1234567891122312");
-    QByteArray bodyData = "\"" + kFixedSn.toUtf8() + "\"";
+    QByteArray bodyData = "\"" + m_deviceSn.toUtf8() + "\"";
 
-    qInfo() << "[Auth] 请求 Product/by-sn, sn=" << kFixedSn;
+    qInfo() << "[Auth] 请求 Product/by-sn, sn=" << m_deviceSn;
     qInfo() << "[HTTP] Body:" << bodyData;
 
     QElapsedTimer timer;

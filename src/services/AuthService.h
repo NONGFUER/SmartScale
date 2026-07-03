@@ -77,6 +77,10 @@ public:
     /** @brief 产品 ID（登录后由 /api/ems/Product/by-sn 返回，缓存到本地） */
     QString productId() const { return m_productId; }
 
+    // === 设备序列号（由 WeightSensor 注入）===
+    void setDeviceSn(const QString &sn) { m_deviceSn = sn; }
+    QString deviceSn() const { return m_deviceSn; }
+
     // === 记住登录功能 ===
     bool rememberLogin() const { return m_rememberLogin; }
     void setRememberLogin(bool remember);
@@ -176,6 +180,7 @@ private:
     int m_custId = 0;
     int m_devId = 0;
     QString m_productId;          // 产品 ID（来自 /api/ems/Product/by-sn）
+    QString m_deviceSn;            // 从 WeightSensor 读取的真实设备 SN
 
     // === 记住登录 ===
     bool m_rememberLogin = false;

@@ -132,11 +132,12 @@ Dialog {
             Layout.preferredWidth:  454
             Layout.preferredHeight: 60
             leftPadding: 24
+            rightPadding: 40
             placeholderText: "请输入登录密码"
             font.family: "PingFang SC"
             font.pixelSize: 24
             color: "#1B263B"
-            echoMode: TextInput.Password
+            echoMode: showPwdCheck.checked ? TextInput.Normal : TextInput.Password
             verticalAlignment: TextInput.AlignVCenter
             inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhPreferLowercase
 
@@ -144,6 +145,80 @@ Dialog {
                 radius: 1
                 border.color: pwdIn.activeFocus ? "#4361EE" : "#E2E8F0"
                 color: "#F7F7F7"
+            }
+
+            // 眼睛图标按钮（切换密码可见性）
+            Rectangle {
+                id: eyeBtn
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.rightMargin: 6
+                width: 34; height: 34; radius: 17
+                color: showPwdCheck.checked ? "#E0E7FF" : "transparent"
+
+                Image {
+                    anchors.centerIn: parent
+                    source: showPwdCheck.checked ? "qrc:/resources/icon/eye-fill.png" : "qrc:/resources/icon/eye-close-fill.png"
+                    sourceSize: Qt.size(20, 20)
+                    cache: true
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: showPwdCheck.toggle()
+                }
+            }
+        }
+
+        // 显示密码选项
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 28
+            Layout.topMargin: -6
+
+            RowLayout {
+                anchors.left: parent.left
+                spacing: 6
+
+                CheckBox {
+                    id: showPwdCheck
+                    text: ""
+                    implicitWidth: 18
+                    implicitHeight: 18
+
+                    indicator: Rectangle {
+                        implicitWidth: 18
+                        implicitHeight: 18
+                        x: 0; y: parent.height / 2 - height / 2
+                        radius: 3
+                        color: showPwdCheck.checked ? "#E0E7FF" : "#FFFFFF"
+                        border.color: showPwdCheck.checked ? "#6366F1" : "#D1D5DB"
+                        border.width: 1.5
+
+                        Text {
+                            visible: showPwdCheck.checked
+                            anchors.centerIn: parent
+                            text: "\u2713"
+                            font.pixelSize: 12
+                            font.bold: true
+                            color: "#6366F1"
+                        }
+                    }
+                    contentItem: null
+                }
+
+                Text {
+                    text: "显示密码"
+                    font.family: "Microsoft YaHei"
+                    font.pixelSize: 14
+                    color: "#64748B"
+                    verticalAlignment: Text.AlignVCenter
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: showPwdCheck.toggle()
+                    }
+                }
             }
         }
 
@@ -160,7 +235,7 @@ Dialog {
 
                 CheckBox {
                     id: rememberCheck
-                    text: "记住登录"
+                    text: ""
                     font.family: "Microsoft YaHei"
                     font.pixelSize: 16
                     checked: false
@@ -169,33 +244,39 @@ Dialog {
                         BackendAuth.rememberLogin = checked
                     }
 
-                    contentItem: Text {
-                        text: rememberCheck.text
-                        font: rememberCheck.font
-                        color: "#64748B"
-                        verticalAlignment: Text.AlignVCenter
-                        leftPadding: rememberCheck.indicator.width + rememberCheck.spacing
-                    }
-
                     indicator: Rectangle {
-                        implicitWidth: 22
-                        implicitHeight: 22
-                        x: rememberCheck.leftPadding
+                        implicitWidth: 20
+                        implicitHeight: 20
+                        x: 0
                         y: parent.height / 2 - height / 2
                         radius: 4
+                        color: rememberCheck.checked ? "#4361EE" : "#FFFFFF"
                         border.color: rememberCheck.checked ? "#4361EE" : "#CBD5E1"
                         border.width: 1.5
-                        color: rememberCheck.checked ? "#4361EE" : "transparent"
 
-                        Rectangle {
-                            width: 12
-                            height: 12
-                            x: (parent.width - width) / 2
-                            y: (parent.height - height) / 2
-                            radius: 2
-                            color: "white"
+                        Text {
                             visible: rememberCheck.checked
+                            anchors.centerIn: parent
+                            text: "\u2713"
+                            font.pixelSize: 13
+                            font.bold: true
+                            color: "#FFFFFF"
                         }
+                    }
+
+                    contentItem: null
+                }
+
+                Text {
+                    text: "记住登录"
+                    font.family: "Microsoft YaHei"
+                    font.pixelSize: 16
+                    color: "#64748B"
+                    verticalAlignment: Text.AlignVCenter
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: rememberCheck.toggle()
                     }
                 }
             }

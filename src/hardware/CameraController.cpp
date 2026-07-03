@@ -1,4 +1,5 @@
 #include "CameraController.h"
+#include "hardware/WeightSensor.h"
 #include "utils/FoodTranslator.h"
 #include "core/PState.h"
 #include <QVideoFrameFormat>
@@ -469,7 +470,9 @@ void CameraController::drawWatermarkOverlay(QPainter &painter, int imgW, int img
         QFont fontFileName("Microsoft YaHei", sFontSize(14), QFont::Bold);
         painter.setPen(QColor(30, 30, 30));
         painter.setFont(fontFileName);
-        QString fileName = QString("WLC200A_1026040405050001_%1_%2.jpg")
+        QString deviceSn = m_weightSensor ? m_weightSensor->sn() : QStringLiteral("UNKNOWN");
+        QString fileName = QString("WLC200A_%1_%2_%3.jpg")
+                               .arg(deviceSn)
                                .arg(now.toString("yyyyMMdd"))
                                .arg(now.toString("HHmmss"));
         int fnRight = imgW - sx(10);
