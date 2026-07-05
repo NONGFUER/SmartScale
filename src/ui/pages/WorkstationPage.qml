@@ -1009,7 +1009,7 @@ Item {
                                         text: PState.isValid(root.currentPrediction)
                                             ? Translator.translate(root.currentPrediction)
                                             : PState.label(root.currentPrediction)  
-                                        font.pixelSize: 88
+                                        font.pixelSize: 68
                                         font.bold: true
                                         color: PState.isValid(root.currentPrediction)
                                                ? "#1E40AF" : "#94A3B8"
