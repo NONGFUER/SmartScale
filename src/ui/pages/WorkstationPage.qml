@@ -638,7 +638,7 @@ Item {
                             // ===== 食材名称标签 + 双按钮（同一行，触摸友好，放大版）=====
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 72
+                                Layout.preferredHeight: 84
                                 spacing: 16
 
                                 Text {
@@ -650,83 +650,12 @@ Item {
 
                                 Item { Layout.fillWidth: true }
 
-                                // ----- 按钮：选择食材（绿色 outline，放大版）-----
-                                Rectangle {
-                                    id: selectFoodBtn
-                                    width: selectFoodRow.implicitWidth + 48
-                                    height: 64
-                                    radius: 32
-                                    color: selectFoodMA.pressed ? "#BBF7D0"
-                                          : (selectFoodMA.containsMouse ? "#D1FAE5" : "#DCFCE7")
-                                    border.color: "#86EFAC"
-                                    border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 120 } }
-
-                                    Row {
-                                        id: selectFoodRow
-                                        anchors.centerIn: parent
-                                        spacing: 10
-
-                                        Canvas {
-                                            id: foodIcon
-                                            width: 32
-                                            height: 32
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            onPaint: {
-                                                var ctx = getContext("2d")
-                                                ctx.clearRect(0, 0, width, height)
-                                                ctx.strokeStyle = "#16A34A"
-                                                ctx.lineWidth = 2.5
-                                                ctx.lineCap = "round"
-                                                ctx.lineJoin = "round"
-                                                ctx.beginPath()
-                                                ctx.moveTo(16, 4)
-                                                ctx.lineTo(4, 15)
-                                                ctx.lineTo(8, 15)
-                                                ctx.lineTo(8, 25)
-                                                ctx.lineTo(24, 25)
-                                                ctx.lineTo(24, 15)
-                                                ctx.lineTo(28, 15)
-                                                ctx.closePath()
-                                                ctx.stroke()
-                                                ctx.beginPath()
-                                                ctx.moveTo(16, 19)
-                                                ctx.quadraticCurveTo(11, 16, 16, 11)
-                                                ctx.quadraticCurveTo(21, 16, 16, 19)
-                                                ctx.fillStyle = "#16A34A"
-                                                ctx.fill()
-                                            }
-                                            Component.onCompleted: requestPaint()
-                                        }
-
-                                        Text {
-                                            text: "选择食材"
-                                            font.pixelSize: 30
-                                            font.bold: true
-                                            color: "#16A34A"
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
-                                    }
-
-                                    MouseArea {
-                                        id: selectFoodMA
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            console.log("[WSP] 点击选择食材按钮，打开品类选择弹窗")
-                                            root.categorySelectMode = true
-                                            correctionDialog.open()
-                                        }
-                                    }
-                                }
-
                                 // ----- 按钮：识别（蓝色主按钮，含 loading，放大版）-----
                                 Rectangle {
                                     id: recognizeBtn
-                                    width: recognizeRow.implicitWidth + 48
-                                    height: 64
-                                    radius: 32
+                                    width: 220
+                                    height: 76
+                                    radius: 38
                                     color: recognizeMA.pressed ? "#2563EB"
                                          : (recognizeMA.containsMouse ? "#3B82F6" : "#60A5FA")
                                     border.color: "#3B82F6"
@@ -830,6 +759,77 @@ Item {
                                         }
                                     }
                                 }
+
+                                // ----- 按钮：选择食材（绿色 outline，放大版）-----
+                                Rectangle {
+                                    id: selectFoodBtn
+                                    width: 220
+                                    height: 76
+                                    radius: 38
+                                    color: selectFoodMA.pressed ? "#BBF7D0"
+                                          : (selectFoodMA.containsMouse ? "#D1FAE5" : "#DCFCE7")
+                                    border.color: "#86EFAC"
+                                    border.width: 1
+                                    Behavior on color { ColorAnimation { duration: 120 } }
+
+                                    Row {
+                                        id: selectFoodRow
+                                        anchors.centerIn: parent
+                                        spacing: 10
+
+                                        Canvas {
+                                            id: foodIcon
+                                            width: 32
+                                            height: 32
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            onPaint: {
+                                                var ctx = getContext("2d")
+                                                ctx.clearRect(0, 0, width, height)
+                                                ctx.strokeStyle = "#16A34A"
+                                                ctx.lineWidth = 2.5
+                                                ctx.lineCap = "round"
+                                                ctx.lineJoin = "round"
+                                                ctx.beginPath()
+                                                ctx.moveTo(16, 4)
+                                                ctx.lineTo(4, 15)
+                                                ctx.lineTo(8, 15)
+                                                ctx.lineTo(8, 25)
+                                                ctx.lineTo(24, 25)
+                                                ctx.lineTo(24, 15)
+                                                ctx.lineTo(28, 15)
+                                                ctx.closePath()
+                                                ctx.stroke()
+                                                ctx.beginPath()
+                                                ctx.moveTo(16, 19)
+                                                ctx.quadraticCurveTo(11, 16, 16, 11)
+                                                ctx.quadraticCurveTo(21, 16, 16, 19)
+                                                ctx.fillStyle = "#16A34A"
+                                                ctx.fill()
+                                            }
+                                            Component.onCompleted: requestPaint()
+                                        }
+
+                                        Text {
+                                            text: "选择食材"
+                                            font.pixelSize: 30
+                                            font.bold: true
+                                            color: "#16A34A"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        id: selectFoodMA
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            console.log("[WSP] 点击选择食材按钮，打开品类选择弹窗")
+                                            root.categorySelectMode = true
+                                            correctionDialog.open()
+                                        }
+                                    }
+                                }
                             }
 
                             // 名称卡片 — 虚线边框 + 文字（可点击选择品类）
@@ -892,7 +892,8 @@ Item {
                             // "称重克数" 独立标签 — 在卡片外部上方
                             Text {
                                 text: "称重克数"
-                                font.pixelSize:24
+                                font.pixelSize: 28
+                                font.bold: true
                                 color: "#64748B"
                             }
 
