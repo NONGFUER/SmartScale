@@ -660,9 +660,9 @@ Item {
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     onClicked: {
-                                        console.log("打开品类选择...")
-                                        root.categorySelectMode = true
-                                        correctionDialog.open()
+                                        //console.log("打开品类选择...")
+                                        //root.categorySelectMode = true
+                                        //correctionDialog.open()
                                     }
                                 }
 
