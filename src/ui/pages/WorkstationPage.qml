@@ -568,12 +568,12 @@ Item {
                     // ==================== 顶部区（紧凑）：用户信息 ====================
                     RowLayout {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 72
+                        Layout.preferredHeight: 120
                         spacing: 14
 
                         // 圆形头像
                         Rectangle {
-                            width: 54; height: 54; radius: 27
+                            width: 72; height: 72; radius: 36
                             color: "#3B82F6"
 
                             Text {
@@ -588,7 +588,7 @@ Item {
                         // 用户名称 + 岗位标签（用普通 Item 包裹，避免内部使用 anchors 时触发 Layout 警告）
                         // 外层 RowLayout 只管理这一个 Item 的布局，内部的 ColumnLayout + MouseArea 用 anchors 定位
                         Item {
-                            Layout.preferredHeight: 72
+                            Layout.preferredHeight: 120
                             implicitWidth: userInfoColumn.implicitWidth
 
                             ColumnLayout {
@@ -598,7 +598,7 @@ Item {
 
                                 Text {
                                     text: BackendAuth.currentUser || "未登录"
-                                    font.pixelSize: 25
+                                    font.pixelSize: 35
                                     font.bold: true
                                     color: "#1E293B"
                                 }
@@ -644,12 +644,13 @@ Item {
 
                         ColumnLayout {
                             anchors.fill: parent
-                            spacing: 12
+                            spacing: 8
 
                             // ===== 食材名称标签 + 双按钮（同一行，触摸友好，放大版）=====
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 84
+                                Layout.preferredHeight: 72
+                                Layout.bottomMargin: -4
                                 spacing: 16
 
                                 Text {
@@ -969,6 +970,7 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 220
                                 Layout.minimumHeight: 180
+                                Layout.topMargin: 2
                                 radius: 12
                                 color: root.currentPrediction === PState.IDLE || root.currentPrediction === PState.NOT_READY
                                        ? "#F8FAFC" : "#EFF6FF"
@@ -1026,6 +1028,7 @@ Item {
                                 font.pixelSize: 28
                                 font.bold: true
                                 color: "#64748B"
+                                Layout.bottomMargin: -4
                             }
 
                             // 称重卡片 — 蓝色圆角色块，白色大字（只放数字），固定高度不撑满
@@ -1033,6 +1036,7 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 240
                                 Layout.maximumHeight: 280
+                                Layout.topMargin: 2
                                 radius: 16
                                 color: "#3B82F6"
 
