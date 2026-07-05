@@ -49,6 +49,17 @@ Item {
         }
     }
 
+    // 清空食材卡片：保存完成（成功或失败）后重置所有食材相关状态
+    function clearIngredientCard() {
+        root.currentPrediction = PState.IDLE
+        root.currentImagePath = ""
+        root.currentIngrId = ""
+        root.currentAiDetected = false
+        root.pendingSaveIngrId = ""
+        root.pendingSaveAiDetected = false
+        root.currentDetailRecord = null
+    }
+
     Component.onCompleted: _selectLatestRecord()
 
     // 历史记录变化时（首次加载/新增/刷新）若未选中任何记录，自动选中最新一条
@@ -787,7 +798,7 @@ Item {
 
                                         Text {
                                             text: root.aiRecognizing ? "识别中..." : "AI识别"
-                                            font.pixelSize: 30
+                                            font.pixelSize: 36
                                             font.bold: true
                                             color: "#FFFFFF"
                                             anchors.verticalCenter: parent.verticalCenter
@@ -931,7 +942,7 @@ Item {
 
                                         Text {
                                             text: "选择食材"
-                                            font.pixelSize: 30
+                                            font.pixelSize: 36
                                             font.bold: true
                                             color: "#FFFFFF"
                                             anchors.verticalCenter: parent.verticalCenter
@@ -1180,12 +1191,7 @@ Item {
                     // 清空当前选中，让 historyChanged 触发时自动选中刚写入的最新记录
                     root.currentDetailRecord = null
                     WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId, root.pendingSaveAiDetected)
-                    root.currentPrediction = PState.IDLE
-                    root.currentImagePath = ""
-                    root.currentIngrId = ""
-                    root.currentAiDetected = false
-                    root.pendingSaveIngrId = ""
-                    root.pendingSaveAiDetected = false
+                    clearIngredientCard()
                 } else {
                     // 自动模式：照片已保存，独立触发 AI 识别（不阻塞保存管线）
                     CameraController.recognizeLastCapture()
@@ -1253,10 +1259,13 @@ Item {
         function onCloudSyncSuccess(localId) {
             console.log("[Toast] 上传成功 id=", localId)
             window.toast("保存成功", "success")
+            VoiceSpeaker.speak("已保存")
+            clearIngredientCard()
         }
         function onCloudSyncFailed(localId, errorMsg) {
             console.warn("[Toast] 上传失败 id=", localId, "err=", errorMsg)
             window.toast("保存失败：" + errorMsg, "error", 4000)
+            clearIngredientCard()
         }
         function onUserRecordCreated(success, msg) {
             window.toast(success ? "记录已创建" : "创建失败：" + msg,

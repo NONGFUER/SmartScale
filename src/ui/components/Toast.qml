@@ -18,9 +18,9 @@ Popup {
     padding: 0
     background: Item {} // 透明背景，内容自绘
 
-    // 顶部居中显示
+    // 顶部居中显示（触摸屏适配：增大 y 偏移，避免与状态栏重叠）
     x: (parent ? parent.width : 0) / 2 - implicitWidth / 2
-    y: 120
+    y: 140
     implicitWidth: bubble.width
     implicitHeight: bubble.height
 
@@ -92,33 +92,34 @@ Popup {
         dequeueTimer.start()
     }
 
-    // 入场/退场动画
+    // 入场/退场动画（触摸屏适配：动画位移距离增大以匹配更大气泡）
     enter: Transition {
         NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 250; easing.type: Easing.OutCubic }
-        NumberAnimation { property: "y"; from: -80; to: 120; duration: 250; easing.type: Easing.OutCubic }
+        NumberAnimation { property: "y"; from: -100; to: 140; duration: 250; easing.type: Easing.OutCubic }
     }
     exit: Transition {
         NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 200; easing.type: Easing.InCubic }
-        NumberAnimation { property: "y"; from: y; to: y - 40; duration: 200; easing.type: Easing.InCubic }
+        NumberAnimation { property: "y"; from: y; to: y - 60; duration: 200; easing.type: Easing.InCubic }
     }
 
     Rectangle {
         id: bubble
-        width: Math.min(Math.max(bubbleText.implicitWidth + 40, 200),
+        // 触摸屏适配：增大最小宽度和内边距，提升可读性和触摸友好度
+        width: Math.min(Math.max(bubbleText.implicitWidth + 64, 300),
                         root.parent ? root.parent.width - 80 : 600)
-        height: 56
-        radius: 12
+        height: 76
+        radius: 16
 
         border.width: 1
         border.color: "#33000000"
 
         Row {
             anchors.centerIn: parent
-            spacing: 10
+            spacing: 12
 
             // Text {
             //     id: iconText
-            //     font.pixelSize: 18
+            //     font.pixelSize: 22
             //     font.bold: true
             //     color: "#FFFFFF"
             //     anchors.verticalCenter: parent.verticalCenter
@@ -126,7 +127,8 @@ Popup {
 
             Text {
                 id: bubbleText
-                font.pixelSize: 18
+                // 触摸屏适配：增大字体以提升可读性和触摸操作准确性
+                font.pixelSize: 26
                 font.bold: true
                 color: "#FFFFFF"
                 anchors.verticalCenter: parent.verticalCenter

@@ -126,7 +126,7 @@ Rectangle {
     Text {
         anchors.centerIn: parent
         text: btnRoot.text
-        font.pixelSize: 32
+        font.pixelSize: 36
         font.bold: true
         color: btnRoot._textColor
     }
