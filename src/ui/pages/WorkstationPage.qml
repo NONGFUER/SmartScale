@@ -650,19 +650,79 @@ Item {
 
                                 Item { Layout.fillWidth: true }
 
-                                // ----- 按钮：识别（蓝色主按钮，含 loading，放大版）-----
+                                // ----- 按钮：识别（蓝色主按钮，专业商务风）-----
                                 Rectangle {
                                     id: recognizeBtn
                                     width: 220
                                     height: 76
-                                    radius: 38
-                                    color: recognizeMA.pressed ? "#2563EB"
-                                         : (recognizeMA.containsMouse ? "#3B82F6" : "#60A5FA")
-                                    border.color: "#3B82F6"
+                                    radius: 12
                                     border.width: 1
-                                    opacity: root.aiRecognizing ? 0.7 : 1.0
-                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                    border.color: recognizeMA.containsMouse ? "#60A5FA" : "#1E40AF"
+                                    opacity: root.aiRecognizing ? 0.75 : 1.0
+                                    clip: false
+
+                                    readonly property color topColor: "#3B82F6"
+                                    readonly property color bottomColor: "#1D4ED8"
+
+                                    Behavior on border.color { ColorAnimation { duration: 140 } }
                                     Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                                    transform: Translate {
+                                        y: recognizeMA.containsMouse && !recognizeMA.pressed ? -2 : 0
+                                        Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                                    }
+
+                                    gradient: Gradient {
+                                        GradientStop { position: 0.0; color: recognizeBtn.topColor }
+                                        GradientStop { position: 1.0; color: recognizeBtn.bottomColor }
+                                    }
+
+                                    // 顶部高光带（弧面反光）
+                                    Rectangle {
+                                        anchors.top: parent.top
+                                        anchors.topMargin: 2
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: parent.width - 20
+                                        height: 2
+                                        radius: 1
+                                        gradient: Gradient {
+                                            orientation: Qt.Horizontal
+                                            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0) }
+                                            GradientStop { position: 0.5; color: "#FFFFFF" }
+                                            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0) }
+                                        }
+                                    }
+
+                                    // 底部暗影带
+                                    Rectangle {
+                                        anchors.bottom: parent.bottom
+                                        anchors.bottomMargin: 2
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: parent.width - 20
+                                        height: 2
+                                        radius: 1
+                                        gradient: Gradient {
+                                            orientation: Qt.Horizontal
+                                            GradientStop { position: 0.0; color: Qt.rgba(0.106, 0.149, 0.231, 0) }
+                                            GradientStop { position: 0.5; color: "#1B263B" }
+                                            GradientStop { position: 1.0; color: Qt.rgba(0.106, 0.149, 0.231, 0) }
+                                        }
+                                        opacity: recognizeMA.containsMouse ? 0.3 : 0.16
+                                        Behavior on opacity { NumberAnimation { duration: 140 } }
+                                    }
+
+                                    // 底部散光投影
+                                    Rectangle {
+                                        anchors.bottom: parent.bottom
+                                        anchors.bottomMargin: -3
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: parent.width - 14
+                                        height: 6
+                                        radius: 3
+                                        color: "#1B263B"
+                                        opacity: recognizeMA.containsMouse ? 0.18 : 0.10
+                                        Behavior on opacity { NumberAnimation { duration: 140 } }
+                                    }
 
                                     Row {
                                         id: recognizeRow
@@ -726,7 +786,7 @@ Item {
                                         }
 
                                         Text {
-                                            text: root.aiRecognizing ? "识别中..." : "识别"
+                                            text: root.aiRecognizing ? "识别中..." : "AI识别"
                                             font.pixelSize: 30
                                             font.bold: true
                                             color: "#FFFFFF"
@@ -760,17 +820,77 @@ Item {
                                     }
                                 }
 
-                                // ----- 按钮：选择食材（绿色 outline，放大版）-----
+                                // ----- 按钮：选择食材（绿色填充按钮，专业商务风）-----
                                 Rectangle {
                                     id: selectFoodBtn
                                     width: 220
                                     height: 76
-                                    radius: 38
-                                    color: selectFoodMA.pressed ? "#BBF7D0"
-                                          : (selectFoodMA.containsMouse ? "#D1FAE5" : "#DCFCE7")
-                                    border.color: "#86EFAC"
+                                    radius: 12
                                     border.width: 1
-                                    Behavior on color { ColorAnimation { duration: 120 } }
+                                    border.color: selectFoodMA.containsMouse ? "#4ADE80" : "#166534"
+                                    clip: false
+
+                                    readonly property color topColor: "#16A34A"
+                                    readonly property color bottomColor: "#15803D"
+
+                                    Behavior on border.color { ColorAnimation { duration: 140 } }
+
+                                    transform: Translate {
+                                        y: selectFoodMA.containsMouse && !selectFoodMA.pressed ? -2 : 0
+                                        Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                                    }
+
+                                    gradient: Gradient {
+                                        GradientStop { position: 0.0; color: selectFoodBtn.topColor }
+                                        GradientStop { position: 1.0; color: selectFoodBtn.bottomColor }
+                                    }
+
+                                    // 顶部高光带（弧面反光）
+                                    Rectangle {
+                                        anchors.top: parent.top
+                                        anchors.topMargin: 2
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: parent.width - 20
+                                        height: 2
+                                        radius: 1
+                                        gradient: Gradient {
+                                            orientation: Qt.Horizontal
+                                            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0) }
+                                            GradientStop { position: 0.5; color: "#FFFFFF" }
+                                            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0) }
+                                        }
+                                    }
+
+                                    // 底部暗影带
+                                    Rectangle {
+                                        anchors.bottom: parent.bottom
+                                        anchors.bottomMargin: 2
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: parent.width - 20
+                                        height: 2
+                                        radius: 1
+                                        gradient: Gradient {
+                                            orientation: Qt.Horizontal
+                                            GradientStop { position: 0.0; color: Qt.rgba(0.024, 0.18, 0.11, 0) }
+                                            GradientStop { position: 0.5; color: "#064E3B" }
+                                            GradientStop { position: 1.0; color: Qt.rgba(0.024, 0.18, 0.11, 0) }
+                                        }
+                                        opacity: selectFoodMA.containsMouse ? 0.3 : 0.16
+                                        Behavior on opacity { NumberAnimation { duration: 140 } }
+                                    }
+
+                                    // 底部散光投影
+                                    Rectangle {
+                                        anchors.bottom: parent.bottom
+                                        anchors.bottomMargin: -3
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        width: parent.width - 14
+                                        height: 6
+                                        radius: 3
+                                        color: "#064E3B"
+                                        opacity: selectFoodMA.containsMouse ? 0.18 : 0.10
+                                        Behavior on opacity { NumberAnimation { duration: 140 } }
+                                    }
 
                                     Row {
                                         id: selectFoodRow
@@ -785,7 +905,7 @@ Item {
                                             onPaint: {
                                                 var ctx = getContext("2d")
                                                 ctx.clearRect(0, 0, width, height)
-                                                ctx.strokeStyle = "#16A34A"
+                                                ctx.strokeStyle = "#FFFFFF"
                                                 ctx.lineWidth = 2.5
                                                 ctx.lineCap = "round"
                                                 ctx.lineJoin = "round"
@@ -803,7 +923,7 @@ Item {
                                                 ctx.moveTo(16, 19)
                                                 ctx.quadraticCurveTo(11, 16, 16, 11)
                                                 ctx.quadraticCurveTo(21, 16, 16, 19)
-                                                ctx.fillStyle = "#16A34A"
+                                                ctx.fillStyle = "#FFFFFF"
                                                 ctx.fill()
                                             }
                                             Component.onCompleted: requestPaint()
@@ -813,7 +933,7 @@ Item {
                                             text: "选择食材"
                                             font.pixelSize: 30
                                             font.bold: true
-                                            color: "#16A34A"
+                                            color: "#FFFFFF"
                                             anchors.verticalCenter: parent.verticalCenter
                                         }
                                     }
