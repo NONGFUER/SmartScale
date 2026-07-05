@@ -339,7 +339,7 @@ void WeightHistoryService::syncAllToCloud()
 //  撤回称重记录（软删除 + 云端 API 调用）
 // ============================================================
 
-void WeightHistoryService::revokeRecord(int recordId, int custId, const QString &cloudRecordId)
+void WeightHistoryService::revokeRecord(int recordId, qint64 custId, const QString &cloudRecordId)
 {
     qDebug() << "[WHS] 撤回记录请求: localId=" << recordId
              << "custId=" << custId << "cloudId=" << cloudRecordId;
@@ -468,7 +468,7 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
             QJsonValue dataVal = doc.object().value("data");
             qDebug() << "[WHS] 服务器返回 data:" << dataVal;
 
-            int custId   = 0;
+            qint64 custId = 0;
             QString remoteRecoId;  // 雪花 ID，全程保持 QString
 
             if (dataVal.isObject()) {
@@ -484,13 +484,14 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
                 }
                 qDebug() << "[WHS] 解析 recoId 原始值:" << r << "→ 转换后:" << remoteRecoId;
 
+                // custId 是雪花 ID（17位），用 toLongLong 避免 int 溢出
                 QJsonValue c = dataObj.value("custId");
-                custId = c.isString() ? c.toString().toInt() : c.toInt();
+                custId = c.isString() ? c.toString().toLongLong() : c.toVariant().toLongLong();
 
                 // fallback: custId 为空时尝试 userId
                 if (custId <= 0) {
                     QJsonValue u = dataObj.value("userId");
-                    int uid = u.isString() ? u.toString().toInt() : u.toInt();
+                    qint64 uid = u.isString() ? u.toString().toLongLong() : u.toVariant().toLongLong();
                     if (uid > 0) {
                         qDebug() << "[WHS] custId为空，fallback到userId=" << uid;
                         custId = uid;
@@ -631,7 +632,7 @@ void WeightHistoryService::createUserWeightRecord(const QString &ingrCd,
 // Body: CustId(int64) + RecoId(int64) + File(binary) 均为 form-data 字段
 // ============================================================
 
-void WeightHistoryService::updateRecordImage(int custId, const QString &recordId, const QString &imagePath)
+void WeightHistoryService::updateRecordImage(qint64 custId, const QString &recordId, const QString &imagePath)
 {
     if (!m_networkMgr || !m_authService) return;
 

@@ -457,8 +457,8 @@ bool AuthService::parseAuthResponse(const QByteArray &data,
 
     // 解析 USER 域字段
     QJsonValue custVal = userData.value("custId");
-    m_custId = custVal.isString() ? custVal.toString().toInt() : custVal.toInt(0);
-    m_devId  = userData.value("devId").toInt(0);
+    m_custId = custVal.isString() ? custVal.toString().toLongLong() : custVal.toVariant().toLongLong();
+    m_devId  = userData.value("devId").toVariant().toLongLong();
     qDebug() << "[Auth] custId raw value:" << custVal << "type:" << custVal.type() << "parsed:" << m_custId;
 
     // UTC → 本地时间

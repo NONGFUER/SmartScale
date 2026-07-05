@@ -18,8 +18,8 @@ class AuthService : public QObject
     Q_PROPERTY(QString role READ role NOTIFY userInfoChanged)
     Q_PROPERTY(bool isOnlineMode READ isOnlineMode NOTIFY modeChanged)
     Q_PROPERTY(QString currentUser READ currentUser NOTIFY currentUserChanged)
-    Q_PROPERTY(int custId READ custId NOTIFY userInfoChanged)
-    Q_PROPERTY(int devId READ devId NOTIFY userInfoChanged)
+    Q_PROPERTY(qint64 custId READ custId NOTIFY userInfoChanged)
+    Q_PROPERTY(qint64 devId READ devId NOTIFY userInfoChanged)
     Q_PROPERTY(QString productId READ productId NOTIFY productIdChanged)
     Q_PROPERTY(bool rememberLogin READ rememberLogin WRITE setRememberLogin NOTIFY rememberLoginChanged)
     Q_PROPERTY(QString lastUserCode READ lastUserCode NOTIFY lastLoginChanged)
@@ -72,8 +72,8 @@ public:
     QString role() const { return m_role; }
     bool isOnlineMode() const { return m_isOnlineMode; }
     QString currentUser() const { return m_currentUser; }
-    int custId() const { return m_custId; }
-    int devId() const { return m_devId; }
+    qint64 custId() const { return m_custId; }
+    qint64 devId() const { return m_devId; }
     /** @brief 产品 ID（登录后由 /api/ems/Product/by-sn 返回，缓存到本地） */
     QString productId() const { return m_productId; }
 
@@ -177,8 +177,8 @@ private:
     qint64 m_userId = -1;
     QString m_role;
     bool m_isOnlineMode = false;
-    int m_custId = 0;
-    int m_devId = 0;
+    qint64 m_custId = 0;
+    qint64 m_devId = 0;
     QString m_productId;          // 产品 ID（来自 /api/ems/Product/by-sn）
     QString m_deviceSn;            // 从 WeightSensor 读取的真实设备 SN
 

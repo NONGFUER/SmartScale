@@ -70,7 +70,7 @@ public:
                                              bool aiDetected);
 
     /** @brief 撤回称重记录 (软删除 + POST /api/user/WeightRecord/revoke) */
-    Q_INVOKABLE void revokeRecord(int recordId, int custId, const QString &cloudRecordId);
+    Q_INVOKABLE void revokeRecord(int recordId, qint64 custId, const QString &cloudRecordId);
 
 Q_SIGNALS:
     void historyChanged();
@@ -90,7 +90,7 @@ private:
     void recalcStats();
     QByteArray buildUploadJson(const WeightRecord &record);
     void uploadSingleRecord(const WeightRecord &record);
-    void updateRecordImage(int custId, const QString &recordId, const QString &imagePath);
+    void updateRecordImage(qint64 custId, const QString &recordId, const QString &imagePath);
 
     WeightRecordRepo *m_repo;
     QVariantList m_historyEntries;

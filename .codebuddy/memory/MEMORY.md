@@ -47,7 +47,8 @@
 
 ## 雪花 ID 类型安全
 
-- 遇到雪花 ID 字段（ingrId/emsId/cateId/recoId/userId/productId）一律 `qint64`/`QString`，禁止 `toInt()`
+- 遇到雪花 ID 字段（ingrId/emsId/cateId/recoId/userId/productId/**custId**/**devId**）一律 `qint64`/`QString`，禁止 `toInt()`
+- `AuthService` 的 `custId`/`devId` 已从 `int` 改为 `qint64`（2026-07-05 修复）
 - 详见 `.codebuddy/skills/id-type-safety/SKILL.md`
 
 ## Token 无感刷新协调器（2026-07-03 新增）
