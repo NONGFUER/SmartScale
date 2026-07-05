@@ -707,15 +707,15 @@ Item {
                                 spacing: 14
                                 layoutDirection: Qt.RightToLeft
 
-                                // ----- 按钮 2：识别（含 loading 状态）-----
+                                // ----- 按钮 2：识别（蓝色主按钮，含 loading 状态）-----
                                 Rectangle {
                                     id: recognizeBtn
                                     width: recognizeRow.implicitWidth + 40
                                     height: 52
                                     radius: 26
-                                    color: recognizeMA.pressed ? "#E2E8F0"
-                                         : (recognizeMA.containsMouse ? "#E8ECF0" : "#F1F5F9")
-                                    border.color: "#D1D5DB"
+                                    color: recognizeMA.pressed ? "#2563EB"
+                                         : (recognizeMA.containsMouse ? "#3B82F6" : "#60A5FA")
+                                    border.color: "#3B82F6"
                                     border.width: 1
                                     opacity: root.aiRecognizing ? 0.7 : 1.0
                                     Behavior on color { ColorAnimation { duration: 120 } }
@@ -724,7 +724,7 @@ Item {
                                     Row {
                                         id: recognizeRow
                                         anchors.centerIn: parent
-                                        spacing: 6
+                                        spacing: 8
 
                                         BusyIndicator {
                                             id: recognizeSpinner
@@ -741,7 +741,7 @@ Item {
                                                     onPaint: {
                                                         var ctx = getContext("2d")
                                                         ctx.clearRect(0, 0, width, height)
-                                                        ctx.strokeStyle = "#475569"
+                                                        ctx.strokeStyle = "#FFFFFF"
                                                         ctx.lineWidth = 3
                                                         ctx.lineCap = "round"
                                                         ctx.beginPath()
@@ -758,11 +758,35 @@ Item {
                                             }
                                         }
 
+                                        Canvas {
+                                            id: scanIcon
+                                            width: 24
+                                            height: 24
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            visible: !root.aiRecognizing
+                                            onPaint: {
+                                                var ctx = getContext("2d")
+                                                ctx.clearRect(0, 0, width, height)
+                                                ctx.strokeStyle = "#FFFFFF"
+                                                ctx.lineWidth = 2
+                                                ctx.lineCap = "round"
+                                                var s = 6
+                                                ctx.beginPath(); ctx.moveTo(4, s); ctx.lineTo(4, 4); ctx.lineTo(s, 4); ctx.stroke()
+                                                ctx.beginPath(); ctx.moveTo(width - s, 4); ctx.lineTo(width - 4, 4); ctx.lineTo(width - 4, s); ctx.stroke()
+                                                ctx.beginPath(); ctx.moveTo(width - 4, height - s); ctx.lineTo(width - 4, height - 4); ctx.lineTo(width - s, height - 4); ctx.stroke()
+                                                ctx.beginPath(); ctx.moveTo(s, height - 4); ctx.lineTo(4, height - 4); ctx.lineTo(4, height - s); ctx.stroke()
+                                                ctx.beginPath()
+                                                ctx.arc(width / 2, height / 2, 4, 0, Math.PI * 2)
+                                                ctx.stroke()
+                                            }
+                                            Component.onCompleted: requestPaint()
+                                        }
+
                                         Text {
                                             text: root.aiRecognizing ? "识别中..." : "识别"
                                             font.pixelSize: 24
                                             font.bold: true
-                                            color: "#475569"
+                                            color: "#FFFFFF"
                                             anchors.verticalCenter: parent.verticalCenter
                                         }
                                     }
@@ -771,47 +795,84 @@ Item {
                                         id: recognizeMA
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        //enabled: !root.aiRecognizing && WeightManager.netWeight > 0.01
-                                    onClicked: {
-                                        console.log("[WSP] 点击识别按钮，手动触发 AI 识别")
-                                        // 登录拦截：未登录则中止识别并引导登录
-                                        if (!BackendAuth.currentUser) {
-                                            console.warn("[WSP] 未登录，拦截识别操作，弹出登录窗口")
-                                            window.toast("请先登录后再识别", "warning", 2000)
-                                            window.showLogin()
-                                            return
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            console.log("[WSP] 点击识别按钮，手动触发 AI 识别")
+                                            // 登录拦截：未登录则中止识别并引导登录
+                                            if (!BackendAuth.currentUser) {
+                                                console.warn("[WSP] 未登录，拦截识别操作，弹出登录窗口")
+                                                window.toast("请先登录后再识别", "warning", 2000)
+                                                window.showLogin()
+                                                return
+                                            }
+                                            if (WeightManager.netWeight <= 0.05) {
+                                                window.toast("请先放置食材再识别", "warning", 2000)
+                                                return
+                                            }
+                                            root.aiRecognizing = true
+                                            aiRecognizeTimeout.restart()
+                                            window.toast("AI 识别中...", "info", 1500)
+                                            CameraController.captureVegetable(WeightManager.netWeight, root.currentPrediction)
                                         }
-                                        if (WeightManager.netWeight <= 0.05) {
-                                            window.toast("请先放置食材再识别", "warning", 2000)
-                                            return
-                                        }
-                root.aiRecognizing = true
-                aiRecognizeTimeout.restart()
-                window.toast("AI 识别中...", "info", 1500)
-                                        CameraController.captureVegetable(WeightManager.netWeight, root.currentPrediction)
-                                    }
                                     }
                                 }
 
-                                // ----- 按钮 1：选择食材 -----
+                                // ----- 按钮 1：选择食材（绿色 outline 按钮）-----
                                 Rectangle {
                                     id: selectFoodBtn
-                                    width: selectFoodText.implicitWidth + 40
+                                    width: selectFoodRow.implicitWidth + 40
                                     height: 52
                                     radius: 26
-                                    color: selectFoodMA.pressed ? "#E2E8F0"
-                                          : (selectFoodMA.containsMouse ? "#E8ECF0" : "#F1F5F9")
-                                    border.color: "#D1D5DB"
+                                    color: selectFoodMA.pressed ? "#BBF7D0"
+                                          : (selectFoodMA.containsMouse ? "#D1FAE5" : "#DCFCE7")
+                                    border.color: "#86EFAC"
                                     border.width: 1
                                     Behavior on color { ColorAnimation { duration: 120 } }
 
-                                    Text {
-                                        id: selectFoodText
+                                    Row {
+                                        id: selectFoodRow
                                         anchors.centerIn: parent
-                                        text: "选择食材"
-                                        font.pixelSize: 24
-                                        font.bold: true
-                                        color: "#475569"
+                                        spacing: 8
+
+                                        Canvas {
+                                            id: foodIcon
+                                            width: 24
+                                            height: 24
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            onPaint: {
+                                                var ctx = getContext("2d")
+                                                ctx.clearRect(0, 0, width, height)
+                                                ctx.strokeStyle = "#16A34A"
+                                                ctx.lineWidth = 2
+                                                ctx.lineCap = "round"
+                                                ctx.lineJoin = "round"
+                                                ctx.beginPath()
+                                                ctx.moveTo(12, 3)
+                                                ctx.lineTo(3, 11)
+                                                ctx.lineTo(6, 11)
+                                                ctx.lineTo(6, 19)
+                                                ctx.lineTo(18, 19)
+                                                ctx.lineTo(18, 11)
+                                                ctx.lineTo(21, 11)
+                                                ctx.closePath()
+                                                ctx.stroke()
+                                                ctx.beginPath()
+                                                ctx.moveTo(12, 14)
+                                                ctx.quadraticCurveTo(8, 12, 12, 8)
+                                                ctx.quadraticCurveTo(16, 12, 12, 14)
+                                                ctx.fillStyle = "#16A34A"
+                                                ctx.fill()
+                                            }
+                                            Component.onCompleted: requestPaint()
+                                        }
+
+                                        Text {
+                                            text: "选择食材"
+                                            font.pixelSize: 24
+                                            font.bold: true
+                                            color: "#16A34A"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
                                     }
 
                                     MouseArea {
