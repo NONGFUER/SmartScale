@@ -1022,7 +1022,7 @@ Item {
 
                             // "称重克数" 独立标签 — 在卡片外部上方
                             Text {
-                                text: "称重克数"
+                                text: "重量"
                                 font.pixelSize: 28
                                 font.bold: true
                                 color: "#64748B"
