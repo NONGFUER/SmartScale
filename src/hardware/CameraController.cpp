@@ -328,10 +328,10 @@ void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
                           (watermarkedImg.height() - side) / 2,
                           side, side);
     } else {
-        // 主摄像头（称台）：水平偏左45%、垂直偏下53%，约占35%
-        double cropRatio = 0.35;
+        // 主摄像头（称台）：水平居中50%、垂直偏下53%，约占50%
+        double cropRatio = 0.50;
         int side = (int)(qMin(watermarkedImg.width(), watermarkedImg.height()) * cropRatio);
-        int cropX = (int)(watermarkedImg.width() * 0.45) - (side / 2);
+        int cropX = (int)(watermarkedImg.width() * 0.5) - (side / 2);
         int cropY = (int)(watermarkedImg.height() * 0.53) - (side / 2);
         cropRect = QRect(cropX, cropY, side, side);
     }

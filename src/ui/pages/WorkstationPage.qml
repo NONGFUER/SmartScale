@@ -415,15 +415,15 @@ Item {
 
                                 // ========== 取景引导框 — 对齐 AI 裁剪区域 ==========
                                 // C++ 裁剪参数 (CameraController._processCommon):
-                                //   边长: min(w,h) * 0.35, 中心: 水平45%, 垂直53%
+                                //   边长: min(w,h) * 0.50, 中心: 水平50%, 垂直53%
                                 Item {
                                     anchors.fill: parent
                                     clip: true
                                     Rectangle {
                                         id: guideBox
-                                        width: Math.min(parent.width, parent.height) * 0.35
+                                        width: Math.min(parent.width, parent.height) * 0.50
                                         height: width
-                                        x: parent.width * 0.45 - width / 2
+                                        x: parent.width * 0.5 - width / 2
                                         y: parent.height * 0.53 - height / 2
                                         color: "transparent"
                                         radius: 8
