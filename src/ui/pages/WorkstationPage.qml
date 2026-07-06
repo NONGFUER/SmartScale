@@ -646,19 +646,11 @@ Item {
                             anchors.fill: parent
                             spacing: 8
 
-                            // ===== 食材名称标签 + 双按钮（同一行，触摸友好，放大版）=====
+                            // ===== AI识别 + 选择食材按钮行 =====
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 72
-                                Layout.bottomMargin: -4
+                                Layout.preferredHeight: 76
                                 spacing: 16
-
-                                Text {
-                                    text: "食材名称"
-                                    font.pixelSize: 28
-                                    font.bold: true
-                                    color: "#64748B"
-                                }
 
                                 Item { Layout.fillWidth: true }
 
@@ -964,13 +956,28 @@ Item {
                                 }
                             }
 
-                            // 名称卡片 — 虚线边框 + 文字（可点击选择品类）
-                            Rectangle {
-                                id: categoryCard
+                            // 名称卡片区域（含浮标标签）
+                            Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 220
                                 Layout.minimumHeight: 180
                                 Layout.topMargin: 2
+
+                                // "食材名称" 浮标标签 — 定位在卡片左上角外侧
+                                Text {
+                                    id: categoryNameLabel
+                                    anchors.left: parent.left
+                                    anchors.bottom: parent.top
+                                    anchors.bottomMargin: 6
+                                    text: "食材名称"
+                                    font.pixelSize: 28
+                                    font.bold: true
+                                    color: "#64748B"
+                                }
+
+                                Rectangle {
+                                    id: categoryCard
+                                    anchors.fill: parent
                                 radius: 12
                                 color: root.currentPrediction === PState.IDLE || root.currentPrediction === PState.NOT_READY
                                        ? "#F8FAFC" : "#EFF6FF"
@@ -1019,47 +1026,55 @@ Item {
 
                                                                  
                                     }
-                            }
+                                } // categoryCard
+                            } // 名称卡片区域 Item
 
 
-                            // "称重克数" 独立标签 — 在卡片外部上方
-                            Text {
-                                text: "重量"
-                                font.pixelSize: 28
-                                font.bold: true
-                                color: "#64748B"
-                                Layout.bottomMargin: -4
-                            }
-
-                            // 称重卡片 — 蓝色圆角色块，白色大字（只放数字），固定高度不撑满
-                            Rectangle {
+                            // 称重卡片区域（含浮标标签）
+                            Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 240
                                 Layout.maximumHeight: 280
                                 Layout.topMargin: 2
-                                radius: 16
-                                color: "#3B82F6"
 
-                                Row {
-                                    anchors.centerIn: parent
-                                    spacing: 6
-
-                                    Text {
-                                        text: WeightManager.netWeight.toFixed(2)
-                                        font.pixelSize: 148
-                                        font.bold: true
-                                        color: "#FFFFFF"
-                                        font.family: "Monospace"
-                                    }
-
-                                    Text {
-                                        text: "/kg"
-                                        font.pixelSize: 28
-                                        color: "#DBEAFE"
-                                        anchors.verticalCenter: parent.verticalCenter
-                                    }
+                                // "重量" 浮标标签 — 定位在卡片左上角外侧
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.bottom: parent.top
+                                    anchors.bottomMargin: 6
+                                    text: "重量"
+                                    font.pixelSize: 28
+                                    font.bold: true
+                                    color: "#64748B"
                                 }
-                            }
+
+                                Rectangle {
+                                    id: weightCard
+                                    anchors.fill: parent
+                                    radius: 16
+                                    color: "#3B82F6"
+
+                                    Row {
+                                        anchors.centerIn: parent
+                                        spacing: 6
+
+                                        Text {
+                                            text: WeightManager.netWeight.toFixed(2)
+                                            font.pixelSize: 148
+                                            font.bold: true
+                                            color: "#FFFFFF"
+                                            font.family: "Monospace"
+                                        }
+
+                                        Text {
+                                            text: "/kg"
+                                            font.pixelSize: 28
+                                            color: "#DBEAFE"
+                                            anchors.verticalCenter: parent.verticalCenter
+                                        }
+                                    }
+                                } // weightCard
+                            } // 称重卡片区域 Item
 
                            
                             
