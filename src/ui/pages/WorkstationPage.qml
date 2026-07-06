@@ -374,14 +374,14 @@ Item {
                                     Text { text: "实时监控"; font.pixelSize: 24; font.bold: true; color: "#334155" }
                                 }
 
-                                Row {
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    anchors.rightMargin: 14
-                                    spacing: 5
-                                    Rectangle { width: 10; height: 10; radius: 4; color: "#22C55E" }
-                                    Text { text: "2路在线"; font.pixelSize: 18; color: "#22C55E"; font.bold: true }
-                                }
+                                // Row {
+                                //     anchors.right: parent.right
+                                //     anchors.verticalCenter: parent.verticalCenter
+                                //     anchors.rightMargin: 14
+                                //     spacing: 5
+                                //     Rectangle { width: 10; height: 10; radius: 4; color: "#22C55E" }
+                                //     Text { text: "2路在线"; font.pixelSize: 18; color: "#22C55E"; font.bold: true }
+                                // }
                             }
 
                             Item {
@@ -594,6 +594,7 @@ Item {
                             ColumnLayout {
                                 id: userInfoColumn
                                 anchors.fill: parent
+                                anchors.verticalCenter: parent.verticalCenter
                                 spacing: 5
 
                                 Text {
@@ -603,19 +604,19 @@ Item {
                                     color: "#1E293B"
                                 }
 
-                                // 蓝色背景岗位标签
-                                Rectangle {
-                                    width: 68; height: 28; radius: 5
-                                    color: "#DBEAFE"
-                                    visible: BackendAuth.currentUser !== "" && BackendAuth.currentUser !== undefined
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "登录账号"
-                                        font.pixelSize: 14
-                                        color: "#2563EB"
-                                    }
-                                }
+                                // 蓝色背景岗位标签（已隐藏）
+//                                 Rectangle {
+//                                     width: 68; height: 28; radius: 5
+//                                     color: "#DBEAFE"
+//                                     visible: BackendAuth.currentUser !== "" && BackendAuth.currentUser !== undefined
+//
+//                                     Text {
+//                                         anchors.centerIn: parent
+//                                         text: "登录账号"
+//                                         font.pixelSize: 14
+//                                         color: "#2563EB"
+//                                     }
+//                                 }
                             }
 
                             // 点击区域覆盖整个用户信息区域（Item 不是 Layout，anchors 安全）
