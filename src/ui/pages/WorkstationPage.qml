@@ -1069,8 +1069,9 @@ Item {
 
                                         Text {
                                             text: "/kg"
-                                            font.pixelSize: 28
-                                            color: "#DBEAFE"
+                                            font.pixelSize: 48
+                                            font.bold: true
+                                            color: "#FFFFFF"
                                             anchors.verticalCenter: parent.verticalCenter
                                         }
                                     }
@@ -1083,12 +1084,14 @@ Item {
                     }
 
                     // ==================== 底部区（固定高度）：操作按钮（三等分）====================
+                    // 底部安全间距：避免按钮贴底边，方便单手操作时轻松触摸
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: false
-                        Layout.minimumHeight: 70
-                        Layout.maximumHeight: 80
-                        spacing: 12
+                        Layout.minimumHeight: 96
+                        Layout.maximumHeight: 104
+                        Layout.bottomMargin: 24  // 与屏幕底部保持安全距离，防止贴边
+                        spacing: 16
 
                         // 归零按钮
                         ActionButton {
