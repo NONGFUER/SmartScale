@@ -252,54 +252,54 @@ Rectangle {
     }
 
             // 调试按钮（测试阶段，放在设置齿轮左侧）
-            Item {
-                width: 46; height: 46
-                Layout.alignment: Qt.AlignVCenter
+            // Item {
+            //     width: 46; height: 46
+            //     Layout.alignment: Qt.AlignVCenter
 
-                    Rectangle {
-                        id: debugBg
-                        anchors.fill: parent
-                        radius: 6
-                        color: "transparent"
+            //         Rectangle {
+            //             id: debugBg
+            //             anchors.fill: parent
+            //             radius: 6
+            //             color: "transparent"
 
-                        states: State {
-                            name: "hovered"; when: debugMouse.containsMouse
-                            PropertyChanges { target: debugBg; color: "#25FFFFFF" }
-                        }
-                    }
+            //             states: State {
+            //                 name: "hovered"; when: debugMouse.containsMouse
+            //                 PropertyChanges { target: debugBg; color: "#25FFFFFF" }
+            //             }
+            //         }
 
-                    // 调试图标 (bug / 终端风格)
-                    Canvas {
-                        anchors.centerIn: parent
-                        width: 30; height: 30
-                        onPaint: {
-                            var ctx = getContext("2d")
-                            ctx.strokeStyle = "#FFFFFF"
-                            ctx.lineWidth = 2.6
-                            ctx.lineCap = "round"
-                            ctx.lineJoin = "round"
-                            var cx = width / 2, cy = height / 2
-                            ctx.strokeRect(cx - 11, cy - 7.5, 22, 15)
-                            ctx.beginPath()
-                            ctx.moveTo(cx - 6, cy + 4)
-                            ctx.lineTo(cx, cy + 4)
-                            ctx.moveTo(cx + 5, cy)
-                            ctx.lineTo(cx + 5, cy + 6)
-                            ctx.stroke()
-                        }
-                        Component.onCompleted: requestPaint()
-                    }
+            //         // 调试图标 (bug / 终端风格)
+            //         Canvas {
+            //             anchors.centerIn: parent
+            //             width: 30; height: 30
+            //             onPaint: {
+            //                 var ctx = getContext("2d")
+            //                 ctx.strokeStyle = "#FFFFFF"
+            //                 ctx.lineWidth = 2.6
+            //                 ctx.lineCap = "round"
+            //                 ctx.lineJoin = "round"
+            //                 var cx = width / 2, cy = height / 2
+            //                 ctx.strokeRect(cx - 11, cy - 7.5, 22, 15)
+            //                 ctx.beginPath()
+            //                 ctx.moveTo(cx - 6, cy + 4)
+            //                 ctx.lineTo(cx, cy + 4)
+            //                 ctx.moveTo(cx + 5, cy)
+            //                 ctx.lineTo(cx + 5, cy + 6)
+            //                 ctx.stroke()
+            //             }
+            //             Component.onCompleted: requestPaint()
+            //         }
 
-                    MouseArea {
-                        id: debugMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: {
-                            console.log("[StatusBar] 调试按钮被点击")
-                            root.debugRequested()
-                        }
-                    }
-                }
+            //         MouseArea {
+            //             id: debugMouse
+            //             anchors.fill: parent
+            //             hoverEnabled: true
+            //             onClicked: {
+            //                 console.log("[StatusBar] 调试按钮被点击")
+            //                 root.debugRequested()
+            //             }
+            //         }
+            //     }
 
                 // 设置齿轮图标
                 Item {
