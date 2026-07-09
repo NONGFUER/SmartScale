@@ -245,16 +245,16 @@ Dialog {
         }
 
         // ===== 按钮区 =====
-        RowLayout {
+        Item {
             Layout.fillWidth: true
             Layout.topMargin: root.detail !== "" ? 12 : 20
-            spacing: 16
+            height: 44
 
             // ----- alert 模式: 单按钮（居中） -----
             Rectangle {
+                anchors.centerIn: parent
                 visible: root.mode === "alert"
-                Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: 180
+                width: 180
                 height: 44
                 radius: 8
 
@@ -282,67 +282,69 @@ Dialog {
             }
 
             // ----- confirm 模式: 双按钮（等宽） -----
-            // 取消按钮
-            Rectangle {
+            Row {
+                anchors.fill: parent
                 visible: root.mode === "confirm"
-                Layout.fillWidth: true
-                Layout.minimumWidth: 140
-                height: 44
-                radius: 8
-                color: cancelBtnMouse.containsMouse ? "#F1F5F9" : "#FFFFFF"
-                border.color: "#D1D5DB"
-                border.width: 1
+                spacing: 16
 
-                Text { anchors.centerIn: parent; text: root.cancelText; font.pixelSize: 17; font.bold: true; color: "#475569" }
-                MouseArea {
-                    id: cancelBtnMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        root.cancelled()
-                        root.dismissed()
-                        root.close()
+                // 取消按钮
+                Rectangle {
+                    width: (parent.width - 16) / 2
+                    height: 44
+                    radius: 8
+                    color: cancelBtnMouse.containsMouse ? "#F1F5F9" : "#FFFFFF"
+                    border.color: "#D1D5DB"
+                    border.width: 1
+
+                    Text { anchors.centerIn: parent; text: root.cancelText; font.pixelSize: 17; font.bold: true; color: "#475569" }
+                    MouseArea {
+                        id: cancelBtnMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.cancelled()
+                            root.dismissed()
+                            root.close()
+                        }
                     }
                 }
-            }
 
-            // 确认/操作按钮
-            Rectangle {
-                visible: root.mode === "confirm"
-                Layout.fillWidth: true
-                Layout.minimumWidth: 140
-                height: 44
-                radius: 8
+                // 确认/操作按钮
+                Rectangle {
+                    width: (parent.width - 16) / 2
+                    height: 44
+                    radius: 8
 
-                gradient: root.dangerMode ? dangerGradient : normalGradient
+                    gradient: root.dangerMode ? dangerGradient : normalGradient
 
-                Gradient {
-                    id: dangerGradient
-                    GradientStop { position: 0.0; color: "#EF4444" }
-                    GradientStop { position: 1.0; color: "#DC2626" }
-                }
-                Gradient {
-                    id: normalGradient
-                    GradientStop { position: 0.0; color: root._color("accent") }
-                    GradientStop { position: 1.0; color: root._color("accentDark") }
-                }
+                    Gradient {
+                        id: dangerGradient
+                        GradientStop { position: 0.0; color: "#EF4444" }
+                        GradientStop { position: 1.0; color: "#DC2626" }
+                    }
+                    Gradient {
+                        id: normalGradient
+                        GradientStop { position: 0.0; color: root._color("accent") }
+                        GradientStop { position: 1.0; color: root._color("accentDark") }
+                    }
 
-                Text {
-                    anchors.centerIn: parent
-                    text: root.actionText
-                    font.pixelSize: 17
-                    font.bold: true
-                    color: "white"
-                }
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        root.confirmed()
-                        root.dismissed()
-                        root.close()
+                    Text {
+                        anchors.centerIn: parent
+                        text: root.actionText
+                        font.pixelSize: 17
+                        font.bold: true
+                        color: "white"
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            root.confirmed()
+                            root.dismissed()
+                            root.close()
+                        }
                     }
                 }
             }

@@ -189,13 +189,19 @@ void WeightSensorWorker::doTare()
         ret = modbusWriteCmd(REG_CMD_ADDR, CMD_TARE);
     }   // ← locker 析构 → 自动 unlock
 
-    m_isBusy.store(false, std::memory_order_release);  // 原子清除
-
     if (ret == 0) {
+        // 去皮成功后等待秤恢复: 秤执行硬件去皮(清零+稳秤)需要数百ms
+        // 若立即恢复轮询, 秤无法响应导致连续无响应→触发串口重启
+        QThread::msleep(400);
+
+        // ★ 秤恢复后才释放 busy, 确保 poll() 不会在秤忙期间抢串口
+        m_isBusy.store(false, std::memory_order_release);
+
         m_consecutiveErrors = 0;
         qDebug() << "[WeightSensorWorker] 去皮成功";
         Q_EMIT tareDone(true);
     } else {
+        m_isBusy.store(false, std::memory_order_release);
         m_consecutiveErrors++;
         qWarning() << "[WeightSensorWorker] 去皮失败, err=" << ret;
         Q_EMIT tareDone(false);

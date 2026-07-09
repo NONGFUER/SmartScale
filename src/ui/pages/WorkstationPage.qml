@@ -1120,6 +1120,7 @@ Item {
                                 // 启动冷却期，防止连击
                                 root.tareButtonLocked = true
                                 tareCooldownTimer.restart()
+                                root.lastScaleOp = "zero"
                                 WeightManager.zero()
                                 window.toast("归零执行中...", "info", 1500)
                             }
@@ -1136,6 +1137,7 @@ Item {
                                 // 启动冷却期，防止连击
                                 root.tareButtonLocked = true
                                 tareCooldownTimer.restart()
+                                root.lastScaleOp = "tare"
                                 WeightManager.tare()
                                 if (typeof window !== "undefined" && window.toast) {
                                     window.toast("去皮执行中...", "info", 1500)
@@ -1323,12 +1325,14 @@ Item {
         target: WeightManager
         function onTareDone(ok) {
             if (ok) {
-                window.toast("去皮成功", "success", 1500)
+                window.toast(root.lastScaleOp === "zero" ? "归零成功" : "去皮成功", "success", 1500)
             } else {
-                window.toast("去皮失败：请检查秤通信", "error", 3000)
+                window.toast(root.lastScaleOp === "zero" ? "归零失败" : "去皮失败：请检查秤通信", "error", 3000)
             }
         }
     }
+
+    property string lastScaleOp: ""  // 记录最近一次操作: "zero" | "tare"
 
     Timer {
        id: fadeTimer
