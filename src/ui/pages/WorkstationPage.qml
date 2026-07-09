@@ -1286,13 +1286,17 @@ Item {
             clearIngredientCard()
         }
         function onCloudSyncFailed(localId, errorMsg) {
-            console.warn("[Toast] 上传失败 id=", localId, "err=", errorMsg)
-            window.toast("保存失败：" + errorMsg, "error", 4000)
+            console.warn("[Alert] 上传失败 id=", localId, "err=", errorMsg)
+            window.alert("保存失败：" + errorMsg, "error", "云端同步失败", errorMsg)
             clearIngredientCard()
         }
         function onUserRecordCreated(success, msg) {
-            window.toast(success ? "记录已创建" : "创建失败：" + msg,
-                         success ? "info" : "error")
+            if (success) {
+                window.toast("记录已创建", "info")
+            } else {
+                console.warn("[Alert] 创建记录失败:", msg)
+                window.alert("创建记录失败：" + msg, "error", "保存失败")
+            }
         }
     }
 

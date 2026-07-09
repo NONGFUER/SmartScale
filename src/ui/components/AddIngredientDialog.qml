@@ -375,7 +375,7 @@ Dialog {
         }
         function onCreateFailed(errorMsg) {
             console.log("[AddIngredient] 创建失败:", errorMsg)
-            // TODO: 显示错误提示 Toast
+            window.alert(errorMsg, "error", "创建食材失败")
         }
     }
 }

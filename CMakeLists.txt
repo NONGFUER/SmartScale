@@ -70,6 +70,7 @@ qt_add_qml_module(appSmartScale
         src/ui/pages/CategoryCorrectionDialog.qml  # 品类纠错弹窗
         src/ui/components/SystemInfoDialog.qml     # [测试] 系统调试信息弹窗
         src/ui/components/Toast.qml                # 全局 Toast 提示组件
+        src/ui/components/AlertDialog.qml          # 通用错误/确认弹窗（全局）
         src/ui/components/WifiListDialog.qml       # Wi-Fi 网络列表弹窗
         src/ui/components/WifiPasswordDialog.qml   # Wi-Fi 密码输入弹窗
         src/ui/components/CellularDialog.qml        # 4G 移动数据控制弹窗

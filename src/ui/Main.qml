@@ -449,6 +449,14 @@ ApplicationWindow {
         z: 9999
     }
 
+    // 全局 Alert 弹窗（重要错误/确认，需用户手动关闭）
+    // 调用方式：window.alert("网络连接失败", "error", "错误标题", "详细错误信息")
+    //          window.confirm("确定删除？", function() { /* 确认回调 */ }, "确认")
+    AlertDialog {
+        id: globalAlert
+        z: 9998  // 低于 Toast(9999)
+    }
+
     // 设置弹窗（设备信息 + 软件版本）
     SettingsDialog {
         id: settingsDialog
@@ -457,6 +465,29 @@ ApplicationWindow {
     // 暴露给子页面调用
     function toast(message, type, duration) {
         globalToast.show(message, type, duration)
+    }
+
+    /**
+     * 全局 Alert 弹窗 — 用于重要错误/信息提示（需用户手动关闭）
+     * @param message  正文消息
+     * @param type     "error"|"warning"|"success"|"info"（默认 "info"）
+     * @param title    标题（可选）
+     * @param detail   详细信息（可选，支持展开/收起）
+     */
+    function alert(message, type, title, detail) {
+        globalAlert.show(message, type, title, detail)
+    }
+
+    /**
+     * 全局 Confirm 弹窗 — 双按钮确认对话框
+     * @param message      正文消息
+     * @param onConfirm    确认回调函数
+     * @param title        标题（可选）
+     * @param cancelText   取消按钮文字（可选，默认 "取消"）
+     * @param actionText   确认按钮文字（可选，默认 "确定"）
+     */
+    function confirm(message, onConfirm, title, cancelText, actionText) {
+        globalAlert.confirm(message, onConfirm, title, cancelText, actionText)
     }
 
     // 打开 Wi-Fi 列表弹窗（供 SettingsPage 等子页面调用）
@@ -469,5 +500,45 @@ ApplicationWindow {
     function openCellularDialog() {
         console.log("[Main] openCellularDialog()")
         cellularDialog.open()
+    }
+
+    // ============================================================
+    //  全局错误信号集中处理 — C++ 服务层 → window.alert()
+    //  注意: LoginDialog/LoginPage 的 loginFailed 保持各自内联处理
+    //        (表单上下文的内联错误提示比弹窗更直观)
+    // ============================================================
+
+    // --- AuthService: Token 刷新失败 ---
+    Connections {
+        target: BackendAuth
+        function onTokenRefreshFailed(errorMsg) {
+            console.warn("[GlobalAlert] Token 刷新失败:", errorMsg)
+            window.alert(errorMsg, "error", "认证失败", errorMsg)
+        }
+    }
+
+    // --- UserIngredientService: 创建/获取食材失败 ---
+    Connections {
+        target: UserIngredientService
+        function onCreateFailed(errorMsg) {
+            console.warn("[GlobalAlert] 创建食材失败:", errorMsg)
+            // AddIngredientDialog 也监听此信号做 UI 反馈，此处仅兜底弹窗
+            if (!addIngredientDialog || !addIngredientDialog.visible) {
+                window.alert(errorMsg, "error", "创建食材失败")
+            }
+        }
+        function onFetchFailed(errorMsg) {
+            console.warn("[GlobalAlert] 获取食材列表失败:", errorMsg)
+            window.alert(errorMsg, "warning", "获取数据失败")
+        }
+    }
+
+    // --- CategoryService: 获取分类失败 ---
+    Connections {
+        target: CategoryService
+        function onFetchFailed(errorMsg) {
+            console.warn("[GlobalAlert] 获取分类列表失败:", errorMsg)
+            window.alert(errorMsg, "warning", "获取分类失败")
+        }
     }
 }

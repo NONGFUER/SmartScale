@@ -1,88 +1,45 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Layouts
 
 // ============================================================
 // LogoutConfirmDialog — 退出登录确认弹窗
-// 用法：
+//
+// 内部委托给 AlertDialog 实现，保持原有 API 完全不变：
+//   signal logoutConfirmed()
+//   .open()
+//   .close()
+//
+// 用法（与之前完全一致）:
 //   LogoutConfirmDialog {
 //       id: logoutConfirmDialog
 //       onLogoutConfirmed: window.appLogout()
 //   }
 //   logoutConfirmDialog.open()
 // ============================================================
-Dialog {
-    id: dialogRoot
+Item {
+    id: wrapper
 
-    // ---- 对外接口 ----
+    // ---- 对外接口（保持不变） ----
     signal logoutConfirmed()
-    title: "退出登录"
-    x: (parent.width - width) / 2
-    y: (parent.height - height) / 2
-    width: 540
-    height: 360
-    modal: true
-    Overlay.modal: Rectangle { color: "#80000000" }   // 显式遮罩
-    standardButtons: Dialog.NoButton
 
-    // Dialog 自身没有 radius 属性，需通过 background 自定义圆角背景
-    background: Rectangle {
-        radius: 16
-        color: "#FFFFFF"
-        border.color: "#E2E8F0"
-        border.width: 1
+    function open() {
+        _alert.confirm(
+            "确定要退出当前账号吗？",
+            function() { wrapper.logoutConfirmed(); },
+            "退出登录",     // title
+            "取消",         // cancelText
+            "退出登录"      // actionText
+        )
+        _alert.dangerMode = true
     }
 
-    ColumnLayout {
-        anchors.centerIn: parent
-        spacing: 20
+    function close() {
+        _alert.close()
+    }
 
-        Text {
-            text: "确定要退出当前账号吗？"
-            font.pixelSize: 25
-            color: "#1E293B"
-            Layout.alignment: Qt.AlignHCenter
-            Layout.bottomMargin: 30
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.leftMargin: 30
-            Layout.rightMargin: 30
-            spacing: 16
-
-            Rectangle {
-                width: 100; height: 38; radius: 8
-                color: cancelLogoutMouse.containsMouse ? "#F1F5F9" : "#FFFFFF"
-                border.color: "#D1D5DB"
-                border.width: 1
-
-                Text { anchors.centerIn: parent; text: "取消"; font.pixelSize: 15; color: "#64748B" }
-                MouseArea {
-                    id: cancelLogoutMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: dialogRoot.close()
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true; Layout.minimumWidth: 100; height: 38; radius: 8
-                gradient: Gradient {
-                    GradientStop { position: 0.0; color: "#EF4444" }
-                    GradientStop { position: 1.0; color: "#DC2626" }
-                }
-
-                Text { anchors.centerIn: parent; text: "退出登录"; font.pixelSize: 15; font.bold: true; color: "white" }
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: {
-                        dialogRoot.close()
-                        dialogRoot.logoutConfirmed()
-                    }
-                }
-            }
-        }
+    // ---- 委托给 AlertDialog ----
+    AlertDialog {
+        id: _alert
+        parent: wrapper.parent || null  // 使用与 wrapper 相同的父级，确保层级正确
     }
 }
