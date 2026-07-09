@@ -35,7 +35,7 @@ QString FoodTranslator::translate(const QString &englishName) const
     }
 
     qWarning() << "Missing translation for:" << englishName;
-    return PState::UNKNOWN;
+    return englishName;   // 未命中则回退到原始值，避免显示字面 "unknown"
 }
 
 // ============================================================

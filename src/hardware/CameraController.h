@@ -35,6 +35,16 @@ public:
     Q_INVOKABLE void captureVegetable(double currentWeight, const QString &watermarkLabel = QString());
     Q_INVOKABLE void recognizeLastCapture();                  // 独立 AI 入口，不阻塞拍照/保存
 
+    // AI-only 模式：仅拍照裁剪用于识别，不画水印不落盘（避免产生无用图片）
+    Q_PROPERTY(bool aiOnlyMode READ aiOnlyMode WRITE setAiOnlyMode NOTIFY aiOnlyModeChanged)
+    bool aiOnlyMode() const { return m_aiOnlyMode; }
+    void setAiOnlyMode(bool on) { if (m_aiOnlyMode != on) { m_aiOnlyMode = on; Q_EMIT aiOnlyModeChanged(); } }
+
+    // 最后一次 AI 识别错误信息（QML 读取后弹 alert）
+    Q_PROPERTY(QString lastAiError READ lastAiError NOTIFY lastAiErrorChanged)
+    QString lastAiError() const { return m_lastAiError; }
+    void setAiError(const QString &error);
+
     VisionAIService* aiService() const { return m_aiService; }
     void setVoiceSpeaker(VoiceSpeaker *speaker) { m_voiceSpeaker = speaker; }
     void setAuthService(AuthService *authSvc);
@@ -45,6 +55,8 @@ Q_SIGNALS:
     void aiRecognitionCompleted(const QString &predictedLabel, const QString &imagePath, qint64 inferenceTimeMs);
     void subCaptureReady();
     void cameraStatusChanged(const QString &statusText);
+    void aiOnlyModeChanged();
+    void lastAiErrorChanged();
 
 private Q_SLOTS:
     void readSubCameraData();
@@ -122,6 +134,8 @@ private:
     mutable QMutex m_captureMetaMutex;
     QString m_watermarkLabel;      // captureVegetable 传入的标签（英文，用于水印）
     QString m_lastSavePath;        // 最后一次主摄保存路径（供独立 AI 识别上下文）
+    bool m_aiOnlyMode = false;     // true=仅拍照用于AI识别，不画水印不落盘
+    QString m_lastAiError;         // 最后一次 AI 识别错误信息
 
     // === Token 刷新协调 ===
     bool m_refreshingToken = false;

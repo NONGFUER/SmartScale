@@ -820,6 +820,8 @@ Item {
                                             root.aiRecognizing = true
                                             aiRecognizeTimeout.restart()
                                             window.toast("AI 识别中...", "info", 1500)
+                                            // AI-only 模式：仅拍照裁剪给 AI 用，不画水印不落盘
+                                            CameraController.aiOnlyMode = true
                                             CameraController.captureVegetable(WeightManager.netWeight, root.currentPrediction)
                                         }
                                     }
@@ -1014,15 +1016,25 @@ Item {
 
                                     // 左侧：文字展示
                                     Text {
+                                        id: ingredientNameText
                                         Layout.fillWidth: true
                                         horizontalAlignment: Text.AlignHCenter
-                                        text: PState.isValid(root.currentPrediction)
-                                            ? Translator.translate(root.currentPrediction)
-                                            : PState.label(root.currentPrediction)  
+                                        text: {
+                                            var pred = root.currentPrediction;
+                                            if (!PState.isValid(pred))
+                                                return PState.label(pred);
+                                            var translated = Translator.translate(pred);
+                                            // translate 未命中时返回原值，此时显示灰色 "--"
+                                            return (translated === pred) ? "--" : translated;
+                                        }
                                         font.pixelSize: 68
                                         font.bold: true
-                                        color: PState.isValid(root.currentPrediction)
-                                               ? "#1E40AF" : "#94A3B8"
+                                        color: {
+                                            var pred = root.currentPrediction;
+                                            if (!PState.isValid(pred)) return "#94A3B8";
+                                            var translated = Translator.translate(pred);
+                                            return (translated === pred) ? "#94A3B8" : "#1E40AF";
+                                        }
                                     }
 
                                                                  
@@ -1265,11 +1277,17 @@ Item {
             if (root.aiRecognizing) {
                 root.aiRecognizing = false
                 aiRecognizeTimeout.stop()
+                // 恢复非 AI-only 模式（下次保存时需要画水印）
+                CameraController.aiOnlyMode = false
+
                 var chineseLabel = Translator.translate(predictedLabel)
                 if (PState.isValid(predictedLabel)) {
                     window.toast("识别完成：" + chineseLabel, "success", 2000)
                 } else {
-                    window.toast("识别未识别出有效结果", "warning", 2500)
+                    // 区分错误类型弹 alert（网络错误 vs 业务错误）
+                    var errMsg = CameraController.lastAiError || "未能识别出食材"
+                    var isNetworkErr = errMsg.indexOf("网络") >= 0 || errMsg.indexOf("HTTP") >= 0 || errMsg.indexOf("未登录") >= 0
+                    window.alert(errMsg, isNetworkErr ? "error" : "warning", "AI识别失败")
                 }
             }
         }
@@ -1328,7 +1346,8 @@ Item {
             if (root.aiRecognizing) {
                 console.warn("[WSP] AI 识别超时（15s），自动重置状态")
                 root.aiRecognizing = false
-                window.toast("识别超时，请重试", "warning", 2500)
+                CameraController.aiOnlyMode = false
+                window.alert("AI 识别超时（15秒无响应）", "warning", "识别超时")
             }
         }
     }

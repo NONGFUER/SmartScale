@@ -363,8 +363,22 @@ void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
         savePath = dir.absolutePath() + QString("/WLC200A_V-XXXXXX_%1.jpg").arg(timeStamp);
     }
 
-    // 5 主摄：立即绘制水印并落盘（不再等待 AI 结果）
+    // 5 主摄：绘制水印并落盘（aiOnlyMode 时跳过——仅拍照给AI用）
     if (cameraIndex == 0 && !savePath.isEmpty()) {
+        // AI-only 模式：不画水印、不落盘，仅裁剪图供识别（避免产生无用图片）
+        bool isAiOnly = false;
+        {
+            QMutexLocker locker(&m_captureMetaMutex);
+            isAiOnly = m_aiOnlyMode;
+        }
+        if (isAiOnly) {
+            qDebug() << "[CameraController] AI-only 模式，跳过水印保存";
+            // 仍然通知 QML 照片已"就绪"（路径用 cp0.jpg），但不落水印盘
+            QMetaObject::invokeMethod(this, [this]() {
+                Q_EMIT photoSaved(0, QStringLiteral("/home/sjwu/Pictures/cp0.jpg"));
+            }, Qt::QueuedConnection);
+            return;  // 跳过后续所有水印逻辑
+        }
         // 读取线程安全的水印标签，空标签默认为 "--"
         QString label;
         {
@@ -840,6 +854,7 @@ void CameraController::postAiRecognize(const QImage &image, const QString &saveP
     QString token = m_authService->token();
     if (token.isEmpty()) {
         qWarning() << "[CameraController] 未登录，无法进行在线 AI 识别";
+        setAiError("未登录，无法进行AI识别");
         emitAiResult(PState::UNKNOWN, savePath, 0);
         return;
     }
@@ -926,8 +941,11 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
             return;
         }
 
-        qWarning() << "[在线AI] 请求失败:" << reply->errorString()
-                   << "HTTP状态:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QString netErr = QString("网络请求失败：%1").arg(reply->errorString());
+        int httpCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        if (httpCode > 0) netErr += QString("（HTTP %1）").arg(httpCode);
+        qWarning() << "[在线AI]" << netErr;
+        setAiError(netErr);
         emitAiResult(PState::UNKNOWN, savePath, elapsed);
         return;
     }
@@ -939,6 +957,7 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
     QJsonDocument doc = QJsonDocument::fromJson(data);
     if (doc.isNull() || !doc.isObject()) {
         qWarning() << "[在线AI] JSON 解析失败";
+        setAiError("服务器响应格式异常，无法解析");
         emitAiResult(PState::UNKNOWN, savePath, elapsed);
         return;
     }
@@ -968,7 +987,13 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
         qWarning() << "[在线AI] 识别失败, success=" << success
                    << "message=" << message
                    << "label=" << label;
+        // 使用服务端返回的 message 作为错误提示，没有则用默认文案
+        QString errDetail = message.isEmpty() ? QStringLiteral("未能识别出食材") : message;
+        setAiError(errDetail);
         label = PState::UNKNOWN;
+    } else {
+        // 成功时清空错误
+        setAiError("");
     }
 
     qInfo() << "[在线AI] 识别结果:" << label << "耗时:" << elapsed << "ms";
@@ -983,6 +1008,14 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
 void CameraController::emitAiResult(const QString &label, const QString &path, qint64 ms)
 {
     Q_EMIT aiRecognitionCompleted(label, path, ms);
+}
+
+void CameraController::setAiError(const QString &error)
+{
+    if (m_lastAiError != error) {
+        m_lastAiError = error;
+        QMetaObject::invokeMethod(this, [this]() { Q_EMIT lastAiErrorChanged(); }, Qt::QueuedConnection);
+    }
 }
 
 void CameraController::speakPredictedLabel(const QString &label)
