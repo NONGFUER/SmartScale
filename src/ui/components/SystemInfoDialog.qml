@@ -117,7 +117,7 @@ Popup {
                     font.pixelSize: 16
                     font.bold: true
                     color: "#334155"
-                    Layout.preferredWidth: 110
+                    Layout.preferredWidth: 130
                 }
 
                 Text {
@@ -141,6 +141,17 @@ Popup {
             //InfoRow { label: "上次开机："; value: formatTime(SystemInfo.lastBootTime) }
            // InfoRow { label: "上次关机："; value: formatTime(SystemInfo.lastShutdownTime) }
             InfoRow { label: "上次关机："; value: formatTime(SystemInfo.currentBootTime) }
+
+            // 分隔线
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: "#E2E8F0"
+            }
+
+            // ---- 蜂窝模组 SIM 卡信息（AT 指令读取，未取到显示 —）----
+            InfoRow { label: "SIM卡号(ICCID)："; value: (CellularModem.ccid !== undefined && CellularModem.ccid.length > 0) ? CellularModem.ccid : "—" }
+            InfoRow { label: "IMSI：";          value: (CellularModem.imsi !== undefined && CellularModem.imsi.length > 0) ? CellularModem.imsi : "—" }
 
             // 分隔线
             Rectangle {

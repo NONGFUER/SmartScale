@@ -25,7 +25,7 @@ Dialog {
     x: (parent.width - width) / 2
     y: (parent.height - height) / 2
     width: Math.min(parent.width * 0.85, 680)
-    height: Math.min(parent.height * 0.75, 560)
+    height: Math.min(parent.height * 0.85, 640)
     modal: true
     Overlay.modal: Rectangle { color: "#80000000" }
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -108,7 +108,9 @@ Dialog {
         SettingRow { label: "秤型号:"; value: "WLC200A-13C"; isLast: false }
         SettingRow { label: "序列号:"; value: WeightManager.sn.length > 0 ? WeightManager.sn : "----"; isLast: false }
         SettingRow { label: "量程范围及精度:"; value: "200kg / \u00B13%"; isLast: false }
-        SettingRow { label: "秤自重:"; value: "20kg"; isLast: true }
+        SettingRow { label: "秤自重:"; value: "20kg"; isLast: false }
+        SettingRow { label: "SIM卡号(ICCID):"; value: (CellularModem.ccid !== undefined && CellularModem.ccid.length > 0) ? CellularModem.ccid : "—"; isLast: false }
+        SettingRow { label: "IMSI:"; value: (CellularModem.imsi !== undefined && CellularModem.imsi.length > 0) ? CellularModem.imsi : "—"; isLast: true }
 
         // 分隔间距
         Item { Layout.preferredHeight: 20 }

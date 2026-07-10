@@ -143,7 +143,7 @@ void CellularModemService::probeNext()
 }
 
 // ============================================================================
-// 命中 AT 端口 → 查询 ICCID
+// 命中 AT 端口 → 依次查询 ICCID、IMSI
 // ============================================================================
 
 void CellularModemService::beginQuery()
@@ -151,6 +151,16 @@ void CellularModemService::beginQuery()
     m_state = State::Querying;
     m_buffer.clear();
     m_serial->write("AT+ICCID\r");
+    m_serial->flush();
+    m_queryTimer->start(kQueryTimeoutMs);
+}
+
+// 拿到 ICCID 后继续查询 IMSI（AT+CIMI）
+void CellularModemService::beginQueryImsi()
+{
+    m_state = State::QueryingImsi;
+    m_buffer.clear();
+    m_serial->write("AT+CIMI\r");
     m_serial->flush();
     m_queryTimer->start(kQueryTimeoutMs);
 }
@@ -184,7 +194,10 @@ void CellularModemService::onReadyRead()
             QRegularExpression re("\\+ICCID:\\s*([0-9A-F]{18,20})");
             const QRegularExpressionMatch m = re.match(QString::fromLatin1(tail));
             if (m.hasMatch()) {
-                finishWithCcid(m.captured(1));
+                m_ccid = m.captured(1);
+                qInfo() << "[CellularModem] 已获取 CCID(ICCID):" << m_ccid
+                        << "，继续查询 IMSI(AT+CIMI)";
+                beginQueryImsi();
                 return;
             }
         }
@@ -194,6 +207,24 @@ void CellularModemService::onReadyRead()
                        << m_buffer;
             m_queryTimer->stop();
             fail(QStringLiteral("AT+ICCID ERROR"));
+        }
+    } else if (m_state == State::QueryingImsi) {
+        // 解析 IMSI：ML307B 的 AT+CIMI 直接回 IMSI 数字（如 "460001234567890"），
+        // 也可能带 "+CIMI:" 前缀。缓冲示例:
+        //   "AT+CIMI\r\r\n460001234567890\r\n\r\nOK\r\n"
+        //   "AT+CIMI\r\r\n+CIMI: 460001234567890\r\n\r\nOK\r\n"
+        QRegularExpression re("(?:\\+CIMI:\\s*)?([0-9]{14,15})");
+        const QRegularExpressionMatch m = re.match(QString::fromLatin1(m_buffer));
+        if (m.hasMatch()) {
+            m_imsi = m.captured(1);
+            finishWithAll();
+            return;
+        }
+        // 已收到 OK 但仍未解析出 IMSI（或明确 ERROR）→ 以已获取的 CCID 收尾，IMSI 留空
+        if (m_buffer.contains("OK") || m_buffer.contains("ERROR")) {
+            qWarning() << "[CellularModem] 未能解析 IMSI（缓冲:" << m_buffer
+                       << "），以 CCID 收尾";
+            finishWithAll();
         }
     }
 }
@@ -213,6 +244,12 @@ void CellularModemService::onProbeTimeout()
 
 void CellularModemService::onQueryTimeout()
 {
+    if (m_state == State::QueryingImsi) {
+        // IMSI 查询超时：仍保有 CCID，则以已获取结果收尾
+        qWarning() << "[CellularModem] AT+CIMI 查询超时，以 CCID 收尾，缓冲:" << m_buffer;
+        finishWithAll();
+        return;
+    }
     if (m_state != State::Querying)
         return;
     qWarning() << "[CellularModem] AT+ICCID 查询超时，缓冲:" << m_buffer;
@@ -230,16 +267,17 @@ void CellularModemService::onRetryTimeout()
 // 收尾 / 失败 / 重试
 // ============================================================================
 
-void CellularModemService::finishWithCcid(const QString &ccid)
+void CellularModemService::finishWithAll()
 {
     m_queryTimer->stop();
     m_state = State::Done;
-    m_ccid = ccid;
-    m_available = true;
+    m_available = !m_ccid.isEmpty() || !m_imsi.isEmpty();
     cleanupSerial();
-    qInfo() << "[CellularModem] 成功获取 CCID(ICCID):" << m_ccid;
+    qInfo() << "[CellularModem] 成功获取 CCID(ICCID):" << m_ccid
+            << " IMSI:" << m_imsi;
     Q_EMIT availableChanged(m_available);
     Q_EMIT ccidChanged(m_ccid);
+    Q_EMIT imsiChanged(m_imsi);
 }
 
 void CellularModemService::fail(const QString &reason)

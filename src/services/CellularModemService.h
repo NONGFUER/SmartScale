@@ -14,8 +14,9 @@
  * 工作流程（纯异步状态机，不阻塞 UI）：
  *   1. 枚举 /dev/ttyUSB*（或按 ASR VID 0x2ECC 过滤）作为候选 AT 端口；
  *   2. 依次打开候选端口、发送 "AT\r"，收到 "OK" 即确认是调制解调器 AT 接口；
- *   3. 命中后发送 "AT+ICCID\r"，在 readyRead 中累积缓冲、按 "+ICCID:" 提取 18~20 位 ICCID；
- *   4. 成功 → 暴露 ccid() 并通过 ccidChanged 信号通知；失败/超时 → 保持空串并自动重试。
+ *   3. 命中后依次发送 "AT+ICCID\r" 与 "AT+CIMI\r"，
+ *      在 readyRead 中累积缓冲、按 "+ICCID:" 提取 18~20 位 ICCID、按 14~15 位数字提取 IMSI；
+ *   4. 成功 → 暴露 ccid()/imsi() 并通过 ccidChanged/imsiChanged 信号通知；失败/超时 → 保持空串并自动重试。
  *
  * 已确认真机参数（ASR ML307B）：
  *   - 模组型号：ASR ML307B，AT 端口实测为 ttyUSB2（但本服务动态探测，不写死）；
@@ -29,6 +30,7 @@ class CellularModemService : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString ccid      READ ccid      NOTIFY ccidChanged)
+    Q_PROPERTY(QString imsi      READ imsi      NOTIFY imsiChanged)
     Q_PROPERTY(bool    available READ available NOTIFY availableChanged)
 
 public:
@@ -36,14 +38,17 @@ public:
     ~CellularModemService();
 
     QString ccid() const { return m_ccid; }
+    QString imsi() const { return m_imsi; }
     bool    available() const { return m_available; }
 
-    /** 启动 CCID 获取：遍历候选端口动态探测 AT 接口并读取 +ICCID（已在进行中或已完成则忽略） */
+    /** 启动 CCID/IMSI 获取：遍历候选端口动态探测 AT 接口并依次读取 +ICCID / +CIMI（已在进行中或已完成则忽略） */
     Q_INVOKABLE void start();
 
 Q_SIGNALS:
-    /** CCID 获取成功（非空串），或后续被刷新时触发 */
+    /** CCID(ICCID) 获取成功（非空串），或后续被刷新时触发 */
     void ccidChanged(const QString &ccid);
+    /** IMSI(CIMI) 获取成功（非空串），或后续被刷新时触发 */
+    void imsiChanged(const QString &imsi);
     /** 模组可用性变化（探测到 AT 接口且成功解析为 true） */
     void availableChanged(bool available);
 
@@ -54,23 +59,25 @@ private Q_SLOTS:
     void onRetryTimeout();
 
 private:
-    enum class State { Idle, Probing, Querying, Done, Failed };
+    enum class State { Idle, Probing, Querying, QueryingImsi, Done, Failed };
 
     void probeNext();
     void beginQuery();
-    void finishWithCcid(const QString &ccid);
+    void beginQueryImsi();
+    void finishWithAll();
     void fail(const QString &reason);
     void cleanupSerial();
 
     QSerialPort *m_serial      = nullptr;
     QTimer     *m_probeTimer   = nullptr;   // 单端口 AT 探测超时
-    QTimer     *m_queryTimer   = nullptr;   // AT+ICCID 查询超时
+    QTimer     *m_queryTimer   = nullptr;   // AT+ICCID / AT+CIMI 查询超时
     QTimer     *m_retryTimer   = nullptr;   // 整体重试间隔
 
     QStringList m_candidates;              // 候选 AT 端口 systemLocation 列表
     int         m_candidateIndex = 0;
     State       m_state = State::Idle;
     QString     m_ccid;
+    QString     m_imsi;
     bool        m_available = false;
     QByteArray  m_buffer;                   // readyRead 累积缓冲
     int         m_retries = 0;              // 已重试次数
