@@ -11,6 +11,8 @@
 #include <QMutex>
 #include <QDir>
 #include <QFileInfo>
+#include <QTimer>
+#include <QProcess>
 #include <cstdio>
 
 // 硬件层
@@ -198,6 +200,9 @@ int main(int argc, char *argv[])
         // 启动/刷新设备状态上报（温度 + 联网 IP，默认 30s 周期）
         mqttClientService->startDeviceStatusReport(sn, custId);
 
+        // 启动/刷新下行命令监听（cust/.../down/cmd: close/restart/exituser）
+        mqttClientService->startCommandListener(sn, custId);
+
         qInfo() << "[Main] MQTT 上报设备信息: sn=" << sn
                 << "custId=" << custId;
         qInfo() << "[Main] 硬件信息字段: hardModel=" << systemInfoService->hardModel()
@@ -235,6 +240,39 @@ int main(int argc, char *argv[])
     // CCID 获取成功后自动补发设备信息（带 sim 字段），去重守卫避免重复上报
     QObject::connect(cellularModemService, &CellularModemService::ccidChanged,
                      mqttClientService, tryPublishDeviceInfo);
+
+    // ============================================================
+    // 下行命令处理: cust/{custId}/device/{sn}/down/cmd
+    //   cmd=close   预留，暂不处理
+    //   cmd=restart 重启设备
+    //   cmd=exituser 退出登录
+    // time 字段指定延迟多少毫秒后执行(<=0 立即执行)
+    // ============================================================
+    QObject::connect(mqttClientService, &MqttClientService::deviceCommandReceived,
+                     &app, [authService](const QString &cmd, qint64 timeMs) {
+        const qint64 delay = (timeMs > 0) ? timeMs : 0;
+        if (cmd == QStringLiteral("exituser")) {
+            qInfo() << "[Main] MQTT 命令: 退出登录, 延时" << delay << "ms";
+            QTimer::singleShot(delay, authService, [authService]() {
+                qInfo() << "[Main] 执行退出登录";
+                authService->logout();
+            });
+        } else if (cmd == QStringLiteral("restart")) {
+            qInfo() << "[Main] MQTT 命令: 重启设备, 延时" << delay << "ms";
+            QTimer::singleShot(delay, &app, []() {
+                qInfo() << "[Main] 执行设备重启";
+                // 嵌入式 Linux: reboot（systemd 环境回退 systemctl reboot）
+                if (QProcess::execute(QStringLiteral("reboot")) != 0)
+                    QProcess::execute(QStringLiteral("systemctl"),
+                                      QStringList() << QStringLiteral("reboot"));
+            });
+        } else if (cmd == QStringLiteral("close")) {
+            // 预留命令，暂不处理
+            qInfo() << "[Main] MQTT 命令 close (预留): 暂不处理";
+        } else {
+            qWarning() << "[Main] 未知 MQTT 命令:" << cmd;
+        }
+    });
 
     // 启动 CCID 获取：开机即尝试（服务内置重试）；4G 硬件就绪/启用后再补触发一次
     cellularModemService->start();

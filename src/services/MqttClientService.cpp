@@ -41,6 +41,10 @@ MqttClientService::MqttClientService(QObject *parent)
     connect(m_client, &QMqttClient::messageReceived,
             this,     &MqttClientService::onQMqttMessageReceived);
 
+    // 下行命令过滤：在通用 messageReceived 之外单独解析 down/cmd
+    connect(this, &MqttClientService::messageReceived,
+            this, &MqttClientService::onCommandMessage);
+
     // ---- 重连定时器 ----
     m_reconnectTimer = new QTimer(this);
     m_reconnectTimer->setSingleShot(true);
@@ -885,13 +889,10 @@ QString MqttClientService::buildPingTopic(qint64 custId, const QString &sn)
     return QString("cust/%1/device/%2/up/ping").arg(custId).arg(sn);
 }
 
-QByteArray MqttClientService::buildPingPayload(const QString &sn)
+QByteArray MqttClientService::buildPingPayload()
 {
-    QJsonObject obj;
-    obj[QStringLiteral("ts")] = QDateTime::currentMSecsSinceEpoch();
-    if (!sn.isEmpty())
-        obj[QStringLiteral("sn")] = sn;
-    return QJsonDocument(obj).toJson(QJsonDocument::Compact);
+    // 心跳仅用于保活，主题已含 custId/sn，payload 为空对象
+    return QJsonDocument(QJsonObject()).toJson(QJsonDocument::Compact);
 }
 
 void MqttClientService::onPingTick()
@@ -916,7 +917,7 @@ void MqttClientService::onPingTick()
     }
 
     const QString     topic   = buildPingTopic(m_heartbeatCustId, m_heartbeatSn);
-    const QByteArray  payload = buildPingPayload(m_heartbeatSn);
+    const QByteArray  payload = buildPingPayload();
 
     try {
         // 心跳用 QoS 0：最多一次，丢失不影响在线判断（下个周期会补）
@@ -995,14 +996,10 @@ QString MqttClientService::buildStatusTopic(qint64 custId, const QString &sn)
     return QString("cust/%1/device/%2/up/status").arg(custId).arg(sn);
 }
 
-QByteArray MqttClientService::buildStatusPayload(const QString &sn,
-                                                 double tempCelsius,
+QByteArray MqttClientService::buildStatusPayload(double tempCelsius,
                                                  const QString &ip)
 {
     QJsonObject obj;
-    obj[QStringLiteral("ts")] = QDateTime::currentMSecsSinceEpoch();
-    if (!sn.isEmpty())
-        obj[QStringLiteral("sn")] = sn;
     // temp: 无法读取(-1.0)时记为 null
     if (tempCelsius >= 0.0)
         obj[QStringLiteral("temp")] = tempCelsius;
@@ -1110,7 +1107,7 @@ void MqttClientService::onStatusTick()
     }
 
     const QString     topic   = buildStatusTopic(m_statusCustId, m_statusSn);
-    const QByteArray  payload = buildStatusPayload(m_statusSn, temp, ip);
+    const QByteArray  payload = buildStatusPayload(temp, ip);
 
     try {
         // 状态用 QoS 1：确保平台可靠收到；断连时由 onStatusTick 跳过，不在离线队列堆积
@@ -1130,6 +1127,112 @@ void MqttClientService::onStatusTick()
         qCWarning(lcMqtt) << "[Mqtt] 状态上报未知异常";
         setError(QStringLiteral("[Mqtt] 状态上报未知异常"));
     }
+}
+
+// ============================================================================
+// 下行命令监听：订阅 cust/{custId}/device/{sn}/down/cmd
+//   命令字: close(预留) / restart(重启) / exituser(退出登录)
+//   附带 time 字段: 多少毫秒后执行
+// ============================================================================
+
+void MqttClientService::startCommandListener(const QString &sn, qint64 custId)
+{
+    if (sn.isEmpty()) {
+        qCWarning(lcMqtt) << "[Mqtt] startCommandListener 失败: SN 为空";
+        return;
+    }
+
+    {
+        const QMutexLocker lock(&m_mutex);
+        m_cmdSn     = sn;
+        m_cmdCustId = custId;
+        m_cmdTopic  = buildCommandTopic(custId, sn);
+    }
+
+    qCInfo(lcMqtt) << "[Mqtt] 启动下行命令监听 ->" << m_cmdTopic;
+
+    // 订阅（未连接时由 subscribe 内部缓存，连接成功后自动执行；
+    //       已连接过一次后续重连由 QMqttClient 自动重订阅）
+    subscribe(m_cmdTopic, QoSLevel::AtLeastOnce);
+}
+
+QString MqttClientService::buildCommandTopic(qint64 custId, const QString &sn)
+{
+    return QString("cust/%1/device/%2/down/cmd").arg(custId).arg(sn);
+}
+
+void MqttClientService::onCommandMessage(const QString &topic, const QByteArray &payload)
+{
+    // 仅处理本设备下行命令主题
+    if (topic != m_cmdTopic)
+        return;
+
+    // 解析 JSON 命令
+    const QJsonObject obj = QJsonDocument::fromJson(payload).object();
+    const QString cmd = obj.value(QStringLiteral("cmd")).toString().trimmed();
+    if (cmd.isEmpty()) {
+        qCWarning(lcMqtt) << "[Mqtt] 下行命令缺少 cmd 字段:" << payload;
+        return;
+    }
+
+    // time: 多少毫秒后执行 (缺省/非法 -> 立即执行)
+    const QJsonValue timeVal = obj.value(QStringLiteral("time"));
+    qint64 timeMs = 0;
+    if (timeVal.isDouble())
+        timeMs = static_cast<qint64>(timeVal.toDouble());
+    else if (timeVal.isString())
+        timeMs = timeVal.toString().toLongLong();
+    if (timeMs < 0) timeMs = 0;
+
+    qCInfo(lcMqtt) << "[Mqtt] 收到下行命令:" << cmd
+                   << "(time=" << timeMs << "ms)";
+
+    // close / restart / exituser 之外的命令字不做特殊处理，原样抛出
+    Q_EMIT deviceCommandReceived(cmd, timeMs);
+}
+
+// ============================================================================
+// 上行告警上报：cust/{custId}/device/{sn}/up/alarm (预留触发点)
+//   参数: type(告警类型) / msg(告警信息) / ts(告警时间戳)
+// ============================================================================
+
+int MqttClientService::publishAlarm(const QString &type,
+                                    const QString &msg,
+                                    qint64 ts)
+{
+    QString sn;
+    qint64 custId;
+    {
+        const QMutexLocker lock(&m_mutex);
+        sn     = m_statusSn;
+        custId = m_statusCustId;
+    }
+    if (sn.isEmpty() || custId <= 0) {
+        qCWarning(lcMqtt) << "[Mqtt] 告警上报失败: 状态上报参数未配置 (sn/custId)";
+        return -1;
+    }
+
+    const QString     topic   = buildAlarmTopic(custId, sn);
+    const QByteArray  payload = buildAlarmPayload(type, msg, ts);
+    return publish(topic, payload, QoSLevel::AtLeastOnce, false);
+}
+
+QString MqttClientService::buildAlarmTopic(qint64 custId, const QString &sn)
+{
+    return QString("cust/%1/device/%2/up/alarm").arg(custId).arg(sn);
+}
+
+QByteArray MqttClientService::buildAlarmPayload(const QString &type,
+                                               const QString &msg,
+                                               qint64 ts)
+{
+    QJsonObject obj;
+    obj[QStringLiteral("type")] = type.isEmpty() ? QJsonValue(QJsonValue::Null) : type;
+    obj[QStringLiteral("msg")]  = msg.isEmpty()   ? QJsonValue(QJsonValue::Null) : msg;
+    // ts: 缺省(<=0)使用当前时间戳
+    const qint64 stamp = (ts > 0) ? ts : QDateTime::currentMSecsSinceEpoch();
+    obj[QStringLiteral("ts")] = stamp;
+    return QJsonDocument(obj).toJson(QJsonDocument::Compact);
 }
 
 // ============================================================================

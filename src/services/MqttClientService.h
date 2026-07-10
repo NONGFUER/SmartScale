@@ -317,8 +317,8 @@ public:
     /** 构建心跳主题: cust/{custId}/device/{sn}/up/ping */
     static QString buildPingTopic(qint64 custId, const QString &sn);
 
-    /** 构建心跳 payload (JSON): {"ts":<ms>,"sn":".."} */
-    static QByteArray buildPingPayload(const QString &sn = QString());
+    /** 构建心跳 payload (JSON): {} (保活用，主题已含 custId/sn) */
+    static QByteArray buildPingPayload();
 
     /**
      * @brief 启动设备状态上报（默认每 30 秒向 cust/{custId}/device/{sn}/up/status 发送）
@@ -342,11 +342,10 @@ public:
 
     /**
      * 构建设备状态 payload (JSON)
-     * 例: {"ts":<ms>,"sn":"..","temp":45.2,"ip":"192.168.1.10"}
+     * 例: {"temp":45.2,"ip":"192.168.1.10"}
      * temp 无法读取时为 null；ip 无法获取时为 null。
      */
-    static QByteArray buildStatusPayload(const QString &sn,
-                                         double tempCelsius,
+    static QByteArray buildStatusPayload(double tempCelsius,
                                          const QString &ip);
 
     /** 读取设备温度（℃）。失败时返回 -1.0（调用方据此写 null） */
@@ -354,6 +353,43 @@ public:
 
     /** 获取设备当前联网 IP（出口 IP）。失败时返回空串 */
     static QString getCurrentLocalIp();
+
+    // ==================== 下行命令监听 (cust/.../down/cmd) ====================
+
+    /**
+     * @brief 订阅平台下行命令主题 cust/{custId}/device/{sn}/down/cmd
+     * @param sn      设备序列号
+     * @param custId  客户 ID
+     * @note 收到命令后通过 deviceCommandReceived(cmd, timeMs) 信号抛出。
+     *       订阅在 MQTT 连接生命周期内保持；断连重连后由 QMqttClient 自动重订阅。
+     *       可重复调用（SN/custId 变化时刷新）。
+     */
+    Q_INVOKABLE void startCommandListener(const QString &sn, qint64 custId);
+
+    /** 构建下行命令主题: cust/{custId}/device/{sn}/down/cmd */
+    static QString buildCommandTopic(qint64 custId, const QString &sn);
+
+    // ==================== 上行告警上报 (cust/.../up/alarm，预留触发点) ====================
+
+    /**
+     * @brief 上报设备告警到 cust/{custId}/device/{sn}/up/alarm
+     * @param type 告警类型: "temp"(温度) / "hard"(硬件) 等
+     * @param msg  告警信息
+     * @param ts   告警时间戳(毫秒)；<=0 表示使用当前时间
+     * @note 使用 startDeviceStatusReport 已缓存的 sn/custId 作为主题参数；
+     *       未配置上报参数时返回 -1。目前业务暂无明确告警触发点，接口预留。
+     */
+    Q_INVOKABLE int publishAlarm(const QString &type,
+                                 const QString &msg,
+                                 qint64 ts = 0);
+
+    /** 构建告警主题: cust/{custId}/device/{sn}/up/alarm */
+    static QString buildAlarmTopic(qint64 custId, const QString &sn);
+
+    /** 构建告警 payload (JSON): {"type":"..","msg":"..","ts":<ms>} */
+    static QByteArray buildAlarmPayload(const QString &type,
+                                       const QString &msg,
+                                       qint64 ts);
 
     /** 生成随机密码（字母+数字，默认 16 位） */
     static QString generateRandomPassword(int length = 16);
@@ -394,6 +430,13 @@ Q_SIGNALS:
     void statusReported(const QString &topic);                     ///< 状态上报成功
     void statusSkipped();                                           ///< 因未连接跳过本次状态上报
 
+    /**
+     * 收到平台下行命令 (cust/.../down/cmd)
+     * @param cmd     命令字: "close" / "restart" / "exituser"
+     * @param timeMs  延迟执行毫秒数 (命令中的 time 字段，<=0 表示立即执行)
+     */
+    void deviceCommandReceived(const QString &cmd, qint64 timeMs);
+
 private Q_SLOTS:
     void onQMqttConnected();
     void onQMqttDisconnected();
@@ -403,6 +446,7 @@ private Q_SLOTS:
     void onKeepAliveCheck();
     void onPingTick();
     void onStatusTick();
+    void onCommandMessage(const QString &topic, const QByteArray &payload);  ///< 过滤并处理下行命令
 
 private:
     // ---- 内部辅助方法 ----
@@ -514,6 +558,11 @@ private:
     qint64                  m_statusCustId      = 0;           // 状态上报用 custId
     QString                 m_lastReportedIp;                  // 上次上报的 IP，用于变化检测立即补发
     static constexpr int    kStatusIntervalMs    = 30000;      // 状态上报间隔 30 秒
+
+    // ---- 下行命令监听专用字段 ----
+    QString                 m_cmdSn;                           // 命令监听用 SN
+    qint64                  m_cmdCustId        = 0;            // 命令监听用 custId
+    QString                 m_cmdTopic;                       // 已订阅的下行命令主题 (用于过滤)
 
     // ---- Broker 常量 (shxgs) ----
     static inline const char *kShxgsHost = "user.shxgs.cn";
