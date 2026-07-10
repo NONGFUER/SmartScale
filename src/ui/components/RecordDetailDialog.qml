@@ -4,7 +4,8 @@ import QtQuick.Layouts
 
 // ============================================================
 // RecordDetailDialog — 称重记录图片浏览弹窗（纯图片模式）
-// 无边框、无顶栏，仅显示图片 + 导航控件
+// 顶部深色导航栏：居中对称翻页 [◀] 1/3 [▶] + 右侧关闭 [✕]
+// 触摸滑动手势保留；支持 ← → 键翻页、Esc 关闭
 // 用法：
 //   RecordDetailDialog {
 //       id: detailDialog
@@ -55,7 +56,10 @@ Dialog {
     Rectangle {
         id: imageContainer
         anchors.fill: parent
-        anchors.margins: 50
+        anchors.topMargin: 56       // 顶部留给导航栏
+        anchors.leftMargin: 24
+        anchors.rightMargin: 24
+        anchors.bottomMargin: 24
         color: "transparent"
         clip: true
 
@@ -216,139 +220,125 @@ Dialog {
         }
     }
 
-    // ========== 浮动控件层（锚定到弹窗本身，位于留白区）==========
+    // ========== 顶部导航栏（深色工具条，翻页居中对称，关闭居右）==========
 
-    // ---- 浮动关闭按钮（右上角）----
     Rectangle {
-        id: closeBtn
+        id: topBar
         anchors.top: parent.top
-        anchors.right: parent.right
-        anchors.margins: 24
-        width: 62
-        height: 62
-        radius: 21
-        color: closeBtnMA.containsMouse ? Qt.rgba(239, 226, 226, 0.95) : Qt.rgba(255, 255, 255, 0.15)
-
-        Text {
-            anchors.centerIn: parent
-            text: "\u2715"
-            font.pixelSize: 24
-            color: closeBtnMA.containsMouse ? "#EF4444" : "#FFFFFF"
-        }
-
-        Behavior on color { ColorAnimation { duration: 120 } }
-
-        MouseArea {
-            id: closeBtnMA
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: dialogRoot.close()
-        }
-    }
-
-    // ---- 左箭头（弹窗左侧留白区）----
-    Rectangle {
-        id: prevBtn
         anchors.left: parent.left
-        anchors.leftMargin: -20
-        anchors.verticalCenter: parent.verticalCenter
-        width: 58; height: 58; radius: 29
-        color: prevMA.containsMouse ? "#EFF6FF" : Qt.rgba(1, 1, 1, 0.12)
-        border.color: dialogRoot.hasPrev ? "transparent" : "rgba(255,255,255,0.08)"
-        border.width: 1
-        visible: dialogRoot.recordList && dialogRoot.recordList.length > 1
-        opacity: dialogRoot.hasPrev ? 1.0 : 0.3
-        // 按压缩放反馈
-        scale: prevMA.pressed ? 0.85 : 1.0
-        Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
-        Behavior on color { ColorAnimation { duration: 120 } }
-
-        Text {
-            anchors.centerIn: parent
-            text: "\u2039"; font.pixelSize: 34; font.bold: true
-            color: dialogRoot.hasPrev ? "#FFFFFF" : "rgba(255,255,255,0.3)"
-        }
-        MouseArea {
-            id: prevMA
-            anchors.fill: parent; hoverEnabled: true
-            enabled: dialogRoot.hasPrev
-            cursorShape: dialogRoot.hasPrev ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: dialogRoot.navigateToRecord(dialogRoot.currentIndex - 1)
-        }
-    }
-
-    // ---- 右箭头（弹窗右侧留白区）----
-    Rectangle {
-        id: nextBtn
         anchors.right: parent.right
-        anchors.rightMargin: -20
-        anchors.verticalCenter: parent.verticalCenter
-        width: 58; height: 58; radius: 29
-        color: nextMA.containsMouse ? "#EFF6FF" : Qt.rgba(1, 1, 1, 0.12)
-        border.color: dialogRoot.hasNext ? "transparent" : "rgba(255,255,255,0.08)"
-        border.width: 1
-        visible: dialogRoot.recordList && dialogRoot.recordList.length > 1
-        opacity: dialogRoot.hasNext ? 1.0 : 0.3
-        // 按压缩放反馈
-        scale: nextMA.pressed ? 0.85 : 1.0
-        Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
-        Behavior on color { ColorAnimation { duration: 120 } }
-
-        Text {
-            anchors.centerIn: parent
-            text: "\u203A"; font.pixelSize: 34; font.bold: true
-            color: dialogRoot.hasNext ? "#FFFFFF" : "rgba(255,255,255,0.3)"
+        height: 56
+        color: "#1E293B"
+        z: 10
+        // 底部细分隔线，增强层次
+        Rectangle {
+            anchors.bottom: parent.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 1
+            color: Qt.rgba(255, 255, 255, 0.08)
         }
-        MouseArea {
-            id: nextMA
-            anchors.fill: parent; hoverEnabled: true
-            enabled: dialogRoot.hasNext
-            cursorShape: dialogRoot.hasNext ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: dialogRoot.navigateToRecord(dialogRoot.currentIndex + 1)
+
+        // ---- 居中对称翻页组 [◀] 1/3 [▶] ----
+        RowLayout {
+            id: navGroup
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 16
+            visible: dialogRoot.recordList && dialogRoot.recordList.length > 1
+                      && dialogRoot.currentIndex >= 0
+
+            // 上一张
+            Rectangle {
+                id: prevBtn
+                width: 40; height: 40; radius: 20
+                color: prevMA.containsMouse ? "#3B82F6"
+                      : (dialogRoot.hasPrev ? "#334155" : "#1E293B")
+                border.color: dialogRoot.hasPrev ? "#475569" : "#334155"
+                border.width: 1
+                scale: prevMA.pressed ? 0.85 : 1.0
+                Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "\u25C0"; font.pixelSize: 16; font.bold: true
+                    color: dialogRoot.hasPrev ? "#FFFFFF" : "rgba(255,255,255,0.3)"
+                }
+                MouseArea {
+                    id: prevMA
+                    anchors.fill: parent; hoverEnabled: true
+                    enabled: dialogRoot.hasPrev
+                    onClicked: dialogRoot.navigateToRecord(dialogRoot.currentIndex - 1)
+                }
+            }
+
+            // 计数
+            Text {
+                id: countLabel
+                text: (dialogRoot.currentIndex + 1) + " / " + dialogRoot.recordList.length
+                font.pixelSize: 17; font.bold: true
+                color: "#FFFFFF"
+                horizontalAlignment: Text.AlignHCenter
+                Layout.preferredWidth: Math.max(implicitWidth, 56)
+            }
+
+            // 下一张
+            Rectangle {
+                id: nextBtn
+                width: 40; height: 40; radius: 20
+                color: nextMA.containsMouse ? "#3B82F6"
+                      : (dialogRoot.hasNext ? "#334155" : "#1E293B")
+                border.color: dialogRoot.hasNext ? "#475569" : "#334155"
+                border.width: 1
+                scale: nextMA.pressed ? 0.85 : 1.0
+                Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "\u25B6"; font.pixelSize: 16; font.bold: true
+                    color: dialogRoot.hasNext ? "#FFFFFF" : "rgba(255,255,255,0.3)"
+                }
+                MouseArea {
+                    id: nextMA
+                    anchors.fill: parent; hoverEnabled: true
+                    enabled: dialogRoot.hasNext
+                    onClicked: dialogRoot.navigateToRecord(dialogRoot.currentIndex + 1)
+                }
+            }
+        }
+
+        // ---- 关闭按钮（居右）----
+        Rectangle {
+            id: closeBtn
+            anchors.right: parent.right
+            anchors.rightMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
+            width: 40; height: 40; radius: 20
+            color: closeMA.containsMouse ? "#EF4444" : "#334155"
+            border.color: "#475569"; border.width: 1
+            scale: closeMA.pressed ? 0.85 : 1.0
+            Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
+            Behavior on color { ColorAnimation { duration: 120 } }
+
+            Text {
+                anchors.centerIn: parent
+                text: "\u2715"; font.pixelSize: 18
+                color: "#FFFFFF"
+            }
+            MouseArea {
+                id: closeMA
+                anchors.fill: parent;                 hoverEnabled: true
+                onClicked: dialogRoot.close()
+            }
         }
     }
 
-    // ---- 计数角标（顶部居中，位于图片上方留白区）----
-    Rectangle {
-        anchors.top: parent.top
-        anchors.topMargin: 20
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: countLabel.implicitWidth + 28
-        height: 34; radius: 17
-        color: Qt.rgba(0, 0, 0, 0.55)
-        visible: dialogRoot.recordList && dialogRoot.recordList.length > 1
-                    && dialogRoot.currentIndex >= 0
-
-        Text {
-            id: countLabel
-            anchors.centerIn: parent
-            text: (dialogRoot.currentIndex + 1) + " / " + dialogRoot.recordList.length
-            font.pixelSize: 16; font.bold: true
-            color: "#FFFFFF"
-        }
-    }
-
-    // ---- 底部滑动提示（位于图片下方留白区）----
-    Rectangle {
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 20
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: hintContent.implicitWidth + 32
-        height: 48; radius: 18
-        color: Qt.rgba(0, 0, 0, 0.45)
-        visible: dialogRoot.recordList && dialogRoot.recordList.length > 1
-
-        Row {
-            id: hintContent
-            anchors.centerIn: parent; spacing: 8
-            Text { text: "\u2039"; font.pixelSize: 24; font.bold: true;
-                    color: "#FFFFFF"; opacity: dialogRoot.hasPrev ? 1.0 : 0.3 }
-            Text { text: "左右滑动切换"; font.pixelSize: 18; color: "#FFFFFF" }
-            Text { text: "\u203A"; font.pixelSize: 24; font.bold: true;
-                    color: "#FFFFFF"; opacity: dialogRoot.hasNext ? 1.0 : 0.3 }
-        }
-    }
+    // 键盘支持：← → 翻页
+    focus: true
+    Keys.onLeftPressed: if (dialogRoot.hasPrev) dialogRoot.navigateToRecord(dialogRoot.currentIndex - 1)
+    Keys.onRightPressed: if (dialogRoot.hasNext) dialogRoot.navigateToRecord(dialogRoot.currentIndex + 1)
 
     // ========================================================================
     // 工具函数
