@@ -320,6 +320,41 @@ public:
     /** 构建心跳 payload (JSON): {"ts":<ms>,"sn":".."} */
     static QByteArray buildPingPayload(const QString &sn = QString());
 
+    /**
+     * @brief 启动设备状态上报（默认每 30 秒向 cust/{custId}/device/{sn}/up/status 发送）
+     * @param sn        设备序列号（来自 WeightSensor::sn()）
+     * @param custId    客户 ID（来自 AuthService::custId()）
+     * @param intervalMs 上报周期（毫秒，默认 30000）
+     * @note 上报内容：temp（设备温度 ℃）、ip（设备当前联网 IP）。
+     *       仅在 MQTT 已连接时发送；断连自动暂停，重连成功后自动恢复。
+     *       IP 发生变化时立即补发一次，确保平台及时感知网络切换。
+     *       可重复调用以更新 sn/custId 或周期。
+     */
+    Q_INVOKABLE void startDeviceStatusReport(const QString &sn,
+                                             qint64 custId,
+                                             int intervalMs = 30000);
+
+    /** 停止设备状态上报（清空参数并停止定时器） */
+    Q_INVOKABLE void stopDeviceStatusReport();
+
+    /** 构建状态主题: cust/{custId}/device/{sn}/up/status */
+    static QString buildStatusTopic(qint64 custId, const QString &sn);
+
+    /**
+     * 构建设备状态 payload (JSON)
+     * 例: {"ts":<ms>,"sn":"..","temp":45.2,"ip":"192.168.1.10"}
+     * temp 无法读取时为 null；ip 无法获取时为 null。
+     */
+    static QByteArray buildStatusPayload(const QString &sn,
+                                         double tempCelsius,
+                                         const QString &ip);
+
+    /** 读取设备温度（℃）。失败时返回 -1.0（调用方据此写 null） */
+    static double getDeviceTemperatureCelsius();
+
+    /** 获取设备当前联网 IP（出口 IP）。失败时返回空串 */
+    static QString getCurrentLocalIp();
+
     /** 生成随机密码（字母+数字，默认 16 位） */
     static QString generateRandomPassword(int length = 16);
 
@@ -356,6 +391,9 @@ Q_SIGNALS:
     void heartbeatSent(const QString &topic);                      ///< 心跳发送成功
     void heartbeatSkipped();                                        ///< 因未连接跳过本次心跳
 
+    void statusReported(const QString &topic);                     ///< 状态上报成功
+    void statusSkipped();                                           ///< 因未连接跳过本次状态上报
+
 private Q_SLOTS:
     void onQMqttConnected();
     void onQMqttDisconnected();
@@ -364,6 +402,7 @@ private Q_SLOTS:
     void onReconnectTimerTick();
     void onKeepAliveCheck();
     void onPingTick();
+    void onStatusTick();
 
 private:
     // ---- 内部辅助方法 ----
@@ -376,6 +415,8 @@ private:
     void stopKeepAliveMonitor();
     void startPingTimer();
     void stopPingTimer();
+    void startStatusTimer();
+    void stopStatusTimer();
     void flushPendingMessages();       // 发送所有缓存的 publish
     void flushPendingSubscriptions();  // 执行所有缓存的 subscribe
     void resetReconnectCounter();
@@ -411,6 +452,7 @@ private:
     QTimer                 *m_reconnectTimer      = nullptr;   // 重连定时器
     QTimer                 *m_keepAliveMonitor    = nullptr;   // 心跳监控定时器
     QTimer                 *m_pingTimer           = nullptr;   // 心跳上报定时器 (3s)
+    QTimer                 *m_statusTimer         = nullptr;   // 状态上报定时器 (30s)
 
     mutable QMutex          m_mutex;                         // 保护共享状态的互斥锁
 
@@ -466,6 +508,12 @@ private:
     QString                 m_heartbeatSn;                     // 心跳用 SN (来自 WeightSensor)
     qint64                  m_heartbeatCustId    = 0;          // 心跳用 custId (来自 AuthService)
     static constexpr int    kPingIntervalMs      = 3000;       // 心跳间隔 3 秒
+
+    // ---- 设备状态上报专用字段 ----
+    QString                 m_statusSn;                        // 状态上报用 SN
+    qint64                  m_statusCustId      = 0;           // 状态上报用 custId
+    QString                 m_lastReportedIp;                  // 上次上报的 IP，用于变化检测立即补发
+    static constexpr int    kStatusIntervalMs    = 30000;      // 状态上报间隔 30 秒
 
     // ---- Broker 常量 (shxgs) ----
     static inline const char *kShxgsHost = "user.shxgs.cn";

@@ -195,6 +195,9 @@ int main(int argc, char *argv[])
         // 启动/刷新设备心跳上报（SN 与 custId 均就绪后平台靠它判断在线）
         mqttClientService->startHeartbeat(sn, custId);
 
+        // 启动/刷新设备状态上报（温度 + 联网 IP，默认 30s 周期）
+        mqttClientService->startDeviceStatusReport(sn, custId);
+
         qInfo() << "[Main] MQTT 上报设备信息: sn=" << sn
                 << "custId=" << custId;
         qInfo() << "[Main] 硬件信息字段: hardModel=" << systemInfoService->hardModel()

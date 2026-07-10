@@ -12,6 +12,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDateTime>
+#include <QNetworkInterface>
+#include <QUdpSocket>
+#include <QFile>
+#include <QDir>
+#include <QTextStream>
 
 Q_LOGGING_CATEGORY(lcMqtt, "smartscale.mqtt")
 
@@ -55,6 +60,13 @@ MqttClientService::MqttClientService(QObject *parent)
     m_pingTimer->setSingleShot(false);
     connect(m_pingTimer, &QTimer::timeout,
             this,          &MqttClientService::onPingTick);
+
+    // ---- 设备状态上报定时器 (默认每 30 秒) ----
+    m_statusTimer = new QTimer(this);
+    m_statusTimer->setInterval(kStatusIntervalMs);
+    m_statusTimer->setSingleShot(false);
+    connect(m_statusTimer, &QTimer::timeout,
+            this,             &MqttClientService::onStatusTick);
 
     qCDebug(lcMqtt) << "[Mqtt] MqttClientService 已创建";
 }
@@ -403,6 +415,7 @@ void MqttClientService::disconnectFromBroker(bool clearPendingQueue)
         stopReconnectTimer();
         stopKeepAliveMonitor();
         stopPingTimer();          // 用户主动断开：暂停心跳 (参数保留，重连后自动恢复)
+        stopStatusTimer();        // 用户主动断开：暂停状态上报 (参数保留，重连后自动恢复)
 
         if (clearPendingQueue) {
             const QMutexLocker lock(&m_mutex);
@@ -681,12 +694,19 @@ void MqttClientService::onQMqttConnected()
         startPingTimer();
         onPingTick();
     }
+
+    // ---- 连接成功后，若已配置状态上报则启动（并立即发一次）----
+    if (!m_statusSn.isEmpty()) {
+        startStatusTimer();
+        onStatusTick();
+    }
 }
 
 void MqttClientService::onQMqttDisconnected()
 {
     stopKeepAliveMonitor();
     stopPingTimer();          // 断连：暂停心跳 (参数保留，重连后自动恢复)
+    stopStatusTimer();        // 断连：暂停状态上报 (参数保留，重连后自动恢复)
 
     DisconnectReason reason = DisconnectReason::Unknown;
     auto clientErr = m_client->error();
@@ -913,6 +933,202 @@ void MqttClientService::onPingTick()
     } catch (...) {
         qCWarning(lcMqtt) << "[Mqtt] 心跳发送未知异常";
         setError(QStringLiteral("[Mqtt] 心跳发送未知异常"));
+    }
+}
+
+// ============================================================================
+// 设备状态上报：每隔 kStatusIntervalMs 向 cust/{custId}/device/{sn}/up/status 发送
+//   参数: temp = 设备温度(℃), ip = 设备当前联网 IP
+// ============================================================================
+
+void MqttClientService::startStatusTimer()
+{
+    if (m_statusTimer && !m_statusTimer->isActive())
+        m_statusTimer->start();
+}
+
+void MqttClientService::stopStatusTimer()
+{
+    if (m_statusTimer) m_statusTimer->stop();
+}
+
+void MqttClientService::startDeviceStatusReport(const QString &sn,
+                                                qint64 custId,
+                                                int intervalMs)
+{
+    if (sn.isEmpty()) {
+        qCWarning(lcMqtt) << "[Mqtt] startDeviceStatusReport 失败: SN 为空";
+        return;
+    }
+
+    {
+        const QMutexLocker lock(&m_mutex);
+        m_statusSn     = sn;
+        m_statusCustId = custId;
+        if (intervalMs >= 1000)
+            m_statusTimer->setInterval(intervalMs);
+    }
+
+    qCInfo(lcMqtt) << "[Mqtt] 启动设备状态上报 (间隔"
+                   << m_statusTimer->interval() << "ms) ->"
+                   << buildStatusTopic(custId, sn);
+
+    // 已连接则立即启动并先发一次；未连接仅保存参数，待 onQMqttConnected 时启动
+    if (isConnected()) {
+        startStatusTimer();
+        onStatusTick();
+    }
+}
+
+void MqttClientService::stopDeviceStatusReport()
+{
+    stopStatusTimer();
+    const QMutexLocker lock(&m_mutex);
+    m_statusSn.clear();
+    m_statusCustId    = 0;
+    m_lastReportedIp.clear();
+    qCInfo(lcMqtt) << "[Mqtt] 设备状态上报已停止";
+}
+
+QString MqttClientService::buildStatusTopic(qint64 custId, const QString &sn)
+{
+    return QString("cust/%1/device/%2/up/status").arg(custId).arg(sn);
+}
+
+QByteArray MqttClientService::buildStatusPayload(const QString &sn,
+                                                 double tempCelsius,
+                                                 const QString &ip)
+{
+    QJsonObject obj;
+    obj[QStringLiteral("ts")] = QDateTime::currentMSecsSinceEpoch();
+    if (!sn.isEmpty())
+        obj[QStringLiteral("sn")] = sn;
+    // temp: 无法读取(-1.0)时记为 null
+    if (tempCelsius >= 0.0)
+        obj[QStringLiteral("temp")] = tempCelsius;
+    else
+        obj[QStringLiteral("temp")] = QJsonValue(QJsonValue::Null);
+    // ip: 无法获取时记为 null
+    if (!ip.isEmpty())
+        obj[QStringLiteral("ip")] = ip;
+    else
+        obj[QStringLiteral("ip")] = QJsonValue(QJsonValue::Null);
+    return QJsonDocument(obj).toJson(QJsonDocument::Compact);
+}
+
+double MqttClientService::getDeviceTemperatureCelsius()
+{
+    // 方案: 读取 Linux thermal zone (温度单位为毫摄氏度)
+    // 取所有可用 zone 中的最大值（通常代表 CPU/主板温度）
+    QDir thermalDir(QStringLiteral("/sys/class/thermal"));
+    if (!thermalDir.exists())
+        return -1.0;
+
+    const QStringList entries = thermalDir.entryList(
+        QStringList() << QStringLiteral("thermal_zone*"),
+        QDir::Dirs | QDir::NoDotAndDotDot);
+    if (entries.isEmpty())
+        return -1.0;
+
+    double maxTemp = -1.0;
+    for (const QString &entry : entries) {
+        QFile f(thermalDir.filePath(entry) + QStringLiteral("/temp"));
+        if (!f.open(QIODevice::ReadOnly))
+            continue;
+        bool ok = false;
+        const qlonglong milli = f.readAll().trimmed().toLongLong(&ok);
+        f.close();
+        if (ok && milli > 0) {
+            const double c = static_cast<double>(milli) / 1000.0;
+            if (c > maxTemp) maxTemp = c;
+        }
+    }
+    return maxTemp;   // 无有效读数返回 -1.0
+}
+
+QString MqttClientService::getCurrentLocalIp()
+{
+    // 方案: 通过 UDP "连接" 到一个公网地址（不实际发包），
+    //       让操作系统选定出口网卡，从而读取设备当前联网 IP。
+    QUdpSocket s;
+    s.connectToHost(QStringLiteral("8.8.8.8"), 53, QIODevice::ReadOnly);
+    const QHostAddress addr = s.localAddress();
+    s.close();
+    if (!addr.isNull() && addr != QHostAddress::LocalHost
+        && addr.protocol() == QAbstractSocket::IPv4Protocol) {
+        return addr.toString();
+    }
+
+    // 回退: 遍历所有网卡，取第一个已启用、非回环、非链路本地、有 IPv4 且非 169.254 的地址
+    const QList<QNetworkInterface> ifaces = QNetworkInterface::allInterfaces();
+    for (const QNetworkInterface &iface : ifaces) {
+        if (!(iface.flags() & QNetworkInterface::IsUp)
+            || !(iface.flags() & QNetworkInterface::IsRunning)
+            || (iface.flags() & QNetworkInterface::IsLoopBack))
+            continue;
+        for (const QNetworkAddressEntry &entry : iface.addressEntries()) {
+            const QHostAddress a = entry.ip();
+            if (a.protocol() == QAbstractSocket::IPv4Protocol
+                && !a.isLoopback()
+                && !a.toString().startsWith(QStringLiteral("169.254."))) {
+                return a.toString();
+            }
+        }
+    }
+    return QString();
+}
+
+void MqttClientService::onStatusTick()
+{
+    // 参数异常：停止定时器自我保护
+    if (m_statusSn.isEmpty()) {
+        stopStatusTimer();
+        return;
+    }
+
+    // 仅在真正连接就绪时发送，避免离线队列堆积状态
+    bool reallyConnected;
+    {
+        const QMutexLocker lock(&m_mutex);
+        reallyConnected = (m_connectionState == ConnectionState::Connected)
+                       && (m_client->state() == QMqttClient::Connected);
+    }
+    if (!reallyConnected) {
+        qCDebug(lcMqtt) << "[Mqtt] 状态上报跳过 (连接尚未就绪)";
+        Q_EMIT statusSkipped();
+        return;
+    }
+
+    // 采集设备温度与 IP
+    const double temp = getDeviceTemperatureCelsius();
+    const QString ip   = getCurrentLocalIp();
+
+    {
+        const QMutexLocker lock(&m_mutex);
+        // IP 未变化且本轮非首次→仍按周期上报；若 IP 变化则记录（下个周期自然带上最新值）
+        m_lastReportedIp = ip;
+    }
+
+    const QString     topic   = buildStatusTopic(m_statusCustId, m_statusSn);
+    const QByteArray  payload = buildStatusPayload(m_statusSn, temp, ip);
+
+    try {
+        // 状态用 QoS 1：确保平台可靠收到；断连时由 onStatusTick 跳过，不在离线队列堆积
+        const int msgId = publish(topic, payload, QoSLevel::AtLeastOnce, false);
+        if (msgId >= 0) {
+            Q_EMIT statusReported(topic);
+            qCInfo(lcMqtt) << "[Mqtt] 状态已上报:" << topic
+                           << "temp=" << (temp >= 0.0 ? QString::number(temp, 'f', 1) + "C" : "N/A")
+                           << "ip=" << (ip.isEmpty() ? "N/A" : ip);
+        } else {
+            qCWarning(lcMqtt) << "[Mqtt] 状态上报失败 (publish 返回" << msgId << ")";
+        }
+    } catch (const std::exception &e) {
+        qCWarning(lcMqtt) << "[Mqtt] 状态上报异常:" << e.what();
+        setError(QStringLiteral("[Mqtt] 状态上报异常: ") + QString::fromUtf8(e.what()));
+    } catch (...) {
+        qCWarning(lcMqtt) << "[Mqtt] 状态上报未知异常";
+        setError(QStringLiteral("[Mqtt] 状态上报未知异常"));
     }
 }
 
