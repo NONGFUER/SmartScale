@@ -102,6 +102,7 @@ qt_add_qml_module(appSmartScale
         SOURCES src/services/SystemInfoService.h src/services/SystemInfoService.cpp       # [测试] 系统信息服务
         SOURCES src/services/NetworkManagerService.h src/services/NetworkManagerService.cpp  # 网络管理服务 (WiFi + 4G)
         SOURCES src/services/MqttClientService.h src/services/MqttClientService.cpp           # MQTT 客户端服务
+        SOURCES src/services/CellularModemService.h src/services/CellularModemService.cpp     # 蜂窝模组 CCID(ICCID) 获取 (AT 指令)
 
         # --- 数据层: Models ---
         SOURCES src/data/models/WeightRecord.h src/data/models/WeightRecord.cpp

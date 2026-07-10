@@ -1,0 +1,42 @@
+# =============================================================================
+# ASR ML307B 蜂窝模组 udev 规则 (SmartScale)
+# -----------------------------------------------------------------------------
+# 作用：
+#   1. 模组插入后，自动加载 option 驱动并绑定 VID/PID，使 /dev/ttyUSB0~N 出现。
+#   2. 放开串口访问权限，并建立稳定符号链接 /dev/cellular-modem。
+#
+# 真机参数：
+#   VID=2ecc (ASR)   PID=3012 (ML307B)
+#
+# 安装（需 root，在目标设备上执行）：
+#   sudo cp 99-asr-ml307.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger
+#   # 重新插拔模组，或重启系统
+#
+# 验证：
+#   ls -l /dev/ttyUSB* /dev/cellular-modem
+#   lsusb -d 2ecc:3012
+#
+# 权限说明：
+#   应用以普通用户 sjwu 运行，需能读写 /dev/ttyUSB*：
+#   方案 A（推荐）：将用户加入 dialout 组 → sudo usermod -aG dialout sjwu
+#   方案 B（兜底）：下方 MODE="0666" 直接放开所有人读写
+#   两者任选其一即可；本规则两者都留，确保万无一失。
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 关键第一步：USB 设备插入时，加载 option 驱动并把 ASR ML307B 的 VID/PID
+# 写入 option1 驱动的 new_id，让内核创建 /dev/ttyUSB* 节点。
+# 必须先执行这一步，否则只有 eth1（网口）没有 AT 串口。
+# -----------------------------------------------------------------------------
+ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="2ecc", ATTRS{idProduct}=="3012", \
+    RUN+="/sbin/modprobe option", \
+    RUN+="/bin/sh -c 'echo 2ecc 3012 > /sys/bus/usb-serial/drivers/option1/new_id'"
+
+# ASR ML307B：放开权限并建立稳定符号链接 /dev/cellular-modem
+SUBSYSTEM=="tty", ATTRS{idVendor}=="2ecc", ATTRS{idProduct}=="3012", \
+    MODE="0666", GROUP="dialout", SYMLINK+="cellular-modem"
+
+# 通用兜底：所有 ttyUSB* 也放开权限（防止非标准 PID 的模组变体无法访问）
+SUBSYSTEM=="tty", KERNEL=="ttyUSB*", MODE="0666", GROUP="dialout"

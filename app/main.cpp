@@ -32,6 +32,7 @@
 #include "services/SystemInfoService.h"       // [测试] 系统调试信息服务
 #include "services/NetworkManagerService.h"   // 网络管理服务 (WiFi + 4G)
 #include "services/MqttClientService.h"           // MQTT 客户端服务
+#include "services/CellularModemService.h"        // 蜂窝模组 CCID(ICCID) 获取 (AT 指令)
 
 // 数据层
 #include "data/DatabaseManager.h"
@@ -147,6 +148,9 @@ int main(int argc, char *argv[])
     // MQTT 客户端服务 — 设备信息上报 (mqtts://user.shxgs.cn:8888)
     MqttClientService *mqttClientService = new MqttClientService(&app);
 
+    // 蜂窝模组服务 — 遍历 /dev/ttyUSB* 发送 AT 指令动态确认端口并读取 CCID(ICCID)
+    CellularModemService *cellularModemService = new CellularModemService(&app);
+
     // 语音播报注入 CameraController，AI推理完成后直接播报（省掉QML往返）
     cameraController->setVoiceSpeaker(voiceSpeaker);
     // 登录用户信息注入 CameraController（水印中显示操作员）
@@ -166,7 +170,8 @@ int main(int argc, char *argv[])
     // 登录(后端返回 custId) 可能早于 SN 串口读取完成，或反之。
     // 抽成 lambda 供两个信号共用：两者都齐了才上报，并打印日志定位缺了哪个。
     auto tryPublishDeviceInfo = [mqttClientService, authService,
-                                 weightSensor, systemInfoService]() {
+                                 weightSensor, systemInfoService,
+                                 cellularModemService]() {
         QString sn = weightSensor->sn();
         qint64 custId = authService->custId();
         if (sn.isEmpty() || custId <= 0) {
@@ -175,16 +180,29 @@ int main(int argc, char *argv[])
                     << "custId=" << custId;
             return;
         }
+        QString sim = cellularModemService->ccid();   // sim ← CCID(ICCID) 蜂窝模组 (未取到则空串)
+
+        // 去重守卫：内容与上次相同时跳过，避免 SN/custId/ccid 信号多次触发导致重复上报
+        static QString s_lastSim;
+        static bool    s_published = false;
+        if (s_published && s_lastSim == sim) {
+            qDebug() << "[Main] 设备信息内容未变化，跳过重复上报";
+            return;
+        }
+        s_published = true;
+        s_lastSim = sim;
+
         qInfo() << "[Main] MQTT 上报设备信息: sn=" << sn
                 << "custId=" << custId;
         qInfo() << "[Main] 硬件信息字段: hardModel=" << systemInfoService->hardModel()
                 << "hardRevision=" << systemInfoService->hardRevision()
-                << "hardSerial=" << systemInfoService->hardSerial();
+                << "hardSerial=" << systemInfoService->hardSerial()
+                << "sim(CCID)=" << (sim.isEmpty() ? "<empty>" : sim);
         mqttClientService->publishDeviceInfo(
             sn, custId,
             systemInfoService->hardModel(),     // hardver ← /proc/cpuinfo Model
             systemInfoService->appVersion(),    // softver ← v2.13.2.9_日期
-            QString(),                          // sim ← ICCID (以太网模式 4G 暂取不到，空串兜底)
+            sim,                                // sim ← CCID(ICCID) 蜂窝模组 AT 指令获取
             systemInfoService->hardRevision(),  // revision ← /proc/cpuinfo Revision
             systemInfoService->hardSerial());   // serial ← /proc/cpuinfo Serial
     };
@@ -207,6 +225,21 @@ int main(int argc, char *argv[])
     // custId 变更后更新 MQTT（登录成功后触发）；若 SN 也已就绪则上报
     QObject::connect(authService, &AuthService::userInfoChanged,
                      mqttClientService, tryPublishDeviceInfo);
+
+    // CCID 获取成功后自动补发设备信息（带 sim 字段），去重守卫避免重复上报
+    QObject::connect(cellularModemService, &CellularModemService::ccidChanged,
+                     mqttClientService, tryPublishDeviceInfo);
+
+    // 启动 CCID 获取：开机即尝试（服务内置重试）；4G 硬件就绪/启用后再补触发一次
+    cellularModemService->start();
+    QObject::connect(networkManagerService, &NetworkManagerService::cellularHardwareChanged,
+                     cellularModemService, [cellularModemService](bool has) {
+                         if (has) cellularModemService->start();
+                     });
+    QObject::connect(networkManagerService, &NetworkManagerService::cellularEnabled,
+                     cellularModemService, [cellularModemService]() {
+                         cellularModemService->start();
+                     });
 
     // 注入 AuthService 给 HistoryService（云同步需要 token/userId）
     historyService->setAuthService(authService);
@@ -237,6 +270,7 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "SystemInfo", systemInfoService);  // [测试] 系统信息
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "NetworkManager", networkManagerService);  // 网络管理 (WiFi + 4G)
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "MqttClient", mqttClientService);          // MQTT 设备上报 (shxgs)
+    qmlRegisterSingletonInstance("App.Backend", 1, 0, "CellularModem", cellularModemService);     // 蜂窝模组 CCID(ICCID)
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());
     qmlRegisterSingletonInstance<PState>("SmartScale.Tools", 1, 0, "PState", &PState::inst());
 
