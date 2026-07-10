@@ -192,6 +192,9 @@ int main(int argc, char *argv[])
         s_published = true;
         s_lastSim = sim;
 
+        // 启动/刷新设备心跳上报（SN 与 custId 均就绪后平台靠它判断在线）
+        mqttClientService->startHeartbeat(sn, custId);
+
         qInfo() << "[Main] MQTT 上报设备信息: sn=" << sn
                 << "custId=" << custId;
         qInfo() << "[Main] 硬件信息字段: hardModel=" << systemInfoService->hardModel()

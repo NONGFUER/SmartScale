@@ -302,6 +302,24 @@ public:
                                        const QString &revision,
                                        const QString &serial);
 
+    /**
+     * @brief 启动设备心跳上报（默认每 3 秒向 cust/{custId}/device/{sn}/up/ping 发送）
+     * @param sn      设备序列号（来自 WeightSensor::sn()）
+     * @param custId  客户 ID（来自 AuthService::custId()）
+     * @note 仅在 MQTT 已连接时发送；断连自动暂停，重连成功后自动恢复。
+     *       可重复调用以更新 sn/custId（例如重新登录后 custId 变化）。
+     */
+    Q_INVOKABLE void startHeartbeat(const QString &sn, qint64 custId);
+
+    /** 停止心跳上报（清空参数并停止定时器） */
+    Q_INVOKABLE void stopHeartbeat();
+
+    /** 构建心跳主题: cust/{custId}/device/{sn}/up/ping */
+    static QString buildPingTopic(qint64 custId, const QString &sn);
+
+    /** 构建心跳 payload (JSON): {"ts":<ms>,"sn":".."} */
+    static QByteArray buildPingPayload(const QString &sn = QString());
+
     /** 生成随机密码（字母+数字，默认 16 位） */
     static QString generateRandomPassword(int length = 16);
 
@@ -335,6 +353,9 @@ Q_SIGNALS:
     void errorOccurred(const QString &errorString);                ///< 错误发生
     void reconnecting(int attemptNumber);                          ///< 正在第 N 次重连
 
+    void heartbeatSent(const QString &topic);                      ///< 心跳发送成功
+    void heartbeatSkipped();                                        ///< 因未连接跳过本次心跳
+
 private Q_SLOTS:
     void onQMqttConnected();
     void onQMqttDisconnected();
@@ -342,6 +363,7 @@ private Q_SLOTS:
     void onQMqttMessageReceived(const QByteArray &message, const QMqttTopicName &topic);
     void onReconnectTimerTick();
     void onKeepAliveCheck();
+    void onPingTick();
 
 private:
     // ---- 内部辅助方法 ----
@@ -352,6 +374,8 @@ private:
     void stopReconnectTimer();
     void startKeepAliveMonitor();
     void stopKeepAliveMonitor();
+    void startPingTimer();
+    void stopPingTimer();
     void flushPendingMessages();       // 发送所有缓存的 publish
     void flushPendingSubscriptions();  // 执行所有缓存的 subscribe
     void resetReconnectCounter();
@@ -386,6 +410,7 @@ private:
     QMqttClient            *m_client             = nullptr;
     QTimer                 *m_reconnectTimer      = nullptr;   // 重连定时器
     QTimer                 *m_keepAliveMonitor    = nullptr;   // 心跳监控定时器
+    QTimer                 *m_pingTimer           = nullptr;   // 心跳上报定时器 (3s)
 
     mutable QMutex          m_mutex;                         // 保护共享状态的互斥锁
 
@@ -436,6 +461,11 @@ private:
     qint64                  m_custId              = 0;   // 当前 custId
     static constexpr const char *kSettingsGroup  = "MqttShxgs";
     static constexpr const char *kSettingsKeyPwd = "Password";
+
+    // ---- 心跳上报专用字段 ----
+    QString                 m_heartbeatSn;                     // 心跳用 SN (来自 WeightSensor)
+    qint64                  m_heartbeatCustId    = 0;          // 心跳用 custId (来自 AuthService)
+    static constexpr int    kPingIntervalMs      = 3000;       // 心跳间隔 3 秒
 
     // ---- Broker 常量 (shxgs) ----
     static inline const char *kShxgsHost = "user.shxgs.cn";

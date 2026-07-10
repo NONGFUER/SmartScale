@@ -11,6 +11,7 @@
 #include <QRandomGenerator>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QDateTime>
 
 Q_LOGGING_CATEGORY(lcMqtt, "smartscale.mqtt")
 
@@ -47,6 +48,13 @@ MqttClientService::MqttClientService(QObject *parent)
     m_keepAliveMonitor->setInterval(5000);
     connect(m_keepAliveMonitor, &QTimer::timeout,
             this,                &MqttClientService::onKeepAliveCheck);
+
+    // ---- 心跳上报定时器 (默认每 3 秒) ----
+    m_pingTimer = new QTimer(this);
+    m_pingTimer->setInterval(kPingIntervalMs);
+    m_pingTimer->setSingleShot(false);
+    connect(m_pingTimer, &QTimer::timeout,
+            this,          &MqttClientService::onPingTick);
 
     qCDebug(lcMqtt) << "[Mqtt] MqttClientService 已创建";
 }
@@ -394,6 +402,7 @@ void MqttClientService::disconnectFromBroker(bool clearPendingQueue)
     QMetaObject::invokeMethod(this, [this, clearPendingQueue]() {
         stopReconnectTimer();
         stopKeepAliveMonitor();
+        stopPingTimer();          // 用户主动断开：暂停心跳 (参数保留，重连后自动恢复)
 
         if (clearPendingQueue) {
             const QMutexLocker lock(&m_mutex);
@@ -666,11 +675,18 @@ void MqttClientService::onQMqttConnected()
 
     flushPendingSubscriptions();
     flushPendingMessages();
+
+    // ---- 连接成功后，若已配置心跳则启动（并立即发一次）----
+    if (!m_heartbeatSn.isEmpty()) {
+        startPingTimer();
+        onPingTick();
+    }
 }
 
 void MqttClientService::onQMqttDisconnected()
 {
     stopKeepAliveMonitor();
+    stopPingTimer();          // 断连：暂停心跳 (参数保留，重连后自动恢复)
 
     DisconnectReason reason = DisconnectReason::Unknown;
     auto clientErr = m_client->error();
@@ -794,6 +810,109 @@ void MqttClientService::onKeepAliveCheck()
     if (m_connectionState == ConnectionState::Connected) {
         qCDebug(lcMqtt) << "[Mqtt] 心跳正常 (keepAlive="
                         << k_keepAliveSeconds << "s)";
+    }
+}
+
+// ============================================================================
+// 设备心跳上报：每隔 kPingIntervalMs 向 cust/{custId}/device/{sn}/up/ping 发送
+// ============================================================================
+
+void MqttClientService::startPingTimer()
+{
+    if (m_pingTimer && !m_pingTimer->isActive())
+        m_pingTimer->start();
+}
+
+void MqttClientService::stopPingTimer()
+{
+    if (m_pingTimer) m_pingTimer->stop();
+}
+
+void MqttClientService::startHeartbeat(const QString &sn, qint64 custId)
+{
+    if (sn.isEmpty()) {
+        qCWarning(lcMqtt) << "[Mqtt] startHeartbeat 失败: SN 为空";
+        return;
+    }
+
+    {
+        const QMutexLocker lock(&m_mutex);
+        m_heartbeatSn     = sn;
+        m_heartbeatCustId = custId;
+    }
+
+    qCInfo(lcMqtt) << "[Mqtt] 启动心跳上报 (间隔" << kPingIntervalMs << "ms) ->"
+                   << buildPingTopic(custId, sn);
+
+    // 已连接则立即启动并先发一次；未连接仅保存参数，待 onQMqttConnected 时启动
+    if (isConnected()) {
+        startPingTimer();
+        onPingTick();
+    }
+}
+
+void MqttClientService::stopHeartbeat()
+{
+    stopPingTimer();
+    const QMutexLocker lock(&m_mutex);
+    m_heartbeatSn.clear();
+    m_heartbeatCustId = 0;
+    qCInfo(lcMqtt) << "[Mqtt] 心跳上报已停止";
+}
+
+QString MqttClientService::buildPingTopic(qint64 custId, const QString &sn)
+{
+    return QString("cust/%1/device/%2/up/ping").arg(custId).arg(sn);
+}
+
+QByteArray MqttClientService::buildPingPayload(const QString &sn)
+{
+    QJsonObject obj;
+    obj[QStringLiteral("ts")] = QDateTime::currentMSecsSinceEpoch();
+    if (!sn.isEmpty())
+        obj[QStringLiteral("sn")] = sn;
+    return QJsonDocument(obj).toJson(QJsonDocument::Compact);
+}
+
+void MqttClientService::onPingTick()
+{
+    // 参数异常：停止定时器自我保护
+    if (m_heartbeatSn.isEmpty()) {
+        stopPingTimer();
+        return;
+    }
+
+    // 仅在真正连接就绪时发送，避免离线队列堆积心跳
+    bool reallyConnected;
+    {
+        const QMutexLocker lock(&m_mutex);
+        reallyConnected = (m_connectionState == ConnectionState::Connected)
+                       && (m_client->state() == QMqttClient::Connected);
+    }
+    if (!reallyConnected) {
+        qCDebug(lcMqtt) << "[Mqtt] 心跳跳过 (连接尚未就绪)";
+        Q_EMIT heartbeatSkipped();
+        return;
+    }
+
+    const QString     topic   = buildPingTopic(m_heartbeatCustId, m_heartbeatSn);
+    const QByteArray  payload = buildPingPayload(m_heartbeatSn);
+
+    try {
+        // 心跳用 QoS 0：最多一次，丢失不影响在线判断（下个周期会补）
+        const int msgId = publish(topic, payload, QoSLevel::AtMostOnce, false);
+        if (msgId >= 0) {
+            Q_EMIT heartbeatSent(topic);
+            qCDebug(lcMqtt) << "[Mqtt] 心跳已发送:" << topic;
+        } else {
+            qCWarning(lcMqtt) << "[Mqtt] 心跳发送失败 (publish 返回" << msgId << ")";
+        }
+    } catch (const std::exception &e) {
+        qCWarning(lcMqtt) << "[Mqtt] 心跳发送异常:" << e.what();
+        setError(QStringLiteral("[Mqtt] 心跳发送异常: ") + QString::fromUtf8(e.what()));
+    } catch (...) {
+        qCWarning(lcMqtt) << "[Mqtt] 心跳发送未知异常";
+        setError(QStringLiteral("[Mqtt] 心跳发送未知异常"));
     }
 }
 
