@@ -282,21 +282,25 @@ public:
 
     /**
      * @brief 发布设备信息到 cust/{custId}/device/{sn}/up/info
-     * 格式: JSON {"hardver":"xxx","softver":"xxx","sim":"xxx"}
+     * 格式: JSON {"hardver":"..","softver":"..","sim":"..","revision":"..","serial":".."}
      */
     Q_INVOKABLE int publishDeviceInfo(const QString &sn,
                                       qint64 custId,
                                       const QString &hardVer = QString(),
                                       const QString &softVer = QString(),
-                                      const QString &sim       = QString());
+                                      const QString &sim       = QString(),
+                                      const QString &revision = QString(),
+                                      const QString &serial   = QString());
 
     /** 构建设备上报主题: cust/{custId}/device/{sn}/up/info */
     static QString buildDeviceTopic(qint64 custId, const QString &sn);
 
-    /** 构建设备信息 payload (JSON): {"hardver":"xxx","softver":"xxx","sim":"xxx"} */
+    /** 构建设备信息 payload (JSON): {"hardver":"..","softver":"..","sim":"..","revision":"..","serial":".."} */
     static QByteArray buildInfoPayload(const QString &hardVer,
                                        const QString &softVer,
-                                       const QString &sim);
+                                       const QString &sim,
+                                       const QString &revision,
+                                       const QString &serial);
 
     /** 生成随机密码（字母+数字，默认 16 位） */
     static QString generateRandomPassword(int length = 16);

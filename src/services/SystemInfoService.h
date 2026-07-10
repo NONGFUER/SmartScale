@@ -21,6 +21,9 @@ class SystemInfoService : public QObject
     Q_PROPERTY(QString lastShutdownTime READ lastShutdownTime CONSTANT)
     Q_PROPERTY(QString currentBootTime  READ currentBootTime  CONSTANT)
     Q_PROPERTY(QString appVersion       READ appVersion       CONSTANT)
+    Q_PROPERTY(QString hardModel        READ hardModel        CONSTANT)
+    Q_PROPERTY(QString hardRevision     READ hardRevision     CONSTANT)
+    Q_PROPERTY(QString hardSerial       READ hardSerial       CONSTANT)
 
 public:
     explicit SystemInfoService(QObject *parent = nullptr);
@@ -31,11 +34,16 @@ public:
     QString lastShutdownTime() const { return m_lastShutdownTime; }
     QString currentBootTime()  const { return m_currentBootTime; }
     QString appVersion()       const { return m_appVersion; }
+    QString hardModel()    const { return m_hardModel; }
+    QString hardRevision() const { return m_hardRevision; }
+    QString hardSerial()   const { return m_hardSerial; }
 
 private:
     static constexpr const char *kLogFile = "/var/log/power_monitor.log";
 
     void parseLog();
+    /** @brief 读取 /proc/cpuinfo 解析树莓派 Model/Revision/Serial（开机后不变，构造时读一次） */
+    void parseCpuInfo();
 
     int     m_bootCount     = 0;
     int     m_shutdownCount = 0;
@@ -43,4 +51,7 @@ private:
     QString m_lastShutdownTime;
     QString m_currentBootTime;
     QString m_appVersion;
+    QString m_hardModel;     // /proc/cpuinfo Model   → MQTT hardver
+    QString m_hardRevision;  // /proc/cpuinfo Revision → MQTT revision
+    QString m_hardSerial;    // /proc/cpuinfo Serial   → MQTT serial
 };

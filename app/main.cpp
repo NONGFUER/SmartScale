@@ -4,6 +4,15 @@
 #include <Qt>
 #include <QQmlContext>
 
+// 日志落盘
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
+#include <QMutex>
+#include <QDir>
+#include <QFileInfo>
+#include <cstdio>
+
 // 硬件层
 #include "hardware/WeightSensor.h"
 #include "hardware/CameraController.h"
@@ -30,8 +39,47 @@
 #include "data/repositories/UserRepo.h"
 #include "core/PState.h"
 
+// ============================================================================
+// 日志：同时输出到控制台(stderr) 与 data/smartscale.log（带时间+级别）
+// ============================================================================
+static QFile  g_logFile;
+static QMutex g_logMutex;
+
+static void smartScaleMessageHandler(QtMsgType type,
+                                     const QMessageLogContext &ctx,
+                                     const QString &msg)
+{
+    QString level;
+    switch (type) {
+    case QtDebugMsg:    level = "DEBUG"; break;
+    case QtInfoMsg:     level = "INFO";  break;
+    case QtWarningMsg:  level = "WARN";  break;
+    case QtCriticalMsg: level = "CRIT";  break;
+    case QtFatalMsg:    level = "FATAL"; break;
+    default:            level = "???";   break;
+    }
+    const QString text = QString("[%1] %2: %3")
+        .arg(QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss.zzz"))
+        .arg(level)
+        .arg(msg);
+
+    // 1) 控制台（保持原有行为）
+    fprintf(stderr, "%s\n", qPrintable(text));
+    fflush(stderr);
+
+    // 2) 文件（线程安全）
+    QMutexLocker locker(&g_logMutex);
+    if (g_logFile.isOpen()) {
+        QTextStream ts(&g_logFile);
+        ts << text << Qt::endl;
+    }
+}
+
 int main(int argc, char *argv[])
 {
+    // 接管 Qt 日志输出
+    qInstallMessageHandler(smartScaleMessageHandler);
+
     // 虚拟键盘配置
     // 注意：Debian 13 的 Qt6 VirtualKeyboard 不打包 Pinyin 插件，
     // 触摸屏键盘只能输入英文/数字/符号，无法输入中文（除非自编译 Pinyin 插件）。
@@ -40,6 +88,22 @@ int main(int argc, char *argv[])
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");
 
     QGuiApplication app(argc, argv);
+
+    // 打开日志文件：写到可执行文件目录的 data/smartscale.log（超过 2MB 自动截断）
+    {
+        const QString logPath = QCoreApplication::applicationDirPath()
+                                + "/data/smartscale.log";
+        QDir().mkpath(QFileInfo(logPath).absolutePath());
+        g_logFile.setFileName(logPath);
+        QIODevice::OpenMode mode = QIODevice::WriteOnly | QIODevice::Text;
+        mode |= (QFile::exists(logPath) && QFile(logPath).size() > 2 * 1024 * 1024)
+                ? QIODevice::Truncate
+                : QIODevice::Append;
+        if (!g_logFile.open(mode))
+            qWarning() << "[Main] 无法打开日志文件:" << logPath;
+        else
+            qInfo() << "[Main] 日志文件:" << logPath;
+    }
 
     // 触摸屏环境：全局隐藏鼠标光标
     QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
@@ -102,7 +166,7 @@ int main(int argc, char *argv[])
     // 登录(后端返回 custId) 可能早于 SN 串口读取完成，或反之。
     // 抽成 lambda 供两个信号共用：两者都齐了才上报，并打印日志定位缺了哪个。
     auto tryPublishDeviceInfo = [mqttClientService, authService,
-                                 weightSensor]() {
+                                 weightSensor, systemInfoService]() {
         QString sn = weightSensor->sn();
         qint64 custId = authService->custId();
         if (sn.isEmpty() || custId <= 0) {
@@ -113,7 +177,16 @@ int main(int argc, char *argv[])
         }
         qInfo() << "[Main] MQTT 上报设备信息: sn=" << sn
                 << "custId=" << custId;
-        mqttClientService->publishDeviceInfo(sn, custId);
+        qInfo() << "[Main] 硬件信息字段: hardModel=" << systemInfoService->hardModel()
+                << "hardRevision=" << systemInfoService->hardRevision()
+                << "hardSerial=" << systemInfoService->hardSerial();
+        mqttClientService->publishDeviceInfo(
+            sn, custId,
+            systemInfoService->hardModel(),     // hardver ← /proc/cpuinfo Model
+            systemInfoService->appVersion(),    // softver ← v2.13.2.9_日期
+            QString(),                          // sim ← ICCID (以太网模式 4G 暂取不到，空串兜底)
+            systemInfoService->hardRevision(),  // revision ← /proc/cpuinfo Revision
+            systemInfoService->hardSerial());   // serial ← /proc/cpuinfo Serial
     };
 
     // SN 就绪后自动初始化 MQTT 连接 (shxgs Broker)

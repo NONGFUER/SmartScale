@@ -866,22 +866,22 @@ void MqttClientService::initAndConnect(const QString &sn, qint64 custId)
     }
 
     // Last-Will
-    QString willTopic = buildDeviceTopic(custId, sn);
-    QJsonObject willObj;
-    willObj[QStringLiteral("hardver")] = QString();
-    willObj[QStringLiteral("softver")] = QString();
-    willObj[QStringLiteral("sim")]     = QString();
-   // willObj[QStringLiteral("status")]  = QStringLiteral("offline");
-    QByteArray willMsg = QJsonDocument(willObj).toJson(QJsonDocument::Compact);
-    setWillMessage(willTopic, willMsg, QoSLevel::AtLeastOnce, false);
+//     QString willTopic = buildDeviceTopic(custId, sn);
+//     QJsonObject willObj;
+//     willObj[QStringLiteral("hardver")] = QString();
+//     willObj[QStringLiteral("softver")] = QString();
+//     willObj[QStringLiteral("sim")]     = QString();
+//    // willObj[QStringLiteral("status")]  = QStringLiteral("offline");
+//     QByteArray willMsg = QJsonDocument(willObj).toJson(QJsonDocument::Compact);
+//     setWillMessage(willTopic, willMsg, QoSLevel::AtLeastOnce, false);
 
     qCInfo(lcMqtt) << "[MqttShxgs] 初始化完成:"
                     << "\n  Broker:   mqtts://" << kShxgsHost << ":" << kShxgsPort
                     << "\n  ClientId: " << sn
                     << "\n  Username: " << sn
                     << "\n  Password: " << m_storedPassword
-                    << "\n  CustId:   " << custId
-                    << "\n  Will:     " << willTopic;
+                    << "\n  CustId:   " << custId;
+                   // << "\n  Will:     " << willTopic;
 
     // 调试用：方便用外部客户端测试时直接拿到 (SN / Password)
     qInfo().noquote() << "[MqttShxgs-DEBUG] 配置文件:" << settings.fileName()
@@ -896,10 +896,12 @@ int MqttClientService::publishDeviceInfo(const QString &sn,
                                           qint64 custId,
                                           const QString &hardVer,
                                           const QString &softVer,
-                                          const QString &sim)
+                                          const QString &sim,
+                                          const QString &revision,
+                                          const QString &serial)
 {
     QString topic = buildDeviceTopic(custId, sn);
-    QByteArray payload = buildInfoPayload(hardVer, softVer, sim);
+    QByteArray payload = buildInfoPayload(hardVer, softVer, sim, revision, serial);
 
     return publish(topic, payload, QoSLevel::AtLeastOnce);
 }
@@ -911,12 +913,16 @@ QString MqttClientService::buildDeviceTopic(qint64 custId, const QString &sn)
 
 QByteArray MqttClientService::buildInfoPayload(const QString &hardVer,
                                                const QString &softVer,
-                                               const QString &sim)
+                                               const QString &sim,
+                                               const QString &revision,
+                                               const QString &serial)
 {
     QJsonObject obj;
-    obj[QStringLiteral("hardver")] = hardVer.isEmpty() ? QString() : hardVer;
-    obj[QStringLiteral("softver")] = softVer.isEmpty() ? QString() : softVer;
-    obj[QStringLiteral("sim")]     = sim.isEmpty()     ? QString() : sim;
+    obj[QStringLiteral("hardver")]   = hardVer.isEmpty()   ? QString() : hardVer;
+    obj[QStringLiteral("softver")]   = softVer.isEmpty()   ? QString() : softVer;
+    obj[QStringLiteral("sim")]       = sim.isEmpty()       ? QString() : sim;
+    obj[QStringLiteral("revision")]  = revision.isEmpty()  ? QString() : revision;
+    obj[QStringLiteral("serial")]    = serial.isEmpty()    ? QString() : serial;
     return QJsonDocument(obj).toJson(QJsonDocument::Compact);
 }
 
