@@ -249,7 +249,7 @@ int main(int argc, char *argv[])
     // time 字段指定延迟多少毫秒后执行(<=0 立即执行)
     // ============================================================
     QObject::connect(mqttClientService, &MqttClientService::deviceCommandReceived,
-                     &app, [authService](const QString &cmd, qint64 timeMs) {
+                     &app, [authService, &app](const QString &cmd, qint64 timeMs) {
         const qint64 delay = (timeMs > 0) ? timeMs : 0;
         if (cmd == QStringLiteral("exituser")) {
             qInfo() << "[Main] MQTT 命令: 退出登录, 延时" << delay << "ms";

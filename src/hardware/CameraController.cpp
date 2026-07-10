@@ -360,7 +360,9 @@ void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
     if (cameraIndex == 0) {
         QDir dir(QDir::homePath() + "/Pictures");
         if (!dir.exists()) dir.mkpath(".");
-        savePath = dir.absolutePath() + QString("/WLC200A_V-XXXXXX_%1.jpg").arg(timeStamp);
+        QString deviceSn = m_weightSensor ? m_weightSensor->sn() : QStringLiteral("V-XXXXXX");
+        if (deviceSn.isEmpty()) deviceSn = QStringLiteral("V-XXXXXX");
+        savePath = dir.absolutePath() + QString("/WLC200A_%1_%2.jpg").arg(deviceSn).arg(timeStamp);
     }
 
     // 5 主摄：绘制水印并落盘（aiOnlyMode 时跳过——仅拍照给AI用）
