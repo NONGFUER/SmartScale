@@ -35,8 +35,9 @@ else()
     message(STATUS "Modbus 协议: Feigong (飞功标准, 0x0000 起 5 寄存器)")
 endif()
 
-# Qt 组件
-find_package(Qt6 REQUIRED COMPONENTS Quick VirtualKeyboard Multimedia Sql Network SerialPort Concurrent)
+# Qt 组件 (QtMqtt 从源码编译安装到 /usr/local)
+set(Qt6Mqtt_DIR "/usr/local/lib/aarch64-linux-gnu/cmake/Qt6Mqtt" CACHE PATH "" FORCE)
+find_package(Qt6 REQUIRED COMPONENTS Quick VirtualKeyboard Multimedia Sql Network SerialPort Concurrent Mqtt)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -100,6 +101,7 @@ qt_add_qml_module(appSmartScale
         SOURCES src/services/UserIngredientService.h src/services/UserIngredientService.cpp
         SOURCES src/services/SystemInfoService.h src/services/SystemInfoService.cpp       # [测试] 系统信息服务
         SOURCES src/services/NetworkManagerService.h src/services/NetworkManagerService.cpp  # 网络管理服务 (WiFi + 4G)
+        SOURCES src/services/MqttClientService.h src/services/MqttClientService.cpp           # MQTT 客户端服务
 
         # --- 数据层: Models ---
         SOURCES src/data/models/WeightRecord.h src/data/models/WeightRecord.cpp
@@ -148,6 +150,7 @@ target_link_libraries(appSmartScale
         Qt6::Network
         Qt6::SerialPort
         Qt6::Concurrent
+        Qt6::Mqtt
         pthread
         onnxruntime
 )

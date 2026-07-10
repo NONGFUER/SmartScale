@@ -22,6 +22,7 @@
 #include "services/UserIngredientService.h"   // USER 域食材服务
 #include "services/SystemInfoService.h"       // [测试] 系统调试信息服务
 #include "services/NetworkManagerService.h"   // 网络管理服务 (WiFi + 4G)
+#include "services/MqttClientService.h"           // MQTT 客户端服务
 
 // 数据层
 #include "data/DatabaseManager.h"
@@ -79,6 +80,9 @@ int main(int argc, char *argv[])
     // 网络管理服务 — Wi-Fi 扫描/连接/断开 + 4G 开启/关闭
     NetworkManagerService *networkManagerService = new NetworkManagerService(&app);
 
+    // MQTT 客户端服务 — 设备信息上报 (mqtts://user.shxgs.cn:8888)
+    MqttClientService *mqttClientService = new MqttClientService(&app);
+
     // 语音播报注入 CameraController，AI推理完成后直接播报（省掉QML往返）
     cameraController->setVoiceSpeaker(voiceSpeaker);
     // 登录用户信息注入 CameraController（水印中显示操作员）
@@ -93,6 +97,43 @@ int main(int argc, char *argv[])
                      authService, [authService, weightSensor]() {
                          authService->setDeviceSn(weightSensor->sn());
                      });
+
+    // === 设备信息上报：SN 与 custId 到达顺序不确定，任一就绪后都尝试补发 ===
+    // 登录(后端返回 custId) 可能早于 SN 串口读取完成，或反之。
+    // 抽成 lambda 供两个信号共用：两者都齐了才上报，并打印日志定位缺了哪个。
+    auto tryPublishDeviceInfo = [mqttClientService, authService,
+                                 weightSensor]() {
+        QString sn = weightSensor->sn();
+        qint64 custId = authService->custId();
+        if (sn.isEmpty() || custId <= 0) {
+            qInfo() << "[Main] 设备信息暂不上报 (等待双方就绪):"
+                    << "sn=" << (sn.isEmpty() ? "<empty>" : sn)
+                    << "custId=" << custId;
+            return;
+        }
+        qInfo() << "[Main] MQTT 上报设备信息: sn=" << sn
+                << "custId=" << custId;
+        mqttClientService->publishDeviceInfo(sn, custId);
+    };
+
+    // SN 就绪后自动初始化 MQTT 连接 (shxgs Broker)
+    // 首次连接: 生成随机密码并持久化; 后续复用密码
+    QObject::connect(weightSensor, &WeightSensor::snChanged,
+                     mqttClientService, [mqttClientService, authService,
+                                          weightSensor,
+                                          tryPublishDeviceInfo]() {
+                         QString sn = weightSensor->sn();
+                         if (sn.isEmpty()) return;
+                         qInfo() << "[Main] MQTT 初始化: sn=" << sn;
+                         mqttClientService->initAndConnect(
+                             sn, authService->custId());
+                         // SN 到了，若已登录(custId>0)则补发设备信息
+                         tryPublishDeviceInfo();
+                     });
+
+    // custId 变更后更新 MQTT（登录成功后触发）；若 SN 也已就绪则上报
+    QObject::connect(authService, &AuthService::userInfoChanged,
+                     mqttClientService, tryPublishDeviceInfo);
 
     // 注入 AuthService 给 HistoryService（云同步需要 token/userId）
     historyService->setAuthService(authService);
@@ -122,6 +163,7 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "VoiceSpeaker", voiceSpeaker);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "SystemInfo", systemInfoService);  // [测试] 系统信息
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "NetworkManager", networkManagerService);  // 网络管理 (WiFi + 4G)
+    qmlRegisterSingletonInstance("App.Backend", 1, 0, "MqttClient", mqttClientService);          // MQTT 设备上报 (shxgs)
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());
     qmlRegisterSingletonInstance<PState>("SmartScale.Tools", 1, 0, "PState", &PState::inst());
 
