@@ -44,16 +44,17 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: root.height       // 占满栏高，垂直方向有明确基准
             // 日期时间显示
-            ColumnLayout {
-                spacing: 0
+            RowLayout {
+                spacing: 8
                 Layout.alignment: Qt.AlignVCenter
 
                 Text {
                     id: dateText
                     text: ""
-                    font.pixelSize: 14
-                    color: "#E8F0FE"
-                    Layout.alignment: Qt.AlignHCenter
+                    font.pixelSize: 22
+                    font.family: "Monospace"
+                    font.bold: true
+                    color: "#FFFFFF"
                 }
 
                 Text {
@@ -63,7 +64,6 @@ Rectangle {
                     font.family: "Monospace"
                     font.bold: true
                     color: "#FFFFFF"
-                    Layout.alignment: Qt.AlignHCenter
                 }
             }
 

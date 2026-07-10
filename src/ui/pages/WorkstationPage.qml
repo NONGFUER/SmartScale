@@ -119,7 +119,7 @@ Item {
                                         spacing: 6
                                         Text {
                                             text: "历史记录"
-                                            font.pixelSize: 18
+                                            font.pixelSize: 24
                                             font.bold: true
                                             color: "#1E293B"
                                         }
@@ -129,7 +129,7 @@ Item {
 
                                     Text {
                                         text: "更多 >"
-                                        font.pixelSize: 14
+                                        font.pixelSize: 18
                                         color: "#3B82F6"
                                         MouseArea {
                                             anchors.fill: parent
@@ -223,7 +223,7 @@ Item {
                                                 // 时间（选中=品牌色辅助色，否则=浅灰）
                                                 Text {
                                                     text: (modelData.recordTime || "").substring(5, 16)
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: 16
                                                     color: historyDelegate.isSelected ? "#6B82D9" : "#94A3B8"
                                                     Behavior on color { ColorAnimation { duration: 150 } }
                                                 }
@@ -289,7 +289,7 @@ Item {
 
                                 Text {
                                     text: "水印预览"
-                                    font.pixelSize: 18
+                                    font.pixelSize: 24
                                     font.bold: true
                                     color: "#1E293B"
                                 }
@@ -394,6 +394,56 @@ Item {
                                     anchors.topMargin: 6
                                     spacing: 10
 
+                            // ========== 副摄像头 — 暖灰主题（辅助观察区） ==========
+                            Rectangle {
+                                Layout.preferredWidth: Math.min(parent.width * 0.38, 280)
+                                Layout.fillHeight: true
+                                Layout.minimumWidth: 160
+                                radius: 12
+                                color: "#F1F0EF"        
+                                border.color: "#D6D3D1" 
+                                border.width: 2
+                                clip: true
+
+                                VideoOutput {
+                                    id: subVideo
+                                    anchors.fill: parent
+                                    fillMode: VideoOutput.PreserveAspectCrop  // 填满容器，超出部分自动裁切（外层 clip:true 生效）
+                                    Component.onCompleted: {
+                                        CameraController.setSubVideoSink(subVideo.videoSink)
+                                    }
+                                }
+
+                                // 左上角胶囊标签 — 暖色调
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.margins: 10
+                                    width: aux_label_w.width + 24
+                                    height: 30
+                                    radius: 6
+                                    color: "#78716C"        // 暖灰实心底
+
+                                    Row {
+                                        id: aux_label_w
+                                        spacing: 5
+                                        anchors.centerIn: parent
+                                        
+                                        Text { text: "操作员视角"; font.pixelSize: 15; font.bold: true; color: "#FFFFFF" }
+                                    }
+                                }
+
+                                // 右下角状态指示
+                                Row {
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    anchors.margins: 8
+                                    spacing: 5
+                                    Rectangle { width: 7; height: 7; radius: 3; color: "#F97316" }
+                                    Text { text: "AUX"; font.pixelSize: 12; font.bold: true; color: "#78716C" }
+                                }
+                            }
+
                             // ========== 主摄像头 — 蓝调主题（核心工作区） ==========
                             Rectangle {
                                 Layout.fillWidth: true
@@ -462,13 +512,13 @@ Item {
                                         radius: 4
                                         color: "#2563EB"
                                         visible: guideBox.y > 30
-                                        Text {
-                                            id: guideTextLabel
-                                            anchors.centerIn: parent
-                                            text: "请将食材对准框内"
-                                            font.pixelSize: 12
-                                            color: "#FFFFFF"
-                                        }
+                                            Text {
+                                                id: guideTextLabel
+                                                anchors.centerIn: parent
+                                                text: "请将食材对准框内"
+                                                font.pixelSize: 14
+                                                color: "#FFFFFF"
+                                            }
                                     }
                                 }
 
@@ -487,7 +537,7 @@ Item {
                                         spacing: 5
                                         anchors.centerIn: parent
                                        
-                                        Text { text: "食材拍摄"; font.pixelSize: 13; font.bold: true; color: "#FFFFFF" }
+                                        Text { text: "食材拍摄"; font.pixelSize: 15; font.bold: true; color: "#FFFFFF" }
                                     }
                                 }
 
@@ -498,57 +548,7 @@ Item {
                                     anchors.margins: 8
                                     spacing: 5
                                     Rectangle { width: 8; height: 8; radius: 4; color: "#22C55E" }  // 绿点=在线
-                                    Text { text: "LIVE"; font.pixelSize: 10; font.bold: true; color: "#22C55E" }
-                                }
-                            }
-
-                            // ========== 副摄像头 — 暖灰主题（辅助观察区） ==========
-                            Rectangle {
-                                Layout.preferredWidth: Math.min(parent.width * 0.38, 280)
-                                Layout.fillHeight: true
-                                Layout.minimumWidth: 160
-                                radius: 12
-                                color: "#F1F0EF"        
-                                border.color: "#D6D3D1" 
-                                border.width: 2
-                                clip: true
-
-                                VideoOutput {
-                                    id: subVideo
-                                    anchors.fill: parent
-                                    fillMode: VideoOutput.PreserveAspectCrop  // 填满容器，超出部分自动裁切（外层 clip:true 生效）
-                                    Component.onCompleted: {
-                                        CameraController.setSubVideoSink(subVideo.videoSink)
-                                    }
-                                }
-
-                                // 左上角胶囊标签 — 暖色调
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.top: parent.top
-                                    anchors.margins: 10
-                                    width: aux_label_w.width + 24
-                                    height: 30
-                                    radius: 6
-                                    color: "#78716C"        // 暖灰实心底
-
-                                    Row {
-                                        id: aux_label_w
-                                        spacing: 5
-                                        anchors.centerIn: parent
-                                        
-                                        Text { text: "操作员视角"; font.pixelSize: 12; font.bold: true; color: "#FFFFFF" }
-                                    }
-                                }
-
-                                // 右下角状态指示
-                                Row {
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    anchors.margins: 8
-                                    spacing: 5
-                                    Rectangle { width: 7; height: 7; radius: 3; color: "#F97316" }
-                                    Text { text: "AUX"; font.pixelSize: 9; font.bold: true; color: "#78716C" }
+                                    Text { text: "LIVE"; font.pixelSize: 13; font.bold: true; color: "#22C55E" }
                                 }
                             }
                         } 
