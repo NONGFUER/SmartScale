@@ -1,11 +1,19 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
+import SmartScale
 
 // ============================================================
-// RecordDetailDialog — 称重记录图片浏览弹窗（纯图片模式）
-// 顶部深色导航栏：居中对称翻页 [◀] 1/3 [▶] + 右侧关闭 [✕]
-// 触摸滑动手势保留；支持 ← → 键翻页、Esc 关闭
+// RecordDetailDialog — 称重记录图片浏览弹窗
+//
+// 视觉风格与称重记录查询弹窗（WeightRecordSearchDialog）保持一致：
+//   白色卡片背景 + 圆角阴影 / 标题栏(返回+标题+关闭) /
+//   浅灰内容容器 / 蓝色系翻页控件
+//
+// 功能：
+//   单张/多张图片查看 / 触摸左右滑动翻页 / 键盘 ← → 翻页
+//
 // 用法：
 //   RecordDetailDialog {
 //       id: detailDialog
@@ -43,299 +51,360 @@ Dialog {
     y: (parent.height - height) / 2
 
     width: Math.min(parent.width * 0.92, 1280)
-    height: Math.min(parent.height * 0.92, 820)
+    height: Math.min(parent.height * 0.92, 860)
 
     modal: true
-    Overlay.modal: Rectangle { color: "#70000000" }
+    Overlay.modal: Rectangle { color: "#80000000" }
     padding: 0
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    // 透明背景，无边框
-    background: Item {}
-
-    // ========== 图片区域（比弹窗稍小，给控件留出浮动空间）==========
-    Rectangle {
-        id: imageContainer
-        anchors.fill: parent
-        anchors.topMargin: 56       // 顶部留给导航栏
-        anchors.leftMargin: 24
-        anchors.rightMargin: 24
-        anchors.bottomMargin: 24
-        color: "transparent"
-        clip: true
-
-        // 切换状态：true=正在切换（图片淡出中），false=正常显示
-        property bool switching: false
-
-        // 图片容器（拖拽平移 + 切换淡入淡出）
-        Item {
-            id: imageWrapper
-            anchors.fill: parent
-
-            // 拖拽中：实时跟随手指；切换中：固定在中心；正常：固定在中心
-            x: swipeArea.isDragging ? swipeArea.dragOffset : 0
-
-            // 拖拽中：随距离微变淡；切换中：完全透明；正常：不透明
-            opacity: imageContainer.switching ? 0.0
-                  : (swipeArea.isDragging
-                     ? Math.max(0.5, 1.0 - Math.abs(swipeArea.dragOffset) / (imageContainer.width * 0.8))
-                     : 1.0)
-
-            // 回弹 / 淡入淡出动画（仅在非拖拽时生效）
-            Behavior on x {
-                enabled: !swipeArea.isDragging
-                NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
-            }
-            Behavior on opacity {
-                enabled: !swipeArea.isDragging
-                NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
-            }
-
-            // 图片
-            Image {
-                id: detailImage
-                anchors.fill: parent
-                fillMode: Image.PreserveAspectFit
-                source: dialogRoot.record && dialogRoot.record.mainImagePath
-                       ? (dialogRoot.record.mainImagePath.startsWith("file://")
-                          ? dialogRoot.record.mainImagePath
-                          : "file://" + dialogRoot.record.mainImagePath)
-                       : ""
-                visible: source !== ""
-                onStatusChanged: if (status === Image.Error) console.warn("图片加载失败:", source)
-            }
-
-            // 无图占位
-            Column {
-                anchors.centerIn: parent
-                spacing: 14
-                visible: !detailImage.visible
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "暂无图片"
-                    font.pixelSize: 22
-                    color: "#6B7280"
-                }
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "该称重记录未拍摄照片"
-                    font.pixelSize: 17
-                    color: "#9CA3AF"
-                }
-            }
-        }
-
-        // ---- 滑动手势（实时拖拽 + 松手判断）----
-        MouseArea {
-            id: swipeArea
-            anchors.fill: parent
-            enabled: dialogRoot.recordList && dialogRoot.recordList.length > 1 && !imageContainer.switching
-
-            property real startX: 0
-            property real startY: 0
-            property bool isDragging: false
-            property real dragOffset: 0
-
-            onPressed: function(mouse) {
-                startX = mouse.x
-                startY = mouse.y
-                isDragging = false
-                dragOffset = 0
-            }
-            onPositionChanged: function(mouse) {
-                var dx = mouse.x - startX
-                var dy = Math.abs(mouse.y - startY)
-                if (!isDragging && Math.abs(dx) > 10 && dy < Math.abs(dx) * 0.6) {
-                    isDragging = true
-                }
-                if (isDragging) {
-                    // 边界阻尼
-                    if ((dx > 0 && !dialogRoot.hasPrev) || (dx < 0 && !dialogRoot.hasNext)) {
-                        dragOffset = dx * 0.2
-                    } else {
-                        dragOffset = dx
-                    }
-                }
-            }
-            onReleased: {
-                if (isDragging) {
-                    var threshold = imageContainer.width * 0.2
-                    if (dragOffset > threshold && dialogRoot.hasPrev) {
-                        // 够阈值：淡出 → 切换上一条 → 淡入
-                        imageContainer.switching = true
-                        dragOffset = 0
-                        isDragging = false
-                        switchTimer.direction = -1
-                        switchTimer.start()
-                    } else if (dragOffset < -threshold && dialogRoot.hasNext) {
-                        // 够阈值：淡出 → 切换下一条 → 淡入
-                        imageContainer.switching = true
-                        dragOffset = 0
-                        isDragging = false
-                        switchTimer.direction = 1
-                        switchTimer.start()
-                    } else {
-                        // 不够阈值：回弹
-                        dragOffset = 0
-                        isDragging = false
-                    }
-                }
-            }
-        }
-
-        // 切换计时器：淡出动画播完后切换记录，然后恢复显示
-        Timer {
-            id: switchTimer
-            property int direction: 0
-            interval: 200  // 等淡出动画完成
-            onTriggered: {
-                if (direction < 0 && dialogRoot.hasPrev)
-                    dialogRoot.navigateToRecord(dialogRoot.currentIndex - 1)
-                else if (direction > 0 && dialogRoot.hasNext)
-                    dialogRoot.navigateToRecord(dialogRoot.currentIndex + 1)
-                // 切换完成，恢复显示（新图淡入）
-                imageContainer.switching = false
-            }
-        }
-
-        // 拖拽进度指示条（底部细线，实时显示滑动比例）
-        Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 8
-            anchors.horizontalCenter: parent.horizontalCenter
-            width: imageContainer.width * 0.3
-            height: 3
-            radius: 1.5
-            color: Qt.rgba(255, 255, 255, 0.15)
-            visible: swipeArea.isDragging
-
-            Rectangle {
-                anchors.centerIn: parent
-                height: parent.height
-                radius: parent.radius
-                color: "#FFFFFF"
-                width: parent.width * Math.min(1.0, Math.abs(swipeArea.dragOffset) / (imageContainer.width * 0.5))
-                Behavior on width { NumberAnimation { duration: 50 } }
-            }
+    // ---- 白色卡片背景 + 圆角 + 阴影（与搜索弹窗一致）----
+    background: Rectangle {
+        radius: 24
+        color: "#FFFFFF"
+        border.color: "#E2E8F0"
+        border.width: 1
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowColor: "#000000"
+            shadowBlur: 25
+            shadowOpacity: 0.18
+            shadowVerticalOffset: 8
         }
     }
 
-    // ========== 顶部导航栏（深色工具条，翻页居中对称，关闭居右）==========
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
 
-    Rectangle {
-        id: topBar
-        anchors.top: parent.top
-        anchors.left: parent.left
-        anchors.right: parent.right
-        height: 56
-        color: "#1E293B"
-        z: 10
-        // 底部细分隔线，增强层次
-        Rectangle {
-            anchors.bottom: parent.bottom
-            anchors.left: parent.left
-            anchors.right: parent.right
-            height: 1
-            color: Qt.rgba(255, 255, 255, 0.08)
+        // ==========================================
+        // 标题栏：返回按钮 + 标题 + 关闭按钮
+        // （布局与 WeightRecordSearchDialog 完全一致）
+        // ==========================================
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 28
+            Layout.leftMargin: 32
+            Layout.rightMargin: 32
+            Layout.bottomMargin: 16
+            spacing: 0
+
+            // 返回/关闭按钮 — 浅蓝圆形背景（与搜索弹窗返回钮同款）
+            Rectangle {
+                width: 46; height: 46; radius: 23
+                color: backMA.containsMouse ? "#D6EBFF" : "#E8F4FD"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "\u2039"
+                    font.pixelSize: 32
+                    font.bold: true
+                    color: "#2196F3"
+                }
+                MouseArea {
+                    id: backMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: dialogRoot.close()
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+
+            // 居中标题
+            Text {
+                text: "图片查看"
+                font.family: Theme.fontFamilyTitle
+                font.pixelSize: 26
+                font.bold: true
+                color: Theme.colorTextPrimary
+            }
+
+            Item { Layout.fillWidth: true }
+
+            // 关闭按钮 — 透明底，hover 变红（与搜索弹窗关闭钮同款）
+            Rectangle {
+                width: 42; height: 42; radius: 21
+                color: closeMA.containsMouse ? "#FEE2E2" : "transparent"
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "\u2715"
+                    font.pixelSize: 20
+                    color: closeMA.containsMouse ? "#EF4444" : "#94A3B8"
+                }
+                MouseArea {
+                    id: closeMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: dialogRoot.close()
+                }
+            }
         }
 
-        // ---- 居中对称翻页组 [◀] 1/3 [▶] ----
+        // ==========================================
+        // 翻页导航栏（居中对称，大号按钮，位于标题栏与图片之间）
+        // ==========================================
         RowLayout {
-            id: navGroup
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 16
+            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignHCenter
+            Layout.topMargin: 8
+            Layout.bottomMargin: 12
+            spacing: 20
             visible: dialogRoot.recordList && dialogRoot.recordList.length > 1
                       && dialogRoot.currentIndex >= 0
 
-            // 上一张
+            // 上一张 — 大号圆角按钮
             Rectangle {
-                id: prevBtn
-                width: 40; height: 40; radius: 20
-                color: prevMA.containsMouse ? "#3B82F6"
-                      : (dialogRoot.hasPrev ? "#334155" : "#1E293B")
-                border.color: dialogRoot.hasPrev ? "#475569" : "#334155"
-                border.width: 1
-                scale: prevMA.pressed ? 0.85 : 1.0
-                Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
-                Behavior on color { ColorAnimation { duration: 120 } }
+                id: prevBtnRect
+                width: 56; height: 52; radius: 14
+                color: dialogRoot.hasPrev ? (prevHover.hovered ? "#3B82F6" : "#EFF6FF") : "#F1F5F9"
+                border.color: dialogRoot.hasPrev ? (prevHover.hovered ? "#2563EB" : "#BFDBFE") : "#E2E8F0"
+                border.width: 1.5
+                enabled: dialogRoot.hasPrev
+                opacity: enabled ? 1.0 : 0.4
+                scale: enabled && prevHover.hovered ? 1.03 : 1.0
+                Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                Behavior on border.color { ColorAnimation { duration: 150 } }
+                Behavior on color { ColorAnimation { duration: 150 } }
 
                 Text {
                     anchors.centerIn: parent
-                    text: "\u25C0"; font.pixelSize: 16; font.bold: true
-                    color: dialogRoot.hasPrev ? "#FFFFFF" : "rgba(255,255,255,0.3)"
+                    text: "\u2039"; font.pixelSize: 28; font.bold: true
+                    color: dialogRoot.hasPrev ? (prevHover.hovered ? "#FFFFFF" : "#2563EB") : Theme.colorTextTertiary
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
-                MouseArea {
-                    id: prevMA
-                    anchors.fill: parent; hoverEnabled: true
+                HoverHandler { id: prevHover }
+                TapHandler {
                     enabled: dialogRoot.hasPrev
-                    onClicked: dialogRoot.navigateToRecord(dialogRoot.currentIndex - 1)
+                    onTapped: if (dialogRoot.hasPrev) dialogRoot.navigateToRecord(dialogRoot.currentIndex - 1)
                 }
             }
 
-            // 计数
-            Text {
-                id: countLabel
-                text: (dialogRoot.currentIndex + 1) + " / " + dialogRoot.recordList.length
-                font.pixelSize: 17; font.bold: true
-                color: "#FFFFFF"
-                horizontalAlignment: Text.AlignHCenter
-                Layout.preferredWidth: Math.max(implicitWidth, 56)
+            // 页码计数 — 大号蓝色胶囊
+            Rectangle {
+                Layout.preferredWidth: countText.implicitWidth + 48
+                height: 52
+                radius: 26
+                color: "#3B82F6"
+
+                Text {
+                    id: countText
+                    anchors.centerIn: parent
+                    text: (dialogRoot.currentIndex + 1) + " / " + dialogRoot.recordList.length
+                    font.pixelSize: 18
+                    font.bold: true
+                    font.family: Theme.fontFamilyUi
+                    color: "#FFFFFF"
+                }
             }
 
-            // 下一张
+            // 下一张 — 大号圆角按钮（与上一张对称）
             Rectangle {
-                id: nextBtn
-                width: 40; height: 40; radius: 20
-                color: nextMA.containsMouse ? "#3B82F6"
-                      : (dialogRoot.hasNext ? "#334155" : "#1E293B")
-                border.color: dialogRoot.hasNext ? "#475569" : "#334155"
-                border.width: 1
-                scale: nextMA.pressed ? 0.85 : 1.0
-                Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
-                Behavior on color { ColorAnimation { duration: 120 } }
+                id: nextBtnRect
+                width: 56; height: 52; radius: 14
+                color: dialogRoot.hasNext ? (nextHover.hovered ? "#3B82F6" : "#EFF6FF") : "#F1F5F9"
+                border.color: dialogRoot.hasNext ? (nextHover.hovered ? "#2563EB" : "#BFDBFE") : "#E2E8F0"
+                border.width: 1.5
+                enabled: dialogRoot.hasNext
+                opacity: enabled ? 1.0 : 0.4
+                scale: enabled && nextHover.hovered ? 1.03 : 1.0
+                Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                Behavior on border.color { ColorAnimation { duration: 150 } }
+                Behavior on color { ColorAnimation { duration: 150 } }
 
                 Text {
                     anchors.centerIn: parent
-                    text: "\u25B6"; font.pixelSize: 16; font.bold: true
-                    color: dialogRoot.hasNext ? "#FFFFFF" : "rgba(255,255,255,0.3)"
+                    text: "\u203A"; font.pixelSize: 28; font.bold: true
+                    color: dialogRoot.hasNext ? (nextHover.hovered ? "#FFFFFF" : "#2563EB") : Theme.colorTextTertiary
+                    Behavior on color { ColorAnimation { duration: 120 } }
                 }
-                MouseArea {
-                    id: nextMA
-                    anchors.fill: parent; hoverEnabled: true
+                HoverHandler { id: nextHover }
+                TapHandler {
                     enabled: dialogRoot.hasNext
-                    onClicked: dialogRoot.navigateToRecord(dialogRoot.currentIndex + 1)
+                    onTapped: if (dialogRoot.hasNext) dialogRoot.navigateToRecord(dialogRoot.currentIndex + 1)
                 }
             }
         }
 
-        // ---- 关闭按钮（居右）----
+        // ==========================================
+        // 图片展示区域（浅灰圆角容器，与搜索弹窗结果区一致）
+        // ==========================================
         Rectangle {
-            id: closeBtn
-            anchors.right: parent.right
-            anchors.rightMargin: 12
-            anchors.verticalCenter: parent.verticalCenter
-            width: 40; height: 40; radius: 20
-            color: closeMA.containsMouse ? "#EF4444" : "#334155"
-            border.color: "#475569"; border.width: 1
-            scale: closeMA.pressed ? 0.85 : 1.0
-            Behavior on scale { NumberAnimation { duration: 100; easing.type: Easing.OutCubic } }
-            Behavior on color { ColorAnimation { duration: 120 } }
+            id: imageContainer
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            Layout.leftMargin: 24
+            Layout.rightMargin: 24
+            Layout.bottomMargin: 16
+            color: "#F8FAFC"
+            radius: 14
+            border.color: "#E2E8F0"
+            border.width: 1
+            clip: true
 
-            Text {
-                anchors.centerIn: parent
-                text: "\u2715"; font.pixelSize: 18
-                color: "#FFFFFF"
+            // 切换状态：true=正在切换（图片淡出中），false=正常显示
+            property bool switching: false
+
+            // 图片容器（拖拽平移 + 切换淡入淡出）
+            Item {
+                id: imageWrapper
+                anchors.fill: parent
+
+                // 拖拽中：实时跟随手指；切换中：固定在中心；正常：固定在中心
+                x: swipeArea.isDragging ? swipeArea.dragOffset : 0
+
+                // 拖拽中：随距离微变淡；切换中：完全透明；正常：不透明
+                opacity: imageContainer.switching ? 0.0
+                      : (swipeArea.isDragging
+                         ? Math.max(0.5, 1.0 - Math.abs(swipeArea.dragOffset) / (imageContainer.width * 0.8))
+                         : 1.0)
+
+                // 回弹 / 淡入淡出动画（仅在非拖拽时生效）
+                Behavior on x {
+                    enabled: !swipeArea.isDragging
+                    NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+                }
+                Behavior on opacity {
+                    enabled: !swipeArea.isDragging
+                    NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+                }
+
+                // 图片
+                Image {
+                    id: detailImage
+                    anchors.fill: parent
+                    fillMode: Image.PreserveAspectFit
+                    source: dialogRoot.record && dialogRoot.record.mainImagePath
+                           ? (dialogRoot.record.mainImagePath.startsWith("file://")
+                              ? dialogRoot.record.mainImagePath
+                              : "file://" + dialogRoot.record.mainImagePath)
+                           : ""
+                    visible: source !== ""
+                    onStatusChanged: if (status === Image.Error) console.warn("图片加载失败:", source)
+                }
+
+                // 无图占位
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 14
+                    visible: !detailImage.visible
+
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "\u{1F4CF}"
+                        font.pixelSize: 48
+                        color: "#CBD5E1"
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "暂无图片"
+                        font.pixelSize: 18
+                        color: Theme.colorTextTertiary
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: "该称重记录未拍摄照片"
+                        font.pixelSize: 15
+                        color: Theme.colorTextTertiary
+                    }
+                }
             }
+
+            // ---- 滑动手势（实时拖拽 + 松手判断）----
             MouseArea {
-                id: closeMA
-                anchors.fill: parent;                 hoverEnabled: true
-                onClicked: dialogRoot.close()
+                id: swipeArea
+                anchors.fill: parent
+                enabled: dialogRoot.recordList && dialogRoot.recordList.length > 1 && !imageContainer.switching
+
+                property real startX: 0
+                property real startY: 0
+                property bool isDragging: false
+                property real dragOffset: 0
+
+                onPressed: function(mouse) {
+                    startX = mouse.x
+                    startY = mouse.y
+                    isDragging = false
+                    dragOffset = 0
+                }
+                onPositionChanged: function(mouse) {
+                    var dx = mouse.x - startX
+                    var dy = Math.abs(mouse.y - startY)
+                    if (!isDragging && Math.abs(dx) > 10 && dy < Math.abs(dx) * 0.6) {
+                        isDragging = true
+                    }
+                    if (isDragging) {
+                        // 边界阻尼
+                        if ((dx > 0 && !dialogRoot.hasPrev) || (dx < 0 && !dialogRoot.hasNext)) {
+                            dragOffset = dx * 0.2
+                        } else {
+                            dragOffset = dx
+                        }
+                    }
+                }
+                onReleased: {
+                    if (isDragging) {
+                        var threshold = imageContainer.width * 0.2
+                        if (dragOffset > threshold && dialogRoot.hasPrev) {
+                            imageContainer.switching = true
+                            dragOffset = 0
+                            isDragging = false
+                            switchTimer.direction = -1
+                            switchTimer.start()
+                        } else if (dragOffset < -threshold && dialogRoot.hasNext) {
+                            imageContainer.switching = true
+                            dragOffset = 0
+                            isDragging = false
+                            switchTimer.direction = 1
+                            switchTimer.start()
+                        } else {
+                            dragOffset = 0
+                            isDragging = false
+                        }
+                    }
+                }
+            }
+
+            // 切换计时器：淡出动画播完后切换记录，然后恢复显示
+            Timer {
+                id: switchTimer
+                property int direction: 0
+                interval: 200
+                onTriggered: {
+                    if (direction < 0 && dialogRoot.hasPrev)
+                        dialogRoot.navigateToRecord(dialogRoot.currentIndex - 1)
+                    else if (direction > 0 && dialogRoot.hasNext)
+                        dialogRoot.navigateToRecord(dialogRoot.currentIndex + 1)
+                    imageContainer.switching = false
+                }
+            }
+
+            // 拖拽进度指示条
+            Rectangle {
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: 10
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: imageContainer.width * 0.3
+                height: 3
+                radius: 1.5
+                color: Qt.rgba(59, 130, 246, 0.25)
+                visible: swipeArea.isDragging
+
+                Rectangle {
+                    anchors.centerIn: parent
+                    height: parent.height
+                    radius: parent.radius
+                    color: "#3B82F6"
+                    width: parent.width * Math.min(1.0, Math.abs(swipeArea.dragOffset) / (imageContainer.width * 0.5))
+                    Behavior on width { NumberAnimation { duration: 50 } }
+                }
+            }
             }
         }
-    }
 
-    // 键盘支持：← → 翻页
+    // ---- 键盘支持：← → 翻页 ----
     focus: true
     Keys.onLeftPressed: if (dialogRoot.hasPrev) dialogRoot.navigateToRecord(dialogRoot.currentIndex - 1)
     Keys.onRightPressed: if (dialogRoot.hasNext) dialogRoot.navigateToRecord(dialogRoot.currentIndex + 1)
