@@ -397,8 +397,11 @@ Dialog {
                             errorText.opacity = 1
                             return
                         }
-                        // 如果有保存的登录信息且用户名匹配，直接使用保存的凭据自动登录
-                        if (BackendAuth.hasSavedLogin && userIn.text === BackendAuth.lastUserCode) {
+                        // 仅当用户【未输入密码】且账号与已保存账号一致时，才使用保存的凭据自动登录。
+                        // 否则（用户主动输入了密码）必须以用户输入为准，
+                        // 否则后台改密后用户填新密码仍会被旧密码覆盖，导致反复登录失败。
+                        if (BackendAuth.hasSavedLogin && userIn.text === BackendAuth.lastUserCode
+                                && !pwdIn.text.trim()) {
                             console.log("[LoginDialog] 使用记住的凭据登录")
                             BackendAuth.autoLogin()
                             return

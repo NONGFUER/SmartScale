@@ -21,6 +21,8 @@ class AuthService : public QObject
     Q_PROPERTY(qint64 custId READ custId NOTIFY userInfoChanged)
     Q_PROPERTY(qint64 devId READ devId NOTIFY userInfoChanged)
     Q_PROPERTY(QString productId READ productId NOTIFY productIdChanged)
+    Q_PROPERTY(QString avatarUrl READ avatarUrl NOTIFY avatarChanged)
+    Q_PROPERTY(QString deviceSn READ deviceSn NOTIFY deviceSnChanged)
     Q_PROPERTY(bool rememberLogin READ rememberLogin WRITE setRememberLogin NOTIFY rememberLoginChanged)
     Q_PROPERTY(QString lastUserCode READ lastUserCode NOTIFY lastLoginChanged)
     Q_PROPERTY(bool hasSavedLogin READ hasSavedLogin NOTIFY lastLoginChanged)
@@ -76,9 +78,11 @@ public:
     qint64 devId() const { return m_devId; }
     /** @brief 产品 ID（登录后由 /api/ems/Product/by-sn 返回，缓存到本地） */
     QString productId() const { return m_productId; }
+    /** @brief 用户头像 URL（登录后由 /api/ems/User/by-id 返回） */
+    QString avatarUrl() const { return m_avatarUrl; }
 
     // === 设备序列号（由 WeightSensor 注入）===
-    void setDeviceSn(const QString &sn) { m_deviceSn = sn; }
+    void setDeviceSn(const QString &sn);
     QString deviceSn() const { return m_deviceSn; }
 
     // === 记住登录功能 ===
@@ -110,6 +114,8 @@ Q_SIGNALS:
     void userInfoChanged();
     void modeChanged();
     void productIdChanged();
+    void avatarChanged();
+    void deviceSnChanged();
     void rememberLoginChanged();
     void lastLoginChanged();
 
@@ -129,6 +135,9 @@ private:
 
     // === 根据 SN 获取产品（登录后调用，提取 productId 缓存） ===
     void tryFetchProductBySn();
+
+    // === 获取用户信息（头像等，登录成功后调用）===
+    void tryFetchUserInfo();
 
     // === 统一处理登录/刷新成功 ===
     void handleAuthSuccess(const QString &username,
@@ -180,6 +189,7 @@ private:
     qint64 m_custId = 0;
     qint64 m_devId = 0;
     QString m_productId;          // 产品 ID（来自 /api/ems/Product/by-sn）
+    QString m_avatarUrl;           // 用户头像 URL（来自 /api/ems/User/by-id）
     QString m_deviceSn;            // 从 WeightSensor 读取的真实设备 SN
 
     // === 记住登录 ===

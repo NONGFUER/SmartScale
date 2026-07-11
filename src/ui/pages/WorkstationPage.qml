@@ -571,10 +571,21 @@ Item {
                         Layout.preferredHeight: 120
                         spacing: 14
 
-                        // 圆形头像
+                        // 圆形头像（优先显示远程头像，回退到首字母）
                         Rectangle {
                             width: 72; height: 72; radius: 36
-                            color: "#3B82F6"
+                            color: avatarImage.status === Image.Ready ? "transparent" : "#3B82F6"
+                            clip: true   // 裁剪子元素为圆形
+                            visible: BackendAuth.avatarUrl || BackendAuth.currentUser
+
+                            Image {
+                                id: avatarImage
+                                anchors.fill: parent
+                                source: BackendAuth.avatarUrl || ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: true
+                            }
 
                             Text {
                                 anchors.centerIn: parent
@@ -582,6 +593,8 @@ Item {
                                 font.pixelSize: 27
                                 font.bold: true
                                 color: "#FFFFFF"
+                                // 有远程头像且加载成功时隐藏首字母
+                                visible: avatarImage.status !== Image.Ready || !BackendAuth.avatarUrl
                             }
                         }
 

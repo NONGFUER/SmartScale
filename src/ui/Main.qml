@@ -28,6 +28,24 @@ ApplicationWindow {
     property bool chineseInputMode: false  // true=拼音中文, false=纯英文（默认英文）
     property bool useHandwritingMode: false  // false=拼音, true=手写（默认拼音）
     property var _origConsoleError: null  // 保存原始 console.error（全局错误拦截用）
+    property bool _pendingAutoLogin: false  // 等待 SN 就绪后再自动登录的标志
+
+    // 自动登录协调：SN 由串口异步读回，必须等其就绪再登录，
+    // 否则带空 SN 的请求会被服务端拒绝（"登录的设备sn非法"）
+    function tryAutoLogin() {
+        if (!BackendAuth.hasSavedLogin) {
+            loginDialog.open()
+            return
+        }
+        if (BackendAuth.deviceSn !== "") {
+            console.log("[Main] SN 已就绪，自动登录...")
+            BackendAuth.autoLogin()
+        } else {
+            console.log("[Main] 等待设备 SN 读回后再自动登录...")
+            _pendingAutoLogin = true
+            autoLoginSnTimer.start()
+        }
+    }
 
     Component.onCompleted: {
         // 已自编译部署 Qt VirtualKeyboard Pinyin 插件到系统 Plugins/Pinyin/
@@ -41,9 +59,10 @@ ApplicationWindow {
             }
         })
         // 启动时检查是否有记住的登录信息
+        // 注意：SN 由串口异步读回，自动登录必须等 SN 就绪，
+        // 否则带空 SN 的请求会被服务端拒绝（"登录的设备sn非法"）
         if (BackendAuth.hasSavedLogin) {
-            console.log("[Main] 检测到保存的登录信息，自动登录...")
-            BackendAuth.autoLogin()
+            window.tryAutoLogin()
         } else {
             // 无保存信息，弹出登录弹窗
             loginDialog.open()
@@ -346,6 +365,33 @@ ApplicationWindow {
                     console.log("[Main] 自动登录失败，打开登录弹窗:", errorMsg)
                     Qt.callLater(function() { loginDialog.open() })
                 }
+            }
+        }
+
+        // SN 异步读回后，若正处于等待状态则立即补发自动登录
+        Connections {
+            target: BackendAuth
+            function onDeviceSnChanged() {
+                if (window._pendingAutoLogin && BackendAuth.deviceSn !== "") {
+                    window._pendingAutoLogin = false
+                    autoLoginSnTimer.stop()
+                    console.log("[Main] SN 就绪，补发自动登录...")
+                    BackendAuth.autoLogin()
+                }
+            }
+        }
+    }
+
+    // SN 等待超时兜底：串口读不回 SN 时转手动登录，避免一直卡在等待
+    Timer {
+        id: autoLoginSnTimer
+        interval: 3000
+        repeat: false
+        onTriggered: {
+            if (window._pendingAutoLogin) {
+                window._pendingAutoLogin = false
+                console.log("[Main] 等待 SN 超时（3s），转手动登录")
+                loginDialog.open()
             }
         }
     }

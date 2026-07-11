@@ -63,6 +63,7 @@ void AuthService::logout()
     m_isOnlineMode = false;
     m_custId = 0;
     m_devId = 0;
+    m_avatarUrl.clear();
 
     // 退出时清除保存的凭据（保留记住偏好设置）
     if (!m_lastUserCode.isEmpty()) {
@@ -215,6 +216,30 @@ void AuthService::tryFetchProductBySn()
     reply->setProperty("_startTime", QVariant::fromValue(timer));
 }
 
+void AuthService::tryFetchUserInfo()
+{
+    // 在线模式且 token 有效时才调用
+    if (!m_isOnlineMode || m_token.isEmpty()) {
+        qDebug() << "[Auth] 跳过 User/by-id 请求: 非在线模式或无 token";
+        return;
+    }
+
+    QNetworkRequest request = createApiRequest(NetworkUtils::Api::USER_BY_ID, m_token);
+
+    // 后端 [FromBody] string 期望 JSON 字符串值（带引号），与 refresh-token 同模式
+    QByteArray bodyData = "\"" + QString::number(m_userId).toUtf8() + "\"";
+
+    qInfo() << "[Auth] 请求 User/by-id 获取用户信息（含头像）, userId=" << m_userId;
+    qInfo() << "[HTTP] Body:" << bodyData;
+
+    QElapsedTimer timer;
+    timer.start();
+
+    QNetworkReply *reply = m_networkMgr->post(request, bodyData);
+    reply->setProperty("_isUserInfo", true);
+    reply->setProperty("_startTime", QVariant::fromValue(timer));
+}
+
 // ==========================================================================
 //  网络回调处理
 // ==========================================================================
@@ -226,8 +251,10 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
     bool isLogin      = reply->property("_pendingUserCode").isValid();
     bool isProductBySn = reply->property("_isProductBySn").isValid()
                         && reply->property("_isProductBySn").toBool();
+    bool isUserInfo   = reply->property("_isUserInfo").isValid()
+                        && reply->property("_isUserInfo").toBool();
 
-    if (!isRefresh && !isLogin && !isProductBySn) {
+    if (!isRefresh && !isLogin && !isProductBySn && !isUserInfo) {
         reply->deleteLater();
         return;
     }
@@ -279,6 +306,37 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
         saveProductToCache();
         Q_EMIT productIdChanged();
         qInfo() << "[Auth] Product/by-sn 成功: productId=" << m_productId << "（已缓存）";
+        return;
+    }
+
+    // --- User/by-id 分支：解析用户信息（头像等），失败不影响登录态 ---
+    if (isUserInfo) {
+        if (reply->error() != QNetworkReply::NoError) {
+            qWarning() << "[Auth] User/by-id 网络错误:" << reply->errorString();
+            return;
+        }
+        QByteArray data = reply->readAll();
+        qDebug() << "[Auth] User/by-id 响应:" << data;
+
+        QJsonParseError parseErr;
+        QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
+        if (parseErr.error != QJsonParseError::NoError) {
+            qWarning() << "[Auth] User/by-id JSON 解析失败:" << parseErr.errorString();
+            return;
+        }
+
+        QJsonObject root = doc.object();
+        QJsonObject dataObj = root.value("data").toObject();
+        QJsonObject src     = dataObj.isEmpty() ? root : dataObj;
+
+        QString avatar = src.value("img").toString();
+        if (!avatar.isEmpty() && avatar != m_avatarUrl) {
+            m_avatarUrl = avatar;
+            Q_EMIT avatarChanged();
+            qInfo() << "[Auth] User/by-id 成功: avatarUrl=" << m_avatarUrl.left(80) + "...";
+        } else {
+            qDebug() << "[Auth] User/by-id 返回但 avatar 为空或未变化";
+        }
         return;
     }
 
@@ -357,6 +415,14 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
 void AuthService::setUserRepo(UserRepo *repo)
 {
     m_userRepo = repo;
+}
+
+void AuthService::setDeviceSn(const QString &sn)
+{
+    if (m_deviceSn == sn) return;
+    m_deviceSn = sn;
+    Q_EMIT deviceSnChanged();
+    qDebug() << "[Auth] 设备 SN 更新:" << (sn.isEmpty() ? "<empty>" : sn);
 }
 
 void AuthService::tryOfflineLogin(const QString &userCode, const QString &password)
@@ -517,6 +583,7 @@ void AuthService::handleAuthSuccess(const QString &username,
         Q_EMIT loginSuccess();
         if (online) {
             tryFetchProductBySn();
+            tryFetchUserInfo();   // 获取用户头像等信息
         }
     }
 }
