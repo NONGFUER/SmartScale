@@ -80,6 +80,20 @@ private:
     /** V2 旧协议状态位 → Feigong 标准状态位 重映射 */
     static uint16_t remapV2StatusToFeigong(uint16_t v2Status);
 
+    // ==================== Modbus 公共辅助 (消除样板) ====================
+    /** 构造功能码03读请求帧 (8字节, 含CRC) */
+    void buildReadFrame(uint16_t regAddr, uint16_t count, uint8_t tx[8]);
+    /** 构造功能码06写请求帧 (8字节, 含CRC) */
+    void buildWriteFrame(uint16_t regAddr, uint16_t value, uint8_t tx[8]);
+    /** 清空输入并整帧发送 (clear+write+flush), 成功返回 true */
+    bool sendFrame(const uint8_t *tx, int len);
+    /** 循环读取响应帧直至收满 expectedLen 字节或 m_readTimeoutMs 超时 */
+    QByteArray readFrame(int expectedLen);
+    /** CRC + 异常响应校验, 返回 0=OK -2=CRC错 -3=异常响应 */
+    int verifyResponse(const QByteArray &rx, int frameLen);
+    /** 字节数组转空格分隔的大写十六进制串 (日志用) */
+    static QString toHexString(const uint8_t *p, int n);
+
     /** 功能码03: 读取净重+状态+ADC */
     int modbusReadWeight(int32_t *weight_g, uint16_t *status, int32_t *adc_raw);
     /** 功能码03: 读取设备序列号 SN (0x0031 起 8 个寄存器 = 16 字节 ASCII) */

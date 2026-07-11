@@ -359,6 +359,91 @@ int16_t WeightSensorWorker::beToInt16(const uint8_t *p)
 }
 
 // ============================================================================
+// Modbus 公共辅助 — 消除三个通信函数的重复样板 (组帧/发送/CRC/日志)
+// ============================================================================
+
+void WeightSensorWorker::buildReadFrame(uint16_t regAddr, uint16_t count, uint8_t tx[8])
+{
+    tx[0] = m_slaveAddr;
+    tx[1] = FUNC_READ;
+    tx[2] = (regAddr >> 8) & 0xFF;
+    tx[3] = regAddr & 0xFF;
+    tx[4] = (count >> 8) & 0xFF;
+    tx[5] = count & 0xFF;
+    uint16_t crc = crc16Modbus(tx, 6);
+    tx[6] = crc & 0xFF;
+    tx[7] = (crc >> 8) & 0xFF;
+}
+
+void WeightSensorWorker::buildWriteFrame(uint16_t regAddr, uint16_t value, uint8_t tx[8])
+{
+    tx[0] = m_slaveAddr;
+    tx[1] = FUNC_WRITE;
+    tx[2] = (regAddr >> 8) & 0xFF;
+    tx[3] = regAddr & 0xFF;
+    tx[4] = (value >> 8) & 0xFF;
+    tx[5] = value & 0xFF;
+    uint16_t crc = crc16Modbus(tx, 6);
+    tx[6] = crc & 0xFF;
+    tx[7] = (crc >> 8) & 0xFF;
+}
+
+bool WeightSensorWorker::sendFrame(const uint8_t *tx, int len)
+{
+    if (!m_serial || !m_serial->isOpen()) return false;
+    m_serial->clear(QSerialPort::Input);
+    qint64 written = m_serial->write((const char *)tx, len);
+    if (written != len) {
+        qWarning() << "[Modbus] 写入失败, expected=" << len << "actual=" << written;
+        return false;
+    }
+    if (!m_serial->flush()) {
+        qWarning() << "[Modbus] flush 失败";
+        return false;
+    }
+    return true;
+}
+
+QByteArray WeightSensorWorker::readFrame(int expectedLen)
+{
+    QElapsedTimer timer;
+    timer.start();
+    QByteArray rxBuf;
+    while (rxBuf.size() < expectedLen && timer.elapsed() < m_readTimeoutMs) {
+        if (m_serial->waitForReadyRead(SINGLE_WAIT_MS)) {
+            rxBuf += m_serial->readAll();
+        }
+    }
+    return rxBuf;
+}
+
+QString WeightSensorWorker::toHexString(const uint8_t *p, int n)
+{
+    QString s;
+    s.reserve(n * 3);
+    for (int i = 0; i < n; ++i)
+        s.append(QString("%1 ").arg(p[i], 2, 16, QChar('0')).toUpper());
+    return s.trimmed();
+}
+
+int WeightSensorWorker::verifyResponse(const QByteArray &rx, int frameLen)
+{
+    uint16_t calcCrc = crc16Modbus((const uint8_t *)rx.data(), frameLen - 2);
+    uint16_t recvCrc = ((uint8_t)rx[frameLen - 2]) | (((uint8_t)rx[frameLen - 1]) << 8);
+    if (calcCrc != recvCrc) {
+        qWarning() << "[Modbus] CRC错误: calc=0x" << QString::number(calcCrc, 16)
+                   << "recv=0x" << QString::number(recvCrc, 16);
+        return -2;
+    }
+    if ((uint8_t)rx[1] & 0x80) {
+        qWarning() << "[Modbus] 异常响应: 错误码=0x"
+                   << QString::number((uint8_t)rx[2], 16);
+        return -3;
+    }
+    return 0;
+}
+
+// ============================================================================
 // V2 旧协议状态位 → Feigong 标准状态位 重映射
 //   V2:  Bit0=去皮  Bit1=稳定  Bit2=负重
 //   飞功: Bit0=稳定  Bit1=过载  Bit2=负重  Bit3=去皮
@@ -384,38 +469,17 @@ int WeightSensorWorker::modbusWriteCmd(uint16_t regAddr, uint16_t value)
 {
     if (!m_serial || !m_serial->isOpen()) return -1;
 
-    // 组帧
     uint8_t tx[8];
-    tx[0] = m_slaveAddr;
-    tx[1] = FUNC_WRITE;
-    tx[2] = (regAddr >> 8) & 0xFF;
-    tx[3] = regAddr & 0xFF;
-    tx[4] = (value >> 8) & 0xFF;
-    tx[5] = value & 0xFF;
-
-    uint16_t crc = crc16Modbus(tx, 6);
-    tx[6] = crc & 0xFF;
-    tx[7] = (crc >> 8) & 0xFF;
+    buildWriteFrame(regAddr, value, tx);
 
     // 打印 TX
-    QByteArray txHex;
-    for (int i = 0; i < 8; i++) txHex.append(QString("%1 ").arg(tx[i], 2, 16, QChar('0')).toUpper().toUtf8());
     qDebug().nospace() << "[Modbus] TX WRITE(" << m_portName << " slave=0x"
-                       << QString::number(m_slaveAddr, 16) << "): " << txHex.trimmed();
+                       << QString::number(m_slaveAddr, 16) << "): "
+                       << toHexString(tx, 8);
 
-    // 发送前清空接收缓冲区
-    m_serial->clear(QSerialPort::Input);
+    if (!sendFrame(tx, 8)) return -1;
 
-    // 发送
-    qint64 written = m_serial->write((const char *)tx, 8);
-    if (written != 8) {
-        qWarning() << "[Modbus] 写入失败, expected=8 actual=" << written;
-        return -1;
-    }
-    if (!m_serial->flush()) {
-        qWarning() << "[Modbus] flush 失败";
-        return -1;
-    }
+
 
     // 等待确认帧回显 (功能码06的响应 = 请求原样回显, 固定8B)
     if (!m_serial->waitForReadyRead(500)) {
@@ -437,21 +501,10 @@ int WeightSensorWorker::modbusWriteCmd(uint16_t regAddr, uint16_t value)
     for (int i = 0; i < rx.size(); i++) rxHex.append(QString("%1 ").arg((uint8_t)rx[i], 2, 16, QChar('0')).toUpper().toUtf8());
     qDebug().nospace() << "[Modbus] RX ACK(" << rx.size() << "B): " << rxHex.trimmed();
 
-    // CRC 校验
-    uint16_t calcCrc = crc16Modbus((const uint8_t *)rx.data(), 6);
-    uint16_t recvCrc = ((uint8_t)rx[6]) | (((uint8_t)rx[7]) << 8);
-    if (calcCrc != recvCrc) {
-        qWarning() << "[Modbus] CRC错误: calc=0x" << QString::number(calcCrc, 16)
-                   << "recv=0x" << QString::number(recvCrc, 16);
-        return -2;
-    }
+    int v = verifyResponse(rx, 8);
+    if (v != 0) return v;
 
-    // 异常检查
-    if ((uint8_t)rx[1] & 0x80) {
-        qWarning() << "[Modbus] 异常响应: 错误码=0x"
-                   << QString::number((uint8_t)rx[2], 16);
-        return -3;
-    }
+
 
     qDebug() << "[Modbus] [OK] 从站确认成功";
     return 0;
@@ -468,48 +521,17 @@ int WeightSensorWorker::modbusReadSN(QString *sn)
 {
     if (!m_serial || !m_serial->isOpen()) return -1;
 
-    // 组帧
     uint8_t tx[8];
-    tx[0] = m_slaveAddr;
-    tx[1] = FUNC_READ;
-    tx[2] = (REG_SN_ADDR >> 8) & 0xFF;
-    tx[3] = REG_SN_ADDR & 0xFF;
-    tx[4] = (REG_SN_COUNT >> 8) & 0xFF;
-    tx[5] = REG_SN_COUNT & 0xFF;
-
-    uint16_t crc = crc16Modbus(tx, 6);
-    tx[6] = crc & 0xFF;
-    tx[7] = (crc >> 8) & 0xFF;
+    buildReadFrame(REG_SN_ADDR, REG_SN_COUNT, tx);
 
     // 打印 TX
-    QByteArray txHex;
-    for (int i = 0; i < 8; i++) txHex.append(QString("%1 ").arg(tx[i], 2, 16, QChar('0')).toUpper().toUtf8());
-    qDebug().nospace() << "[Modbus] TX READ_SN: " << txHex.trimmed();
+    qDebug().nospace() << "[Modbus] TX READ_SN: " << toHexString(tx, 8);
 
-    // 发送前清空接收缓冲区
-    m_serial->clear(QSerialPort::Input);
+    if (!sendFrame(tx, 8)) return -1;
 
-    // 发送
-    qint64 written = m_serial->write((const char *)tx, 8);
-    if (written != 8) {
-        qWarning() << "[Modbus] SN 写入失败, expected=8 actual=" << written;
-        return -1;
-    }
-    if (!m_serial->flush()) return -1;
-
-    // 等待响应: 21B ≈ 24ms @ 9600bps + 从站处理时间
-    QElapsedTimer timer;
-    timer.start();
-
-    QByteArray rxBuf;
-    while (rxBuf.size() < SN_FRAME_LEN && timer.elapsed() < m_readTimeoutMs) {
-        if (m_serial->waitForReadyRead(SINGLE_WAIT_MS)) {
-            rxBuf += m_serial->readAll();
-        }
-    }
-
+    QByteArray rxBuf = readFrame(SN_FRAME_LEN);
     if (rxBuf.isEmpty()) {
-        qDebug() << "[Modbus] SN 无响应 (等待" << timer.elapsed() << "ms)";
+        qDebug() << "[Modbus] SN 无响应";
         return -1;
     }
     if (rxBuf.size() < SN_FRAME_LEN) {
@@ -522,21 +544,10 @@ int WeightSensorWorker::modbusReadSN(QString *sn)
         qDebug() << "[Modbus] SN 收到" << rxBuf.size() << "B, 仅使用前" << SN_FRAME_LEN << "B (粘包)";
     }
 
-    // CRC 校验
-    uint16_t calcCrc = crc16Modbus((const uint8_t *)rxBuf.data(), SN_FRAME_LEN - 2);
-    uint16_t recvCrc = ((uint8_t)rxBuf[SN_FRAME_LEN - 2]) | (((uint8_t)rxBuf[SN_FRAME_LEN - 1]) << 8);
-    if (calcCrc != recvCrc) {
-        qWarning() << "[Modbus] SN CRC错误: calc=0x" << QString::number(calcCrc, 16)
-                   << "recv=0x" << QString::number(recvCrc, 16);
-        return -2;
-    }
+    int v = verifyResponse(rxBuf, SN_FRAME_LEN);
+    if (v != 0) return v;
 
-    // 异常检查
-    if ((uint8_t)rxBuf[1] & 0x80) {
-        qWarning() << "[Modbus] SN 异常响应: 错误码=0x"
-                   << QString::number((uint8_t)rxBuf[2], 16);
-        return -3;
-    }
+
 
     // 数据区: rxBuf[3..18] = 16 字节 ASCII (高位在前, 大端寄存器序)
     QByteArray snBytes = rxBuf.mid(3, 16);
@@ -628,45 +639,16 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
 {
     if (!m_serial || !m_serial->isOpen()) return -1;
 
-    // 组帧
     uint8_t tx[8];
-    tx[0] = m_slaveAddr;
-    tx[1] = FUNC_READ;
-    tx[2] = (REG_DATA_ADDR >> 8) & 0xFF;
-    tx[3] = REG_DATA_ADDR & 0xFF;
-    tx[4] = (REG_DATA_COUNT >> 8) & 0xFF;
-    tx[5] = REG_DATA_COUNT & 0xFF;
+    buildReadFrame(REG_DATA_ADDR, REG_DATA_COUNT, tx);
 
-    uint16_t crc = crc16Modbus(tx, 6);
-    tx[6] = crc & 0xFF;
-    tx[7] = (crc >> 8) & 0xFF;
+    qDebug().nospace() << "[Modbus] TX READ_WEIGHT: " << toHexString(tx, 8);
 
-    // 发送前清空接收缓冲区
-    m_serial->clear(QSerialPort::Input);
+    if (!sendFrame(tx, 8)) return -1;
 
-    // 发送
-    qint64 written = m_serial->write((const char *)tx, 8);
-    if (written != 8) {
-        qWarning() << "[Modbus] 写入失败, expected=8 actual=" << written;
-        return -1;
-    }
-    if (!m_serial->flush()) return -1;
-
-    // 循环等待响应，直至收满 FRAME_LEN 字节或总超时
-    // 9600bps: 15B × 11bit / 9600 ≈ 17ms (Feigong) / 23B ≈ 26ms (V2) + 从站处理时间
-    // 超时对 UI 无影响 (Worker 线程)
-    QElapsedTimer timer;
-    timer.start();
-
-    QByteArray rxBuf;
-    while (rxBuf.size() < FRAME_LEN && timer.elapsed() < m_readTimeoutMs) {
-        if (m_serial->waitForReadyRead(SINGLE_WAIT_MS)) {
-            rxBuf += m_serial->readAll();
-        }
-    }
-
+    QByteArray rxBuf = readFrame(FRAME_LEN);
     if (rxBuf.isEmpty()) {
-        qDebug() << "[Modbus] 无响应 (等待" << timer.elapsed() << "ms)";
+        qDebug() << "[Modbus] 无响应";
         return -1;
     }
 
@@ -680,21 +662,10 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
         qDebug() << "[Modbus] 收到" << rxBuf.size() << "B, 仅使用前" << FRAME_LEN << "B (粘包)";
     }
 
-    // CRC 校验
-    uint16_t calcCrc = crc16Modbus((const uint8_t *)rxBuf.data(), FRAME_LEN - 2);
-    uint16_t recvCrc = ((uint8_t)rxBuf[FRAME_LEN - 2]) | (((uint8_t)rxBuf[FRAME_LEN - 1]) << 8);
-    if (calcCrc != recvCrc) {
-        qWarning() << "[Modbus] CRC错误: calc=0x" << QString::number(calcCrc, 16)
-                   << "recv=0x" << QString::number(recvCrc, 16);
-        return -2;
-    }
+    int v = verifyResponse(rxBuf, FRAME_LEN);
+    if (v != 0) return v;
 
-    // 异常检查
-    if ((uint8_t)rxBuf[1] & 0x80) {
-        qWarning() << "[Modbus] 异常响应: 错误码=0x"
-                   << QString::number((uint8_t)rxBuf[2], 16);
-        return -3;
-    }
+
 
     // ==================== 数据区解析 (按协议宏分支) ====================
     // rxBuf 布局: [0]=slave [1]=func [2]=byteCount [3..]=data ... [last-1..last]=CRC
