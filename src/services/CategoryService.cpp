@@ -9,6 +9,7 @@
 #include <QFile>
 #include <QDir>
 #include <QDebug>
+#include <algorithm>
 
 CategoryService::CategoryService(QObject *parent)
     : QObject(parent)
@@ -16,6 +17,8 @@ CategoryService::CategoryService(QObject *parent)
 {
     // 先加载离线数据作为兜底
     buildFallbackData();
+    // 启动时从本地缓存恢复食材品类两级树（无网络也可用）
+    loadIngrCateCache();
 }
 
 void CategoryService::setAuthService(AuthService *auth)
@@ -126,6 +129,7 @@ void CategoryService::fetchIngrCategories()
         }
 
         saveIngrCateCache(data);
+        parseIngrCateResponse(data);   // 解析为两级分类树并暴露 categoryTree
         Q_EMIT ingrCategoriesFetched(ingrCateCacheFilePath());
     });
 }
@@ -141,6 +145,103 @@ void CategoryService::saveIngrCateCache(const QByteArray &data)
     file.write(data);
     file.close();
     qInfo() << "[CategoryService] 食材品类缓存已写入:" << path << "(" << data.size() << "字节)";
+}
+
+void CategoryService::loadIngrCateCache()
+{
+    QString path = ingrCateCacheFilePath();
+    QFile file(path);
+    if (!file.exists() || !file.open(QIODevice::ReadOnly)) {
+        qInfo() << "[CategoryService] 无食材品类缓存，等待网络拉取";
+        return;
+    }
+    QByteArray data = file.readAll();
+    file.close();
+    if (parseIngrCateResponse(data))
+        qInfo() << "[CategoryService] 已从缓存恢复食材品类两级树:" << path;
+}
+
+bool CategoryService::parseIngrCateResponse(const QByteArray &data)
+{
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    QJsonArray arr;
+    if (doc.isArray()) {
+        arr = doc.array();
+    } else if (doc.isObject()) {
+        QJsonObject root = doc.object();
+        if (root.contains("data") && root["data"].isArray())
+            arr = root["data"].toArray();
+        else if (root.contains("categories") && root["categories"].isArray())
+            arr = root["categories"].toArray();
+        else if (root.contains("data") && root["data"].isObject()
+                 && root["data"].toObject().contains("items"))
+            arr = root["data"].toObject().value("items").toArray();
+    }
+    if (arr.isEmpty()) {
+        qWarning() << "[CategoryService] 食材品类响应为空，跳过两级树解析";
+        return false;
+    }
+
+    // 1) 解析所有节点: cateId -> {map, sort}
+    struct Node { QVariantMap m; int sort = 0; };
+    QMap<QString, Node> nodes;
+    QStringList order;
+    for (const QJsonValue &v : arr) {
+        QJsonObject o = v.toObject();
+        QString cateId = o.value("cateId").toVariant().toString();
+        if (cateId.isEmpty()) continue;
+        Node n;
+        QVariantMap m;
+        m["cateId"]   = cateId;
+        m["cateCd"]   = o.value("cateCd").toString();
+        m["cateNm"]   = o.value("cateNm").toString();
+        m["parentId"] = o.value("parentId").toVariant().toString();
+        m["parentNm"] = o.value("parentNm").toString();
+        m["emsId"]    = o.value("emsId").toVariant().toString();
+        m["sort"]     = o.value("sort").toString();
+        n.m = m;
+        n.sort = o.value("sort").toInt(0);
+        nodes[cateId] = n;
+        order.append(cateId);
+    }
+    if (nodes.isEmpty()) return false;
+
+    // 2) 组装: 一级 parentId=="0"/空; 其余按 parentId 归集到父节点
+    QMap<QString, QVariantList> childrenMap;
+    QStringList topIds;
+    for (const QString &id : order) {
+        QString pid = nodes[id].m["parentId"].toString();
+        if (pid == "0" || pid.isEmpty())
+            topIds.append(id);
+        else
+            childrenMap[pid].append(nodes[id].m);
+    }
+
+    // 3) 按 sort 升序排序（同级）
+    auto sortBySort = [](QVariantList &lst) {
+        std::sort(lst.begin(), lst.end(), [](const QVariant &a, const QVariant &b) {
+            return a.toMap().value("sort").toInt() < b.toMap().value("sort").toInt();
+        });
+    };
+
+    QVariantList tree;
+    QVariantList topList;
+    for (const QString &id : topIds) topList.append(nodes[id].m);
+    sortBySort(topList);
+    for (const QVariant &t : topList) {
+        QVariantMap top = t.toMap();
+        QString tid = top["cateId"].toString();
+        QVariantList kids = childrenMap.value(tid);
+        sortBySort(kids);
+        top["children"] = kids;
+        tree.append(top);
+    }
+
+    m_categoryTree = tree;
+    Q_EMIT categoryTreeChanged();
+    qInfo() << "[CategoryService] 食材品类两级树解析完成: 一级" << tree.size()
+            << "个, 二级共" << (nodes.size() - tree.size()) << "个";
+    return true;
 }
 
 void CategoryService::onNetworkReply(QNetworkReply *reply)
@@ -242,6 +343,12 @@ bool CategoryService::parseCategoryResponse(const QByteArray &data)
         for (const QJsonValue &itemVal : items) {
             QJsonObject itemObj = itemVal.toObject();
             QVariantMap itemMap;
+            // 保留原始全部字段（cateId / id / img / imgLocal / emsId / cateNm 等），
+            // 供食材选择界面按二级品类 cateId 联动过滤
+            for (auto it = itemObj.begin(); it != itemObj.end(); ++it) {
+                itemMap[it.key()] = it.value().toVariant();
+            }
+            // 规范化中英名字段（覆盖上面可能缺失的 en/cn）
             itemMap["en"]  = itemObj.value("en").toString(itemObj.value("englishName").toString());
             itemMap["cn"]  = itemObj.value("cn").toString(itemObj.value("chineseName").toString(itemObj.value("name").toString()));
             itemList.append(itemMap);

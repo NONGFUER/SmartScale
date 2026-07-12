@@ -44,11 +44,32 @@ Dialog {
 
     property string selectedLabel: ""
     property string selectedIngrId: ""
-    property int activeCategoryIndex: 0
+    property int activeCategoryIndex: 0   // categorySelectMode 下的单级分类下标
+    property int selectedTopIndex: -1     // 一级品类下标（categoryTree）
+    property string selectedSubCateId: "" // 二级品类 cateId
+    property string selectedSubCateName: "" // 二级品类 cateNm
     property string searchText: ""        // 当前搜索关键词
     property var searchResults: []        // 搜索结果列表（跨分类）
 
-    // 本地搜索：在所有分类的所有 item 里按 cn/en 模糊匹配
+    // 扁平化分类列表为食材项数组
+    function flattenItems(cats) {
+        var all = []
+        for (var c = 0; c < cats.length; c++) {
+            var items = cats[c].items || []
+            for (var i = 0; i < items.length; i++)
+                all.push(items[i])
+        }
+        return all
+    }
+
+    // 当前模式下全部食材项
+    function getAllItems() {
+        if (dialogRoot.categorySelectMode)
+            return dialogRoot.flattenItems(UserIngredientService.categories)
+        return dialogRoot.flattenItems(CategoryService.categories)
+    }
+
+    // 本地搜索：跨全部食材按 cn/en 模糊匹配
     function doSearch(key) {
         var trimmed = key.trim()
         if (trimmed === "") {
@@ -57,46 +78,57 @@ Dialog {
         }
         var lower = trimmed.toLowerCase()
         var results = []
-        var cats = getActiveCategories()
-        for (var c = 0; c < cats.length; c++) {
-            var items = cats[c].items || []
-            for (var i = 0; i < items.length; i++) {
-                var cn = (items[i].cn || "").toLowerCase()
-                var en = (items[i].en || "").toLowerCase()
-                if (cn.indexOf(lower) >= 0 || en.indexOf(lower) >= 0) {
-                    results.push(items[i])
-                }
+        var items = dialogRoot.getAllItems()
+        for (var i = 0; i < items.length; i++) {
+            var cn = (items[i].cn || "").toLowerCase()
+            var en = (items[i].en || "").toLowerCase()
+            if (cn.indexOf(lower) >= 0 || en.indexOf(lower) >= 0) {
+                results.push(items[i])
             }
         }
         dialogRoot.searchResults = results
         console.log("[CategoryDialog] 搜索 '", trimmed, "' 命中", results.length, "项")
     }
 
-    // GridView 当前应显示的数据源：搜索时用结果，否则用当前分类
+    // 在 categoryTree 中定位某个二级 cateId 对应的一级下标与二级 id
+    function findCategoryTreePosition(cateId) {
+        var tree = CategoryService.categoryTree
+        for (var i = 0; i < tree.length; i++) {
+            var children = tree[i].children || []
+            for (var j = 0; j < children.length; j++) {
+                if (String(children[j].cateId) === String(cateId)) {
+                    return { topIndex: i, subCateId: String(cateId) }
+                }
+            }
+        }
+        return null
+    }
+
+    // GridView 当前应显示的数据源
     function getDisplayItems() {
         if (dialogRoot.searchText.trim() !== "")
             return dialogRoot.searchResults
-        return getActiveItems()
+        // 食材选择/纠错模式统一按二级品类 cateId 过滤
+        var subId = dialogRoot.selectedSubCateId
+        if (subId === "")
+            return []
+        var all = dialogRoot.getAllItems()
+        var filtered = []
+        for (var i = 0; i < all.length; i++) {
+            if (String(all[i].cateId) === subId)
+                filtered.push(all[i])
+        }
+        return filtered
     }
 
-    function getActiveCategories() {
-        if (categorySelectMode)
-            return UserIngredientService.categories
-        return CategoryService.categories
-    }
-    function getActiveItems() {
-        var cats = getActiveCategories()
-        if (activeCategoryIndex >= 0 && activeCategoryIndex < cats.length)
-            return cats[activeCategoryIndex].items || []
-        return []
-    }
-    function getSelectedCn() {
-        var items = getActiveItems()
+    // 根据当前选中标签取完整食材项
+    function getSelectedItem() {
+        var items = dialogRoot.getAllItems()
         for (var i = 0; i < items.length; i++) {
-            if (items[i].en === selectedLabel)
-                return items[i].cn || items[i].en || selectedLabel
+            if (items[i].en === dialogRoot.selectedLabel)
+                return items[i]
         }
-        return selectedLabel
+        return null
     }
 
     ColumnLayout {
@@ -286,7 +318,6 @@ Dialog {
                         MouseArea {
                             anchors.fill: parent
                             hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
                             onClicked: addIngredientDialog.open()
                         }
                     }
@@ -311,15 +342,160 @@ Dialog {
                 anchors.fill: parent
                 spacing: 0
 
-        // ====== 分类标签行（可横向滚动）=====
+        // ====== 一级品类标签行（食材纠错模式，使用 categoryTree 两级）=====
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: 12
             Layout.leftMargin: 22
+            Layout.rightMargin: 22
+            Layout.bottomMargin: 4
+            spacing: 12
+            visible: dialogRoot.searchText.trim() === ""
+
+            Text {
+                text: "一级:"
+                font.pixelSize: 18
+                color: "#999999"
+                verticalAlignment: Text.AlignVCenter
+            }
+
+            Flickable {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                contentWidth: topTagRow.width
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+
+                Row {
+                    id: topTagRow
+                    spacing: 28
+
+                    Repeater {
+                        model: CategoryService.categoryTree
+
+                        Item {
+                            width: tTxt.implicitWidth + 4
+                            height: 36
+
+                            Text {
+                                id: tTxt
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.cateNm || ""
+                                font.pixelSize: 22
+                                font.bold: (dialogRoot.selectedTopIndex === index)
+                                color: (dialogRoot.selectedTopIndex === index) ? "#4361EE" : "#666666"
+                            }
+
+                            Rectangle {
+                                anchors.bottom: parent.bottom
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: tTxt.width * 0.7
+                                height: 3
+                                visible: (dialogRoot.selectedTopIndex === index)
+                                radius: 1.5
+                                color: "#4361EE"
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    dialogRoot.selectedTopIndex = index
+                                    dialogRoot.selectedSubCateId = ""
+                                    dialogRoot.selectedSubCateName = ""
+                                    dialogRoot.selectedLabel = ""
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ====== 二级品类标签行（食材纠错模式）=====
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 22
+            Layout.rightMargin: 22
+            Layout.bottomMargin: 10
+            spacing: 12
+            visible: dialogRoot.selectedTopIndex >= 0
+                      && dialogRoot.searchText.trim() === ""
+
+            Text {
+                text: "二级:"
+                font.pixelSize: 18
+                color: "#999999"
+                verticalAlignment: Text.AlignVCenter
+            }
+
+            Flickable {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 36
+                contentWidth: subTagRow.width
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+
+                Row {
+                    id: subTagRow
+                    spacing: 28
+
+                    Repeater {
+                        model: (dialogRoot.selectedTopIndex >= 0
+                                && dialogRoot.selectedTopIndex < CategoryService.categoryTree.length)
+                               ? (CategoryService.categoryTree[dialogRoot.selectedTopIndex].children || [])
+                               : []
+
+                        Item {
+                            width: sTxt.implicitWidth + 4
+                            height: 36
+
+                            Text {
+                                id: sTxt
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: modelData.cateNm || ""
+                                property string myId: (modelData.cateId !== undefined) ? String(modelData.cateId) : ""
+                                font.pixelSize: 22
+                                font.bold: (dialogRoot.selectedSubCateId === sTxt.myId)
+                                color: (dialogRoot.selectedSubCateId === sTxt.myId) ? "#4361EE" : "#666666"
+                            }
+
+                            Rectangle {
+                                anchors.bottom: parent.bottom
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: sTxt.width * 0.7
+                                height: 3
+                                visible: (dialogRoot.selectedSubCateId === sTxt.myId)
+                                radius: 1.5
+                                color: "#4361EE"
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    dialogRoot.selectedSubCateId = sTxt.myId
+                                    dialogRoot.selectedSubCateName = (modelData.cateNm !== undefined) ? modelData.cateNm : ""
+                                    dialogRoot.selectedLabel = ""
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ====== 分类标签行（categorySelectMode 单级，保留旧逻辑）=====
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 12
+            Layout.leftMargin: 22
+            Layout.rightMargin: 22
             Layout.bottomMargin: 12
             spacing: 28
-            // 搜索中隐藏分类标签（避免与跨分类搜索结果混淆）
-            visible: dialogRoot.searchText.trim() === ""
+            visible: false
 
             Flickable {
                 Layout.fillWidth: true
@@ -333,7 +509,7 @@ Dialog {
                     spacing: 28
 
                     Repeater {
-                        model: dialogRoot.getActiveCategories()
+                        model: UserIngredientService.categories
 
                         Item {
                             width: catLabelTxt.implicitWidth + 4
@@ -362,27 +538,11 @@ Dialog {
                             MouseArea {
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     dialogRoot.activeCategoryIndex = index
                                     dialogRoot.selectedLabel = ""
                                 }
                             }
-                        }
-                    }
-
-                    // "更多 ▼" 展开项（固定末尾）
-                    Item {
-                        width: moreCatTxt.implicitWidth + 4
-                        height: 36
-                        visible: false
-
-                        Text {
-                            id: moreCatTxt
-                            anchors.centerIn: parent
-                            text: "更多 \u25BC"
-                            font.pixelSize: 16
-                            color: "#999999"
                         }
                     }
                 }
@@ -623,31 +783,33 @@ Dialog {
         selectedLabel = ""
         selectedIngrId = ""
         activeCategoryIndex = 0
+        selectedTopIndex = -1
+        selectedSubCateId = ""
+        selectedSubCateName = ""
         catSearchInput.text = ""
         searchText = ""            // 清空搜索状态
         searchResults = []
 
-        if (categorySelectMode)
+        if (categorySelectMode) {
             UserIngredientService.fetchIngredients()
-        else
+            CategoryService.fetchIngrCategories()
+        } else {
             CategoryService.fetchCategories()
+            CategoryService.fetchIngrCategories()
+        }
     }
 
     onAccepted: {
-        var selItems = getActiveItems()
-        for (var i = 0; i < selItems.length; i++) {
-            if (selItems[i].en === selectedLabel) {
-                var m = selItems[i]
-                console.log("[CategoryDialog] \u9009\u4E2D\u98DF\u6750 \u25B6"
-                            + " ingrId=" + (m.id !== undefined ? m.id : "")
-                            + " ingrCd=" + (m.en !== undefined ? m.en : "")
-                            + " ingrNm=" + (m.cn !== undefined ? m.cn : "")
-                            + " cateId=" + (m.cateId !== undefined ? m.cateId : "")
-                            + " emsId="  + (m.emsId !== undefined ? m.emsId : "")
-                            + " emsCd="  + (m.emsCd !== undefined ? m.emsCd : "")
-                            + " cateNm=" + (m.cateNm !== undefined ? m.cateNm : ""))
-                break
-            }
+        var m = dialogRoot.getSelectedItem()
+        if (m) {
+            console.log("[CategoryDialog] \u9009\u4E2D\u98DF\u6750 \u25B6"
+                        + " ingrId=" + (m.id !== undefined ? m.id : "")
+                        + " ingrCd=" + (m.en !== undefined ? m.en : "")
+                        + " ingrNm=" + (m.cn !== undefined ? m.cn : "")
+                        + " cateId=" + (m.cateId !== undefined ? m.cateId : "")
+                        + " emsId="  + (m.emsId !== undefined ? m.emsId : "")
+                        + " emsCd="  + (m.emsCd !== undefined ? m.emsCd : "")
+                        + " cateNm=" + (m.cateNm !== undefined ? m.cateNm : ""))
         }
 
         let correctLabel = selectedLabel
@@ -680,18 +842,37 @@ Dialog {
         target: UserIngredientService
         function onCreateSuccess(ingrId, ingrNm) {
             console.log("[CategoryDialog] 食材创建成功:", ingrNm, "ingrId=", ingrId)
-            // 切换到新食材所在的分类
             var cats = UserIngredientService.categories
             for (var i = 0; i < cats.length; i++) {
                 var items = cats[i].items || []
                 for (var j = 0; j < items.length; j++) {
                     if (String(items[j].id) === String(ingrId)) {
-                        dialogRoot.activeCategoryIndex = i
+                        var pos = dialogRoot.findCategoryTreePosition(items[j].cateId)
+                        if (pos) {
+                            dialogRoot.selectedTopIndex = pos.topIndex
+                            dialogRoot.selectedSubCateId = pos.subCateId
+                        }
                         dialogRoot.selectedLabel = items[j].en || ""
                         dialogRoot.selectedIngrId = ingrId
                         return
                     }
                 }
+            }
+        }
+    }
+
+    // 两级品类树加载完成后，默认选中第一个一级 + 第一个二级，避免网格空白
+    Connections {
+        target: CategoryService
+        function onCategoryTreeChanged() {
+            if (dialogRoot.selectedTopIndex >= 0
+                || CategoryService.categoryTree.length === 0)
+                return
+            dialogRoot.selectedTopIndex = 0
+            var kids = CategoryService.categoryTree[0].children || []
+            if (kids.length > 0) {
+                dialogRoot.selectedSubCateId = String(kids[0].cateId)
+                dialogRoot.selectedSubCateName = (kids[0].cateNm !== undefined) ? kids[0].cateNm : ""
             }
         }
     }

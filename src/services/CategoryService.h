@@ -21,6 +21,7 @@ class CategoryService : public QObject
     Q_OBJECT
     // === QML 可绑定属性 ===
     Q_PROPERTY(QVariantList categories READ categories NOTIFY categoriesChanged)
+    Q_PROPERTY(QVariantList categoryTree READ categoryTree NOTIFY categoryTreeChanged)
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(QString errorText READ errorText NOTIFY errorTextChanged)
 
@@ -32,6 +33,7 @@ public:
 
     // === Getter ===
     QVariantList categories() const { return m_categories; }
+    QVariantList categoryTree() const { return m_categoryTree; }
     bool loading() const { return m_loading; }
     QString errorText() const { return m_errorText; }
 
@@ -59,6 +61,7 @@ public:
 
 Q_SIGNALS:
     void categoriesChanged();
+    void categoryTreeChanged();
     void loadingChanged();
     void errorTextChanged();
     void fetchSuccess();
@@ -82,6 +85,12 @@ private:
     /** @brief 将食材品类原始响应写入本地缓存文件 */
     void saveIngrCateCache(const QByteArray &data);
 
+    /** @brief 从本地缓存文件加载食材品类两级树（启动离线可用） */
+    void loadIngrCateCache();
+
+    /** @brief 解析 /api/user/IngrCate/all 响应为两级分类树（parentId=="0" 为一级） */
+    bool parseIngrCateResponse(const QByteArray &data);
+
     /** @brief Token 刷新完成后，重发排队请求 */
     void onTokenRefreshCompleted(bool success, const QString &errMsg);
 
@@ -89,6 +98,7 @@ private:
     AuthService *m_authService = nullptr;
 
     QVariantList m_categories;  // [{name: "叶菜类", items: [{en:"...",cn:"..."}, ...]}, ...]
+    QVariantList m_categoryTree; // 两级分类树: [{cateId,cateNm,children:[{cateId,cateNm,parentId,...}]}, ...]
     bool m_loading = false;
     QString m_errorText;
 
