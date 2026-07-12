@@ -13,6 +13,11 @@
 #include <QDir>
 #include <QDateTime>
 #include <QUuid>
+#include <QCryptographicHash>
+#include <QSet>
+#include <QUrl>
+#include <QSslConfiguration>
+#include <QSslSocket>
 
 UserIngredientService::UserIngredientService(QObject *parent)
     : QObject(parent)
@@ -134,6 +139,12 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
 
     // 区分请求类型
     QString requestType = reply->property("requestType").toString();
+
+    // 食材图片下载回复（非 JSON，独立处理）
+    if (requestType == "ingrImage") {
+        processImageReply(reply);
+        return;
+    }
 
     if (reply->error() != QNetworkReply::NoError) {
         m_loading = false;
@@ -272,6 +283,9 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         bool enableBool = obj.value("enable").toBool(false);
         QString enable  = enableBool ? QStringLiteral("true") : QStringLiteral("false");
 
+        // 食材图片 URL（完整地址，可能为空）
+        QString imgUrl  = obj.value("img").toString().trimmed();
+
         QVariantMap item;
         item["en"]     = ingrCd;
         item["cn"]     = ingrNm;
@@ -281,6 +295,8 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         item["emsId"]  = emsId;
         item["emsCd"]  = emsCd;
         item["enable"] = enable;
+        item["img"]    = imgUrl;
+        item["imgLocal"] = QString();   // 本地缓存路径，下载完成后填充
         m_items.append(item);
 
         if (!ingrId.isEmpty() && !ingrCd.isEmpty()) {
@@ -307,6 +323,9 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
 
     // 额外保存一份接口原始响应 (未解析)
     saveRawResponse(data);
+
+    // 下载食材图片到本地缓存（异步，完成后刷新 UI 并落盘）
+    downloadIngredientImages();
 
     // 更新翻译器内存字典 (ingrCd/emsCd → ingrNm)，翻译器不再自行写缓存
     FoodTranslator::instance()->updateFromApi(m_items);
@@ -395,6 +414,130 @@ void UserIngredientService::saveRawResponse(const QByteArray &data)
     qInfo() << "[UserIngr] 原始响应已写入:" << path << "(" << data.size() << "字节)";
 }
 
+// ============================================================
+//  食材图片缓存 (下载到 ~/.cache/smartscale/ingr_images/)
+// ============================================================
+QString UserIngredientService::imageCacheDir() const
+{
+    QString dir = QDir::homePath() + "/.cache/smartscale/ingr_images";
+    QDir().mkpath(dir);
+    return dir;
+}
+
+QString UserIngredientService::localImagePathFor(const QString &imgUrl) const
+{
+    QByteArray hash = QCryptographicHash::hash(imgUrl.toUtf8(),
+                                              QCryptographicHash::Md5).toHex();
+    QString ext = ".img";
+    QString path = QUrl(imgUrl).path();
+    int dot = path.lastIndexOf('.');
+    if (dot >= 0) {
+        QString e = path.mid(dot).toLower();
+        if (e == ".jpg" || e == ".jpeg" || e == ".png" || e == ".gif"
+            || e == ".webp" || e == ".bmp")
+            ext = e;
+    }
+    return imageCacheDir() + "/" + QString::fromLatin1(hash) + ext;
+}
+
+QNetworkRequest UserIngredientService::buildImageRequest(const QString &imgUrl)
+{
+    QNetworkRequest request{QUrl(imgUrl)};
+    QString token = m_authService ? m_authService->token() : QString();
+    if (!token.isEmpty())
+        request.setRawHeader("Authorization", QByteArray("Bearer ") + token.toUtf8());
+
+    // 与 NetworkUtils 一致的 SSL 配置（IP+HTTPS 跳过证书验证）
+    QSslConfiguration sslConf = request.sslConfiguration();
+    sslConf.setPeerVerifyMode(QSslSocket::VerifyNone);
+    sslConf.setProtocol(QSsl::TlsV1_2OrLater);
+    request.setSslConfiguration(sslConf);
+    // 强制 HTTP/1.1
+    request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+    return request;
+}
+
+void UserIngredientService::downloadIngredientImages()
+{
+    // 未登录（无 token）时无法携带认证头，跳过下载；下次 fetch 会重新触发
+    if (!m_authService || m_authService->token().isEmpty())
+        return;
+
+    for (const QVariant &v : m_items) {
+        QVariantMap m = v.toMap();
+        QString imgUrl = m.value("img").toString();
+        QString ingrId = m.value("id").toString();
+        if (imgUrl.isEmpty() || ingrId.isEmpty())
+            continue;
+
+        // 已有本地缓存且文件仍存在则跳过
+        QString local = m.value("imgLocal").toString();
+        if (!local.isEmpty() && QFile::exists(local))
+            continue;
+        // 正在下载中则跳过，避免重复请求
+        if (m_imgDownloading.contains(imgUrl))
+            continue;
+
+        cacheIngredientImage(ingrId, imgUrl);
+    }
+}
+
+void UserIngredientService::cacheIngredientImage(const QString &ingrId, const QString &imgUrl)
+{
+    m_imgDownloading.insert(imgUrl);
+    QNetworkRequest request = buildImageRequest(imgUrl);
+    QNetworkReply *reply = m_networkMgr->get(request);
+    reply->setProperty("requestType", "ingrImage");
+    reply->setProperty("ingrId", ingrId);
+    reply->setProperty("imgUrl", imgUrl);
+    qDebug() << "[UserIngr] 发起食材图片下载:" << ingrId << imgUrl.left(80);
+}
+
+void UserIngredientService::processImageReply(QNetworkReply *reply)
+{
+    QString ingrId = reply->property("ingrId").toString();
+    QString imgUrl = reply->property("imgUrl").toString();
+    m_imgDownloading.remove(imgUrl);
+
+    if (reply->error() != QNetworkReply::NoError) {
+        qWarning() << "[UserIngr] 图片下载失败:" << imgUrl << reply->errorString();
+        return;
+    }
+
+    QByteArray imgData = reply->readAll();
+    if (imgData.isEmpty()) {
+        qWarning() << "[UserIngr] 图片下载为空:" << imgUrl;
+        return;
+    }
+
+    QString localPath = localImagePathFor(imgUrl);
+    QFile f(localPath);
+    if (!f.open(QIODevice::WriteOnly)) {
+        qWarning() << "[UserIngr] 图片缓存写入失败:" << localPath;
+        return;
+    }
+    f.write(imgData);
+    f.close();
+    qInfo() << "[UserIngr] 食材图片已缓存:" << ingrId << "->" << localPath;
+
+    setItemLocalImage(ingrId, localPath);
+    saveToCache();   // 持久化 imgLocal，下次启动无需重新下载
+}
+
+void UserIngredientService::setItemLocalImage(const QString &ingrId, const QString &localPath)
+{
+    for (int i = 0; i < m_items.size(); ++i) {
+        QVariantMap m = m_items[i].toMap();
+        if (m.value("id").toString() == ingrId) {
+            m["imgLocal"] = localPath;
+            m_items[i] = m;
+            break;
+        }
+    }
+    rebuildCategories();
+    Q_EMIT itemsChanged();
+}
+
 void UserIngredientService::loadFromCache()
 {
     QString path = cacheFilePath();
@@ -442,6 +585,8 @@ void UserIngredientService::loadFromCache()
             item["emsId"]  = obj.value("emsId").toVariant().toString();
             item["emsCd"]  = obj.value("emsCd").toString().toLower();
             item["enable"] = obj.value("enable").toString();
+            item["img"]    = obj.value("img").toString();
+            item["imgLocal"] = obj.value("imgLocal").toString();
             m_items.append(item);
 
             QString ingrId = item["id"].toString();
@@ -462,6 +607,9 @@ void UserIngredientService::loadFromCache()
         Q_EMIT itemsChanged();
 
     qInfo() << "[UserIngr] 从缓存加载了" << m_items.size() << "个食材:" << path;
+
+    // 启动时若已有 token（如已登录态恢复），补下载缺失的图片缓存
+    downloadIngredientImages();
 }
 
 void UserIngredientService::saveToCache()
@@ -488,6 +636,8 @@ void UserIngredientService::saveToCache()
             itemObj["emsId"]  = m.value("emsId").toString();
             itemObj["emsCd"]  = m.value("emsCd").toString();
             itemObj["enable"] = m.value("enable").toString();
+            itemObj["img"]    = m.value("img").toString();
+            itemObj["imgLocal"] = m.value("imgLocal").toString();
             itemArr.append(itemObj);
         }
         catObj["items"] = itemArr;

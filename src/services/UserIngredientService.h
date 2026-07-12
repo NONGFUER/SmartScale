@@ -10,6 +10,7 @@
 class AuthService;
 class QNetworkAccessManager;
 class QNetworkReply;
+class QNetworkRequest;
 
 /**
  * @brief 用户域食材服务 — 从 /api/user/UserIngr/paged 拉取食材，缓存到本地 ingredients.json
@@ -70,6 +71,15 @@ private:
     static QString cacheFilePath();
     static QString rawCacheFilePath();        // 原始响应对应的缓存文件绝对路径
 
+    // === 食材图片缓存 ===
+    void downloadIngredientImages();          // 遍历 m_items，下载缺失的食材图片到本地
+    void cacheIngredientImage(const QString &ingrId, const QString &imgUrl); // 下载单个图片
+    void processImageReply(QNetworkReply *reply);  // 图片下载完成回调
+    QNetworkRequest buildImageRequest(const QString &imgUrl);  // 构造带认证头的图片请求
+    QString imageCacheDir() const;            // 图片缓存目录 (~/.cache/smartscale/ingr_images)
+    QString localImagePathFor(const QString &imgUrl) const;  // 由 URL 推导本地文件名
+    void setItemLocalImage(const QString &ingrId, const QString &localPath); // 更新某项本地图路径
+
     /** @brief Token 刷新完成后，重发排队的请求 */
     void onTokenRefreshCompleted(bool success, const QString &errMsg);
 
@@ -95,6 +105,9 @@ private:
     // === Token 刷新协调 ===
     QQueue<PendingRequest> m_pendingRequests;
     bool m_refreshing = false;
+
+    // === 图片下载去重 ===
+    QSet<QString> m_imgDownloading;           // 正在下载的 imgUrl 集合，避免重复请求
 };
 
 #endif // USERINGREDIENTSERVICE_H

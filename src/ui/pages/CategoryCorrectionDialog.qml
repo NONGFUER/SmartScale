@@ -507,12 +507,41 @@ Dialog {
                         Behavior on opacity { NumberAnimation { duration: 140 } }
                     }
 
+                    // 食材图片：本地缓存优先，缺失/损坏时回退远程 URL
+                    Image {
+                        id: foodImg
+                        anchors.fill: parent
+                        fillMode: Image.PreserveAspectCrop
+                        cache: false
+                        source: {
+                            var local = modelData.imgLocal || ""
+                            if (local !== "")
+                                return "file://" + local
+                            return modelData.img || ""
+                        }
+                        onStatusChanged: {
+                            // 本地缓存缺失或损坏时回退到远程 URL
+                            if (status === Image.Error && modelData.imgLocal && modelData.img)
+                                source = modelData.img
+                        }
+                    }
+
+                    // 图片就绪时的整体暗化遮罩，保证文字可读
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "#000000"
+                        opacity: foodImg.status === Image.Ready ? 0.28 : 0
+                        visible: foodImg.status === Image.Ready
+                    }
+
                     Text {
                         anchors.centerIn: parent
                         text: modelData.cn
-                        font.pixelSize: 32
+                        font.pixelSize: 28
                         font.family: "Microsoft YaHei"
-                        color: dialogRoot.selectedLabel === modelData.en ? "#4361EE" : "#1B263B"
+                        font.bold: true
+                        color: foodImg.status === Image.Ready ? "#FFFFFF"
+                               : (dialogRoot.selectedLabel === modelData.en ? "#4361EE" : "#1B263B")
                     }
 
                     HoverHandler { id: cardHover }
