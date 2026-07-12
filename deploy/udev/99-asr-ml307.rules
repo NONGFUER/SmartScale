@@ -30,9 +30,9 @@
 # 写入 option1 驱动的 new_id，让内核创建 /dev/ttyUSB* 节点。
 # 必须先执行这一步，否则只有 eth1（网口）没有 AT 串口。
 # -----------------------------------------------------------------------------
-ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="2ecc", ATTRS{idProduct}=="3012", \
-    RUN+="/sbin/modprobe option", \
-    RUN+="/bin/sh -c 'echo 2ecc 3012 > /sys/bus/usb-serial/drivers/option1/new_id'"
+#ACTION=="add", SUBSYSTEM=="usb", ATTRS{idVendor}=="2ecc", ATTRS{idProduct}=="3012", \
+#RUN+="/sbin/modprobe option", \
+#RUN+="/bin/sh -c 'echo 2ecc 3012 > /sys/bus/usb-serial/drivers/option1/new_id'"
 
 # ASR ML307B：放开权限并建立稳定符号链接 /dev/cellular-modem
 SUBSYSTEM=="tty", ATTRS{idVendor}=="2ecc", ATTRS{idProduct}=="3012", \
