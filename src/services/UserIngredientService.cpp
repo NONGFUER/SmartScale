@@ -305,6 +305,9 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
     // 写入本地缓存 (新结构: 分类 + 食材)
     saveToCache();
 
+    // 额外保存一份接口原始响应 (未解析)
+    saveRawResponse(data);
+
     // 更新翻译器内存字典 (ingrCd/emsCd → ingrNm)，翻译器不再自行写缓存
     FoodTranslator::instance()->updateFromApi(m_items);
 
@@ -370,6 +373,26 @@ QString UserIngredientService::cacheFilePath()
     QString dir = QDir::homePath() + "/.cache/smartscale";
     QDir().mkpath(dir);
     return dir + "/ingredients.json";
+}
+
+QString UserIngredientService::rawCacheFilePath()
+{
+    QString dir = QDir::homePath() + "/.cache/smartscale";
+    QDir().mkpath(dir);
+    return dir + "/ingredients_raw.json";
+}
+
+void UserIngredientService::saveRawResponse(const QByteArray &data)
+{
+    QString path = rawCacheFilePath();
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "[UserIngr] 无法写入原始响应缓存文件:" << path;
+        return;
+    }
+    file.write(data);
+    file.close();
+    qInfo() << "[UserIngr] 原始响应已写入:" << path << "(" << data.size() << "字节)";
 }
 
 void UserIngredientService::loadFromCache()

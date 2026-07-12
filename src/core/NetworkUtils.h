@@ -32,6 +32,7 @@ namespace NetworkUtils {
         inline constexpr const char *USER_WEIGHT_REVOKE     = "/api/user/WeightRecord/revoke";
         inline constexpr const char *USER_INGR_PAGED        = "/api/user/UserIngr/paged";
         inline constexpr const char *USER_INGR_CREATE       = "/api/user/UserIngr/create";
+        inline constexpr const char *USER_INGRCATE_ALL      = "/api/user/IngrCate/all";  // 食材品类全量（按 custId）
     }
 
     /**

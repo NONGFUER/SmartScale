@@ -39,6 +39,18 @@ public:
     Q_INVOKABLE void fetchCategories();
 
     /**
+     * @brief 拉取食材品类全量列表并写入本地缓存
+     *        (POST https://user.shxgs.cn:5196/api/user/IngrCate/all?custId=<custId>)
+     *
+     * custId 取自 AuthService。成功后原始 JSON 响应写入 ingrCateCacheFilePath()，
+     * 并发射 ingrCategoriesFetched(cacheFilePath) 信号。
+     */
+    Q_INVOKABLE void fetchIngrCategories();
+
+    /** @brief 食材品类缓存文件绝对路径（QML 可读） */
+    Q_INVOKABLE QString ingrCateCacheFilePath() const;
+
+    /**
      * @brief 获取指定分类下的所有品项（扁平列表）
      * @param categoryName 分类名称，空字符串返回全部
      * @return 品项列表 [{name, en, cn, categoryName}, ...]
@@ -52,6 +64,11 @@ Q_SIGNALS:
     void fetchSuccess();
     void fetchFailed(const QString &errorMsg);
 
+    /** @brief 食材品类拉取成功，已写入缓存文件 */
+    void ingrCategoriesFetched(const QString &cacheFilePath);
+    /** @brief 食材品类拉取失败 */
+    void ingrCategoriesFetchFailed(const QString &errorMsg);
+
 private Q_SLOTS:
     void onNetworkReply(QNetworkReply *reply);
 
@@ -61,6 +78,9 @@ private:
 
     /** @brief 解析云端返回的 JSON 数据 */
     bool parseCategoryResponse(const QByteArray &data);
+
+    /** @brief 将食材品类原始响应写入本地缓存文件 */
+    void saveIngrCateCache(const QByteArray &data);
 
     /** @brief Token 刷新完成后，重发排队请求 */
     void onTokenRefreshCompleted(bool success, const QString &errMsg);
@@ -74,7 +94,8 @@ private:
 
     // === Token 刷新协调 ===
     bool m_refreshing = false;
-    int m_pendingFetchCount = 0;  // 排队等待刷新的 fetchCategories 调用次数
+    int m_pendingFetchCount = 0;      // 排队等待刷新的 fetchCategories 调用次数
+    int m_pendingIngrCateFetch = 0;   // 排队等待刷新的 fetchIngrCategories 调用次数
 };
 
 #endif // CATEGORYSERVICE_H

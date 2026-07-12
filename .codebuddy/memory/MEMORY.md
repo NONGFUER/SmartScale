@@ -55,19 +55,18 @@
 
 **核心设计**：`AuthService` 内置全局刷新锁 `m_isRefreshing` + 统一完成信号 `tokenRefreshCompleted(bool,QString)`，所有 Service 通过此信号重发排队请求。
 
-**关键接口**（AuthService）：
-- `requestTokenRefresh()` — 带并发锁的统一刷新入口（替代直接调 `refreshToken()`）
-- `isRefreshingToken()` — 查询锁状态
-- `isUnauthorizedError(QNetworkReply*)` — 静态方法检测 401/403
-- `tokenRefreshCompleted(success, errMsg)` — 统一通知信号
+**关键接口**（AuthService）：`requestTokenRefresh()`（带并发锁的统一刷新入口，替代直接调 `refreshToken()`）、`isRefreshingToken()`、静态 `isUnauthorizedError(QNetworkReply*)`（检测 401/403）、信号 `tokenRefreshCompleted(success, errMsg)`。
 
-**已接入的 4 个 Service**：
-1. **WeightHistoryService** — 上传记录预检+401拦截+排队重发
-2. **UserIngredientService** — 拉取食材/创建食材 预检+401拦截+排队
-3. **CategoryService** — 拉取品类 预检+401拦截+排队
-4. **CameraController** — AI识别 预检+401拦截+图片缓存排队
+**已接入 Service**：WeightHistoryService、UserIngredientService、CategoryService、CameraController，均为「预检 + 401 拦截 + 排队重发」模式。
 
-**防竞态机制**：每个 Service 有自己的 `m_refreshing` 标志 + AuthService 全局 `m_isRefreshing` 双层锁。连续失败计数 `m_refreshFailCount` 超过 2 次建议重新登录。
+**防竞态**：每 Service 自有 `m_refreshing` 标志 + AuthService 全局 `m_isRefreshing` 双层锁；连续失败计数 `m_refreshFailCount` 超 2 次建议重新登录。
+
+## 网络请求约定（NetworkUtils）
+
+- 位置：`src/core/NetworkUtils.h|.cpp`。两个域名常量：`API_BASE_URL="https://api.shxgs.cn:5196"`（ems 域）、`USER_BASE_URL="https://user.shxgs.cn:5196"`（user 域）。
+- API 路径集中在 `NetworkUtils::Api` 命名空间常量。EMS 域用 `createApiRequest(apiPath, token)`；USER 域用 `createUserApiRequest(apiPath, token)`；自定义（带 query 参数）用 `createApiRequest(baseUrl, apiPath, token)`。
+- 请求统一：`Content-Type: application/json` + `Bearer` token + SSL VerifyNone + 强制 HTTP/1.1。
+- **本地缓存目录统一**：`~/.cache/smartscale/`（`QDir::homePath()+"/.cache/smartscale"`），如食材缓存 `ingredients.json`、食材品类缓存 `ingr_categories.json`。
 
 ## 网络管理服务（NetworkManagerService）
 

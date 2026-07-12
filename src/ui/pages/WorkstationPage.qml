@@ -965,6 +965,8 @@ Item {
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: {
                                             console.log("[WSP] 点击选择食材按钮，打开品类选择弹窗")
+                                            // 拉取食材品类全量并写入本地缓存 (~/.cache/smartscale/ingr_categories.json)
+                                            CategoryService.fetchIngrCategories()
                                             root.categorySelectMode = true
                                             correctionDialog.open()
                                         }

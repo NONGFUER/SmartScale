@@ -66,7 +66,9 @@ private:
     void rebuildCategories();                 // 由 m_items 按 cateId 分组生成 m_categories
     void loadFromCache();                     // 启动时从本地 JSON 加载
     void saveToCache();                       // API 返回后写入本地 JSON (新结构)
+    void saveRawResponse(const QByteArray &data);  // 保存 /UserIngr/paged 原始响应 (未解析)
     static QString cacheFilePath();
+    static QString rawCacheFilePath();        // 原始响应对应的缓存文件绝对路径
 
     /** @brief Token 刷新完成后，重发排队的请求 */
     void onTokenRefreshCompleted(bool success, const QString &errMsg);

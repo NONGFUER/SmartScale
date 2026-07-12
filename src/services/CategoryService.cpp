@@ -5,6 +5,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QNetworkRequest>
+#include <QFile>
+#include <QDir>
 #include <QDebug>
 
 CategoryService::CategoryService(QObject *parent)
@@ -52,6 +55,92 @@ void CategoryService::fetchCategories()
     qInfo() << "[CategoryService] 正在请求品类列表...";
 
     m_networkMgr->get(request);
+}
+
+// ==========================================================================
+//  食材品类全量拉取 (POST /api/user/IngrCate/all?custId=<custId>) + 本地缓存
+// ==========================================================================
+
+QString CategoryService::ingrCateCacheFilePath() const
+{
+    QString dir = QDir::homePath() + "/.cache/smartscale";
+    QDir().mkpath(dir);
+    return dir + "/ingr_categories.json";
+}
+
+void CategoryService::fetchIngrCategories()
+{
+    QString token = m_authService ? m_authService->token() : QString();
+    // custId 是雪花 ID，用 QString 拼接避免溢出
+    QString custId = m_authService ? QString::number(m_authService->custId()) : QStringLiteral("0");
+
+    // === Token 预检 ===
+    if (!token.isEmpty() && m_authService && m_authService->isTokenExpiringSoon()) {
+        qDebug() << "[CategoryService] Token 即将过期，排队等待刷新后拉取食材品类";
+        m_pendingIngrCateFetch++;
+        if (!m_refreshing && !m_authService->isRefreshingToken()) {
+            m_refreshing = true;
+            m_authService->requestTokenRefresh();
+        }
+        return;
+    }
+
+    // 拼接 custId 查询参数（USER 域）
+    QString apiPath = QString("%1?custId=%2")
+                          .arg(QString::fromLatin1(NetworkUtils::Api::USER_INGRCATE_ALL), custId);
+    QNetworkRequest request = NetworkUtils::createApiRequest(
+        QString::fromLatin1(NetworkUtils::USER_BASE_URL), apiPath, token);
+
+    qInfo() << "[CategoryService] 正在请求食材品类全量, custId=" << custId;
+
+    QNetworkReply *reply = m_networkMgr->post(request, QByteArray());
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+
+        if (reply->error() != QNetworkReply::NoError) {
+            // === 401/403 自动刷新重试 ===
+            if (AuthService::isUnauthorizedError(reply) && m_authService) {
+                qDebug() << "[CategoryService] 食材品类收到 401/403，触发 Token 刷新并重试";
+                m_pendingIngrCateFetch++;
+                if (!m_refreshing && !m_authService->isRefreshingToken()) {
+                    m_refreshing = true;
+                    m_authService->requestTokenRefresh();
+                }
+                return;
+            }
+            QString errMsg = QString("网络错误: %1").arg(reply->errorString());
+            qWarning() << "[CategoryService] 食材品类拉取失败:" << errMsg;
+            Q_EMIT ingrCategoriesFetchFailed(errMsg);
+            return;
+        }
+
+        int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        QByteArray data = reply->readAll();
+        qInfo() << "[CategoryService] 食材品类 HTTP" << statusCode << "响应长度:" << data.size();
+
+        if (statusCode != 200) {
+            QString errMsg = QString("服务器错误(HTTP %1)").arg(statusCode);
+            qWarning() << "[CategoryService]" << errMsg;
+            Q_EMIT ingrCategoriesFetchFailed(errMsg);
+            return;
+        }
+
+        saveIngrCateCache(data);
+        Q_EMIT ingrCategoriesFetched(ingrCateCacheFilePath());
+    });
+}
+
+void CategoryService::saveIngrCateCache(const QByteArray &data)
+{
+    QString path = ingrCateCacheFilePath();
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "[CategoryService] 无法写入食材品类缓存文件:" << path;
+        return;
+    }
+    file.write(data);
+    file.close();
+    qInfo() << "[CategoryService] 食材品类缓存已写入:" << path << "(" << data.size() << "字节)";
 }
 
 void CategoryService::onNetworkReply(QNetworkReply *reply)
@@ -257,21 +346,32 @@ void CategoryService::onTokenRefreshCompleted(bool success, const QString &errMs
     m_refreshing = false;
 
     if (!success) {
-        qWarning() << "[CategoryService] Token 刷新失败，丢弃" << m_pendingFetchCount << "条排队请求";
+        qWarning() << "[CategoryService] Token 刷新失败，丢弃" << m_pendingFetchCount
+                   << "条品类 +" << m_pendingIngrCateFetch << "条食材品类排队请求";
         if (m_pendingFetchCount > 0) {
             m_errorText = "Token 刷新失败: " + errMsg;
             Q_EMIT errorTextChanged();
             Q_EMIT fetchFailed(m_errorText);
         }
+        if (m_pendingIngrCateFetch > 0) {
+            Q_EMIT ingrCategoriesFetchFailed("Token 刷新失败: " + errMsg);
+        }
         m_pendingFetchCount = 0;
+        m_pendingIngrCateFetch = 0;
         return;
     }
 
-    qDebug() << "[CategoryService] Token 刷新成功，重发" << m_pendingFetchCount << "条排队请求";
-    // 只需重发一次 fetchCategories（多次排队合并为一次）
+    qDebug() << "[CategoryService] Token 刷新成功，重发" << m_pendingFetchCount
+             << "条品类 +" << m_pendingIngrCateFetch << "条食材品类排队请求";
+    // 只需各重发一次（多次排队合并为一次）
     int count = m_pendingFetchCount;
+    int ingrCateCount = m_pendingIngrCateFetch;
     m_pendingFetchCount = 0;
+    m_pendingIngrCateFetch = 0;
     if (count > 0) {
         fetchCategories();
+    }
+    if (ingrCateCount > 0) {
+        fetchIngrCategories();
     }
 }
