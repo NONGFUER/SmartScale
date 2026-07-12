@@ -402,8 +402,15 @@ Dialog {
                                 hoverEnabled: true
                                 onClicked: {
                                     dialogRoot.selectedTopIndex = index
-                                    dialogRoot.selectedSubCateId = ""
-                                    dialogRoot.selectedSubCateName = ""
+                                    // 选中一级后默认选中第一个二级分类
+                                    var kids = modelData.children || []
+                                    if (kids.length > 0) {
+                                        dialogRoot.selectedSubCateId = String(kids[0].cateId)
+                                        dialogRoot.selectedSubCateName = (kids[0].cateNm !== undefined) ? kids[0].cateNm : ""
+                                    } else {
+                                        dialogRoot.selectedSubCateId = ""
+                                        dialogRoot.selectedSubCateName = ""
+                                    }
                                     dialogRoot.selectedLabel = ""
                                 }
                             }
