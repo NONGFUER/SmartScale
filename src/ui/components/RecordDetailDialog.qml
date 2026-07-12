@@ -53,7 +53,7 @@ Dialog {
     height: Math.min(parent.height * 0.92, 860)
 
     modal: true
-    Overlay.modal: Rectangle { color: "#C0000000" }
+    Overlay.modal: Rectangle { color: "#CF000000" }
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
@@ -314,7 +314,7 @@ Dialog {
             // 上一张 — 大号圆角按钮
             Rectangle {
                 id: prevBtnRect
-                Layout.preferredWidth: 80
+                Layout.preferredWidth: 180
                 Layout.preferredHeight: 52
                 radius: 14
                 color: dialogRoot.hasPrev ? (prevHover.hovered ? "#3B82F6" : "#EFF6FF") : "#F1F5F9"
@@ -329,7 +329,7 @@ Dialog {
 
                 RowLayout {
                     anchors.centerIn: parent
-                    spacing: 6
+                    spacing: 16
 
                     Image {
                         Layout.preferredWidth: 24
@@ -340,8 +340,8 @@ Dialog {
                     }
                     Text {
                         Layout.alignment: Qt.AlignVCenter
-                        text: "上一张"
-                        font.pixelSize: 12
+                        text: "上一页"
+                        font.pixelSize: 28
                         font.family: Theme.fontFamilyUi
                         color: dialogRoot.hasPrev ? (prevHover.hovered ? "#FFFFFF" : "#2563EB") : "#94A3B8"
                     }
@@ -364,7 +364,7 @@ Dialog {
                     id: countText
                     anchors.centerIn: parent
                     text: (dialogRoot.currentIndex + 1) + " / " + dialogRoot.recordList.length
-                    font.pixelSize: 18
+                    font.pixelSize: 24
                     font.bold: true
                     font.family: Theme.fontFamilyUi
                     color: "#FFFFFF"
@@ -374,7 +374,7 @@ Dialog {
             // 下一张 — 大号圆角按钮（与上一张对称）
             Rectangle {
                 id: nextBtnRect
-                Layout.preferredWidth: 80
+                Layout.preferredWidth: 180
                 Layout.preferredHeight: 52
                 radius: 14
                 color: dialogRoot.hasNext ? (nextHover.hovered ? "#3B82F6" : "#EFF6FF") : "#F1F5F9"
@@ -389,12 +389,12 @@ Dialog {
 
                 RowLayout {
                     anchors.centerIn: parent
-                    spacing: 6
+                    spacing: 16
 
                     Text {
                         Layout.alignment: Qt.AlignVCenter
-                        text: "下一张"
-                        font.pixelSize: 12
+                        text: "下一页"
+                        font.pixelSize: 28
                         font.family: Theme.fontFamilyUi
                         color: dialogRoot.hasNext ? (nextHover.hovered ? "#FFFFFF" : "#2563EB") : "#94A3B8"
                     }
