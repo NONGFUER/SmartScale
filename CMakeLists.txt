@@ -123,6 +123,8 @@ qt_add_resources(appSmartScale "app_assets"
     PREFIX "/"
     FILES
         resources/img/workstation_bg.png
+        resources/img/pageUp.png
+        resources/img/pageDown.png
         resources/icon/eye-fill.png
         resources/icon/eye-close-fill.png
 )

@@ -26,7 +26,6 @@ import SmartScale
 // ============================================================
 Dialog {
     id: dialogRoot
-
     // ---- 对外接口 ----
     property var record: null
     property var recordList: []
@@ -54,7 +53,7 @@ Dialog {
     height: Math.min(parent.height * 0.92, 860)
 
     modal: true
-    Overlay.modal: Rectangle { color: "#80000000" }
+    Overlay.modal: Rectangle { color: "#C0000000" }
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
@@ -90,25 +89,6 @@ Dialog {
             Layout.bottomMargin: 16
             spacing: 0
 
-            // 返回/关闭按钮 — 浅蓝圆形背景（与搜索弹窗返回钮同款）
-            Rectangle {
-                width: 46; height: 46; radius: 23
-                color: backMA.containsMouse ? "#D6EBFF" : "#E8F4FD"
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "\u2039"
-                    font.pixelSize: 32
-                    font.bold: true
-                    color: "#2196F3"
-                }
-                MouseArea {
-                    id: backMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: dialogRoot.close()
-                }
-            }
 
             Item { Layout.fillWidth: true }
 
@@ -125,13 +105,13 @@ Dialog {
 
             // 关闭按钮 — 透明底，hover 变红（与搜索弹窗关闭钮同款）
             Rectangle {
-                width: 42; height: 42; radius: 21
+                width: 52; height: 52; radius: 21
                 color: closeMA.containsMouse ? "#FEE2E2" : "transparent"
 
                 Text {
                     anchors.centerIn: parent
                     text: "\u2715"
-                    font.pixelSize: 20
+                    font.pixelSize: 42
                     color: closeMA.containsMouse ? "#EF4444" : "#94A3B8"
                 }
                 MouseArea {
@@ -143,90 +123,7 @@ Dialog {
             }
         }
 
-        // ==========================================
-        // 翻页导航栏（居中对称，大号按钮，位于标题栏与图片之间）
-        // ==========================================
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: 8
-            Layout.bottomMargin: 12
-            spacing: 20
-            visible: dialogRoot.recordList && dialogRoot.recordList.length > 1
-                      && dialogRoot.currentIndex >= 0
-
-            // 上一张 — 大号圆角按钮
-            Rectangle {
-                id: prevBtnRect
-                width: 56; height: 52; radius: 14
-                color: dialogRoot.hasPrev ? (prevHover.hovered ? "#3B82F6" : "#EFF6FF") : "#F1F5F9"
-                border.color: dialogRoot.hasPrev ? (prevHover.hovered ? "#2563EB" : "#BFDBFE") : "#E2E8F0"
-                border.width: 1.5
-                enabled: dialogRoot.hasPrev
-                opacity: enabled ? 1.0 : 0.4
-                scale: enabled && prevHover.hovered ? 1.03 : 1.0
-                Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-                Behavior on border.color { ColorAnimation { duration: 150 } }
-                Behavior on color { ColorAnimation { duration: 150 } }
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "\u2039"; font.pixelSize: 28; font.bold: true
-                    color: dialogRoot.hasPrev ? (prevHover.hovered ? "#FFFFFF" : "#2563EB") : Theme.colorTextTertiary
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                }
-                HoverHandler { id: prevHover }
-                TapHandler {
-                    enabled: dialogRoot.hasPrev
-                    onTapped: if (dialogRoot.hasPrev) dialogRoot.navigateToRecord(dialogRoot.currentIndex - 1)
-                }
-            }
-
-            // 页码计数 — 大号蓝色胶囊
-            Rectangle {
-                Layout.preferredWidth: countText.implicitWidth + 48
-                height: 52
-                radius: 26
-                color: "#3B82F6"
-
-                Text {
-                    id: countText
-                    anchors.centerIn: parent
-                    text: (dialogRoot.currentIndex + 1) + " / " + dialogRoot.recordList.length
-                    font.pixelSize: 18
-                    font.bold: true
-                    font.family: Theme.fontFamilyUi
-                    color: "#FFFFFF"
-                }
-            }
-
-            // 下一张 — 大号圆角按钮（与上一张对称）
-            Rectangle {
-                id: nextBtnRect
-                width: 56; height: 52; radius: 14
-                color: dialogRoot.hasNext ? (nextHover.hovered ? "#3B82F6" : "#EFF6FF") : "#F1F5F9"
-                border.color: dialogRoot.hasNext ? (nextHover.hovered ? "#2563EB" : "#BFDBFE") : "#E2E8F0"
-                border.width: 1.5
-                enabled: dialogRoot.hasNext
-                opacity: enabled ? 1.0 : 0.4
-                scale: enabled && nextHover.hovered ? 1.03 : 1.0
-                Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
-                Behavior on border.color { ColorAnimation { duration: 150 } }
-                Behavior on color { ColorAnimation { duration: 150 } }
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "\u203A"; font.pixelSize: 28; font.bold: true
-                    color: dialogRoot.hasNext ? (nextHover.hovered ? "#FFFFFF" : "#2563EB") : Theme.colorTextTertiary
-                    Behavior on color { ColorAnimation { duration: 120 } }
-                }
-                HoverHandler { id: nextHover }
-                TapHandler {
-                    enabled: dialogRoot.hasNext
-                    onTapped: if (dialogRoot.hasNext) dialogRoot.navigateToRecord(dialogRoot.currentIndex + 1)
-                }
-            }
-        }
+        
 
         // ==========================================
         // 图片展示区域（浅灰圆角容器，与搜索弹窗结果区一致）
@@ -401,8 +298,123 @@ Dialog {
                     Behavior on width { NumberAnimation { duration: 50 } }
                 }
             }
+        }
+
+        // ==========================================
+        // 翻页导航栏（居中对称，大号按钮，位于底部居中）
+        // ==========================================
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.topMargin: 8
+            Layout.bottomMargin: 16
+            spacing: 20
+            visible: dialogRoot.recordList && dialogRoot.recordList.length > 1
+                      && dialogRoot.currentIndex >= 0
+
+            // 上一张 — 大号圆角按钮
+            Rectangle {
+                id: prevBtnRect
+                Layout.preferredWidth: 80
+                Layout.preferredHeight: 52
+                radius: 14
+                color: dialogRoot.hasPrev ? (prevHover.hovered ? "#3B82F6" : "#EFF6FF") : "#F1F5F9"
+                border.color: dialogRoot.hasPrev ? (prevHover.hovered ? "#2563EB" : "#BFDBFE") : "#E2E8F0"
+                border.width: 1.5
+                enabled: dialogRoot.hasPrev
+                opacity: enabled ? 1.0 : 0.4
+                scale: enabled && prevHover.hovered ? 1.03 : 1.0
+                Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                Behavior on border.color { ColorAnimation { duration: 150 } }
+                Behavior on color { ColorAnimation { duration: 150 } }
+
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 6
+
+                    Image {
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                        Layout.alignment: Qt.AlignVCenter
+                        source: "qrc:/resources/img/pageUp.png"
+                        fillMode: Image.PreserveAspectFit
+                    }
+                    Text {
+                        Layout.alignment: Qt.AlignVCenter
+                        text: "上一张"
+                        font.pixelSize: 12
+                        font.family: Theme.fontFamilyUi
+                        color: dialogRoot.hasPrev ? (prevHover.hovered ? "#FFFFFF" : "#2563EB") : "#94A3B8"
+                    }
+                }
+                HoverHandler { id: prevHover }
+                TapHandler {
+                    enabled: dialogRoot.hasPrev
+                    onTapped: if (dialogRoot.hasPrev) dialogRoot.navigateToRecord(dialogRoot.currentIndex - 1)
+                }
+            }
+
+            // 页码计数 — 大号蓝色胶囊
+            Rectangle {
+                Layout.preferredWidth: countText.implicitWidth + 48
+                Layout.preferredHeight: 52
+                radius: 26
+                color: "#3B82F6"
+
+                Text {
+                    id: countText
+                    anchors.centerIn: parent
+                    text: (dialogRoot.currentIndex + 1) + " / " + dialogRoot.recordList.length
+                    font.pixelSize: 18
+                    font.bold: true
+                    font.family: Theme.fontFamilyUi
+                    color: "#FFFFFF"
+                }
+            }
+
+            // 下一张 — 大号圆角按钮（与上一张对称）
+            Rectangle {
+                id: nextBtnRect
+                Layout.preferredWidth: 80
+                Layout.preferredHeight: 52
+                radius: 14
+                color: dialogRoot.hasNext ? (nextHover.hovered ? "#3B82F6" : "#EFF6FF") : "#F1F5F9"
+                border.color: dialogRoot.hasNext ? (nextHover.hovered ? "#2563EB" : "#BFDBFE") : "#E2E8F0"
+                border.width: 1.5
+                enabled: dialogRoot.hasNext
+                opacity: enabled ? 1.0 : 0.4
+                scale: enabled && nextHover.hovered ? 1.03 : 1.0
+                Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                Behavior on border.color { ColorAnimation { duration: 150 } }
+                Behavior on color { ColorAnimation { duration: 150 } }
+
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 6
+
+                    Text {
+                        Layout.alignment: Qt.AlignVCenter
+                        text: "下一张"
+                        font.pixelSize: 12
+                        font.family: Theme.fontFamilyUi
+                        color: dialogRoot.hasNext ? (nextHover.hovered ? "#FFFFFF" : "#2563EB") : "#94A3B8"
+                    }
+                    Image {
+                        Layout.preferredWidth: 24
+                        Layout.preferredHeight: 24
+                        Layout.alignment: Qt.AlignVCenter
+                        source: "qrc:/resources/img/pageDown.png"
+                        fillMode: Image.PreserveAspectFit
+                    }
+                }
+                HoverHandler { id: nextHover }
+                TapHandler {
+                    enabled: dialogRoot.hasNext
+                    onTapped: if (dialogRoot.hasNext) dialogRoot.navigateToRecord(dialogRoot.currentIndex + 1)
+                }
             }
         }
+
+    }
 
     // ---- 键盘支持：← → 翻页 ----
     focus: true
