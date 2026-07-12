@@ -263,6 +263,16 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         return;
     }
 
+    // 保留已有本地图片路径，避免重新拉取后 imgLocal 被清空导致重复下载
+    QMap<QString, QString> oldImgLocal;
+    for (const QVariant &v : m_items) {
+        QVariantMap m = v.toMap();
+        QString id = m.value("id").toString();
+        QString loc = m.value("imgLocal").toString();
+        if (!id.isEmpty() && !loc.isEmpty())
+            oldImgLocal[id] = loc;
+    }
+
     m_items.clear();
     m_ingrMap.clear();
     m_ingrNameMap.clear();
@@ -296,7 +306,9 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         item["emsCd"]  = emsCd;
         item["enable"] = enable;
         item["img"]    = imgUrl;
-        item["imgLocal"] = QString();   // 本地缓存路径，下载完成后填充
+        // 本地缓存路径：若上一次已下载且文件仍在，则复用，避免重复下载
+        QString restored = oldImgLocal.value(ingrId);
+        item["imgLocal"] = (!restored.isEmpty() && QFile::exists(restored)) ? restored : QString();
         m_items.append(item);
 
         if (!ingrId.isEmpty() && !ingrCd.isEmpty()) {
@@ -426,7 +438,12 @@ QString UserIngredientService::imageCacheDir() const
 
 QString UserIngredientService::localImagePathFor(const QString &imgUrl) const
 {
-    QByteArray hash = QCryptographicHash::hash(imgUrl.toUtf8(),
+    // 关键：预签名 URL 每次签名不同，但 S3 对象路径稳定。
+    // 去掉查询串后再哈希，保证同一张图在不同签名 URL 下映射到同一缓存文件，
+    // 否则每次 fetch 都会算出不同文件名、永远复用不到磁盘缓存 → 重复下载。
+    QUrl u(imgUrl);
+    u.setQuery(QString());
+    QByteArray hash = QCryptographicHash::hash(u.toString().toUtf8(),
                                               QCryptographicHash::Md5).toHex();
     QString ext = ".img";
     QString path = QUrl(imgUrl).path();
@@ -575,6 +592,16 @@ void UserIngredientService::loadFromCache()
     }
 
     QJsonArray cats = root.value("categories").toArray();
+    // 保留已有本地图片路径，避免重新拉取后 imgLocal 被清空导致重复下载
+    QMap<QString, QString> oldImgLocal;
+    for (const QVariant &v : m_items) {
+        QVariantMap m = v.toMap();
+        QString id = m.value("id").toString();
+        QString loc = m.value("imgLocal").toString();
+        if (!id.isEmpty() && !loc.isEmpty())
+            oldImgLocal[id] = loc;
+    }
+
     m_items.clear();
     m_ingrMap.clear();
     m_ingrNameMap.clear();
