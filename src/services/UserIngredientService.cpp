@@ -443,9 +443,18 @@ QString UserIngredientService::localImagePathFor(const QString &imgUrl) const
 QNetworkRequest UserIngredientService::buildImageRequest(const QString &imgUrl)
 {
     QNetworkRequest request{QUrl(imgUrl)};
-    QString token = m_authService ? m_authService->token() : QString();
-    if (!token.isEmpty())
-        request.setRawHeader("Authorization", QByteArray("Bearer ") + token.toUtf8());
+
+    // S3 预签名 URL（含 X-Amz-Signature）自带查询串认证。
+    // 注意：AWS S3 规定一旦请求带有 Authorization 头，便会忽略查询串签名、
+    // 改用头签名验证；而 Bearer token 不是合法的 AWS SigV4 签名，会导致 403。
+    // 因此预签名 URL 绝不能附加 Bearer 头，仅对非预签名地址才携带 token。
+    bool isS3Presigned = imgUrl.contains("X-Amz-Signature", Qt::CaseInsensitive)
+                         || imgUrl.contains("X-Amz-Algorithm", Qt::CaseInsensitive);
+    if (!isS3Presigned) {
+        QString token = m_authService ? m_authService->token() : QString();
+        if (!token.isEmpty())
+            request.setRawHeader("Authorization", QByteArray("Bearer ") + token.toUtf8());
+    }
 
     // 与 NetworkUtils 一致的 SSL 配置（IP+HTTPS 跳过证书验证）
     QSslConfiguration sslConf = request.sslConfiguration();
