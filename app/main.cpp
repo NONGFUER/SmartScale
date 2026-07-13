@@ -52,6 +52,10 @@ static void smartScaleMessageHandler(QtMsgType type,
                                      const QMessageLogContext &ctx,
                                      const QString &msg)
 {
+    // 过滤 qt6ct 平台主题插件的调试噪音（palette() 被反复请求刷屏）
+    if (msg.contains("Qt6CTPlatformTheme"))
+        return;
+
     QString level;
     switch (type) {
     case QtDebugMsg:    level = "DEBUG"; break;
