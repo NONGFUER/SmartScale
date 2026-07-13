@@ -30,7 +30,7 @@ public:
 
     // ---- 方法 ----
     Q_INVOKABLE QString label(const QString &s) const {
-        if (s == IDLE)                  return QStringLiteral("请放置食材称重");
+        if (s == IDLE)                  return QStringLiteral("");
         if (s == NOT_READY)             return QStringLiteral("设备未就绪");
         if (s == UNKNOWN)               return QStringLiteral("--");
         if (s == NONE)                  return QStringLiteral("无识别结果");

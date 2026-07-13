@@ -390,202 +390,201 @@ Item {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        color: "#ECEFF4"
-                        radius: 14
-                        clip: true
+                        color: "#FFFFFF"
+                        radius: 30
+                        border.color: "#33FFFFFF"
+                        border.width: 10
 
-                        ColumnLayout {
+                        // 阴影面板：与历史记录区块一致
+                        layer.enabled: true
+                        layer.effect: MultiEffect {
+                            shadowEnabled: true
+                            shadowColor: "#002A75"
+                            shadowOpacity: 0.1
+                            shadowBlur: 1.0
+                            shadowHorizontalOffset: 0
+                            shadowVerticalOffset: 0
+                        }
+
+                        RowLayout {
                             anchors.fill: parent
-                            spacing: 0
+                            anchors.margins: 20
+                            spacing: 20
 
-                            // 区域标题栏
-                            Item {
+                            // ========== 左侧卡片：操作人员拍摄区域 ==========
+                            Rectangle {
+                                Layout.fillHeight: true
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 40
+                                Layout.preferredWidth: 35
+                                color: "#FFFFFF"
+                                radius: 24
 
-                                Row {
-                                    anchors.left: parent.left
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    anchors.leftMargin: 14
-                                    spacing: 6
-                                    
-                                    Text { text: "实时监控"; font.pixelSize: 24; font.bold: true; color: "#334155" }
+                                // 阴影面板
+                                layer.enabled: true
+                                layer.effect: MultiEffect {
+                                    shadowEnabled: true
+                                    shadowColor: "#002A75"
+                                    shadowOpacity: 0.1
+                                    shadowBlur: 1.0
+                                    shadowHorizontalOffset: 0
+                                    shadowVerticalOffset: 0
                                 }
 
-                            }
-
-                            Item {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-
-                                RowLayout {
+                                ColumnLayout {
                                     anchors.fill: parent
-                                    anchors.margins: 10
-                                    anchors.topMargin: 6
+                                    anchors.margins: 16
                                     spacing: 10
 
-                            // ========== 副摄像头 — 暖灰主题（辅助观察区） ==========
-                            Rectangle {
-                                Layout.preferredWidth: Math.min(parent.width * 0.38, 280)
-                                Layout.fillHeight: true
-                                Layout.minimumWidth: 160
-                                radius: 12
-                                color: "#F1F0EF"        
-                                border.color: "#D6D3D1" 
-                                border.width: 2
-                                clip: true
-
-                                VideoOutput {
-                                    id: subVideo
-                                    anchors.fill: parent
-                                    fillMode: VideoOutput.PreserveAspectCrop  // 填满容器，超出部分自动裁切（外层 clip:true 生效）
-                                    Component.onCompleted: {
-                                        CameraController.setSubVideoSink(subVideo.videoSink)
-                                    }
-                                }
-
-                                // 左上角胶囊标签 — 暖色调
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.top: parent.top
-                                    anchors.margins: 10
-                                    width: aux_label_w.width + 24
-                                    height: 30
-                                    radius: 6
-                                    color: "#78716C"        // 暖灰实心底
-
+                                    // 标题行：操作人员拍摄区域
                                     Row {
-                                        id: aux_label_w
-                                        spacing: 5
-                                        anchors.centerIn: parent
-                                        
-                                        Text { text: "操作员视角"; font.pixelSize: 15; font.bold: true; color: "#FFFFFF" }
+                                        spacing: 6
+                                        Text {
+                                            text: "操作人员拍摄区域"
+                                            font.pixelSize: 28
+                                            font.bold: true
+                                            color: "#1E293B"
+                                        }
                                     }
-                                }
 
-                                // 右下角状态指示
-                                Row {
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    anchors.margins: 8
-                                    spacing: 5
-                                    Rectangle { width: 7; height: 7; radius: 3; color: "#F97316" }
-                                    Text { text: "AUX"; font.pixelSize: 12; font.bold: true; color: "#78716C" }
-                                }
-                            }
-
-                            // ========== 主摄像头 — 蓝调主题（核心工作区） ==========
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                radius: 12
-                                color: "#DBEAFE"       // 浅蓝背景，暗示主要区域
-                                border.color: "#93C5FD" // 柔和蓝边框
-                                border.width: 2
-                                clip: true
-
-                                VideoOutput {
-                                    id: mainVideo
-                                    anchors.fill: parent
-                                    fillMode: VideoOutput.PreserveAspectCrop
-                                    Component.onCompleted: {
-                                        CameraController.setMainVideoSink(mainVideo.videoSink)
-                                    }
-                                }
-
-                                // ========== 取景引导框 — 对齐 AI 裁剪区域 ==========
-                                // C++ 裁剪参数 (CameraController._processCommon):
-                                //   边长: min(w,h) * 0.50, 中心: 水平50%, 垂直53%
-                                Item {
-                                    anchors.fill: parent
-                                    clip: true
+                                    // 副摄像头视频区 — 暖灰主题（辅助观察区）
                                     Rectangle {
-                                        id: guideBox
-                                        width: Math.min(parent.width, parent.height) * 0.50
-                                        height: width
-                                        x: parent.width * 0.5 - width / 2
-                                        y: parent.height * 0.53 - height / 2
-                                        color: "transparent"
-                                        radius: 8
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        radius: 20
+                                        color: "#F1F0EF"
+                                        border.color: "#D6D3D1"
                                         border.width: 2
-                                        border.color: "#3B82F6"
-                                        Rectangle {
+                                        clip: true
+
+                                        VideoOutput {
+                                            id: subVideo
                                             anchors.fill: parent
-                                            anchors.margins: parent.border.width
-                                            radius: 6
-                                            color: "#3B82F6"
-                                            opacity: 0.08
-                                        }
-                                        property real cLen: Math.min(width, height) * 0.2
-                                        Canvas {
-                                            anchors.fill: parent
-                                            onPaint: {
-                                                var ctx = getContext("2d")
-                                                var cl = parent.cLen
-                                                ctx.clearRect(0, 0, width, height)
-                                                ctx.strokeStyle = "#2563EB"
-                                                ctx.lineWidth = 3
-                                                ctx.lineCap = "square"
-                                                ctx.beginPath(); ctx.moveTo(0, cl); ctx.lineTo(0, 0); ctx.lineTo(cl, 0); ctx.stroke()
-                                                ctx.beginPath(); ctx.moveTo(width - cl, 0); ctx.lineTo(width, 0); ctx.lineTo(width, cl); ctx.stroke()
-                                                ctx.beginPath(); ctx.moveTo(0, height - cl); ctx.lineTo(0, height); ctx.lineTo(cl, height); ctx.stroke()
-                                                ctx.beginPath(); ctx.moveTo(width - cl, height); ctx.lineTo(width, height); ctx.lineTo(width - cl, height - cl); ctx.stroke()
+                                            fillMode: VideoOutput.PreserveAspectCrop
+                                            Component.onCompleted: {
+                                                CameraController.setSubVideoSink(subVideo.videoSink)
                                             }
-                                            Component.onCompleted: requestPaint()
                                         }
                                     }
-                                    Rectangle {
-                                        x: guideBox.x + (guideBox.width - width) / 2
-                                        y: guideBox.y - 28
-                                        width: guideTextLabel.width + 16
-                                        height: 24
-                                        radius: 4
-                                        color: "#2563EB"
-                                        visible: guideBox.y > 30
-                                            Text {
-                                                id: guideTextLabel
-                                                anchors.centerIn: parent
-                                                text: "请将食材对准框内"
-                                                font.pixelSize: 14
-                                                color: "#FFFFFF"
-                                            }
-                                    }
-                                }
-
-                                // 左上角标签 — 蓝色调，醒目
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.top: parent.top
-                                    anchors.margins: 10
-                                    width: auto_width.width + 24
-                                    height: 30
-                                    radius: 6
-                                    color: "#2563EB"        // 蓝色实心底
-
-                                    Row {
-                                        id: auto_width
-                                        spacing: 5
-                                        anchors.centerIn: parent
-                                       
-                                        Text { text: "食材拍摄"; font.pixelSize: 15; font.bold: true; color: "#FFFFFF" }
-                                    }
-                                }
-
-                                // 右下角实时状态指示
-                                Row {
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    anchors.margins: 8
-                                    spacing: 5
-                                    Rectangle { width: 8; height: 8; radius: 4; color: "#22C55E" }  // 绿点=在线
-                                    Text { text: "LIVE"; font.pixelSize: 13; font.bold: true; color: "#22C55E" }
                                 }
                             }
-                        } 
-                    } 
-                } 
-            } 
-        } 
+
+                            // ========== 右侧卡片：食材拍摄区域 ==========
+                            Rectangle {
+                                Layout.fillHeight: true
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 65
+                                color: "#FFFFFF"
+                                radius: 24
+
+                                // 阴影面板
+                                layer.enabled: true
+                                layer.effect: MultiEffect {
+                                    shadowEnabled: true
+                                    shadowColor: "#002A75"
+                                    shadowOpacity: 0.1
+                                    shadowBlur: 1.0
+                                    shadowHorizontalOffset: 0
+                                    shadowVerticalOffset: 0
+                                }
+
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 16
+                                    spacing: 10
+
+                                    // 标题行：食材拍摄区域
+                                    Row {
+                                        spacing: 6
+                                        Text {
+                                            text: "食材拍摄区域"
+                                            font.pixelSize: 28
+                                            font.bold: true
+                                            color: "#1E293B"
+                                        }
+                                    }
+
+
+                                    // 主摄像头视频区 — 蓝调主题（核心工作区）
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        radius: 20
+                                        color: "#DBEAFE"
+                                        border.color: "#93C5FD"
+                                        border.width: 2
+                                        clip: true
+
+                                        VideoOutput {
+                                            id: mainVideo
+                                            anchors.fill: parent
+                                            fillMode: VideoOutput.PreserveAspectCrop
+                                            Component.onCompleted: {
+                                                CameraController.setMainVideoSink(mainVideo.videoSink)
+                                            }
+                                        }
+
+                                        // ========== 取景引导框 — 对齐 AI 裁剪区域 ==========
+                                        Item {
+                                            anchors.fill: parent
+                                            clip: true
+                                            Rectangle {
+                                                id: guideBox
+                                                width: Math.min(parent.width, parent.height) * 0.50
+                                                height: width
+                                                x: parent.width * 0.5 - width / 2
+                                                y: parent.height * 0.53 - height / 2
+                                                color: "transparent"
+                                                radius: 8
+                                                border.width: 2
+                                                border.color: "#3B82F6"
+                                                Rectangle {
+                                                    anchors.fill: parent
+                                                    anchors.margins: parent.border.width
+                                                    radius: 6
+                                                    color: "#3B82F6"
+                                                    opacity: 0.08
+                                                }
+                                                property real cLen: Math.min(width, height) * 0.2
+                                                Canvas {
+                                                    anchors.fill: parent
+                                                    onPaint: {
+                                                        var ctx = getContext("2d")
+                                                        var cl = parent.cLen
+                                                        ctx.clearRect(0, 0, width, height)
+                                                        ctx.strokeStyle = "#2563EB"
+                                                        ctx.lineWidth = 3
+                                                        ctx.lineCap = "square"
+                                                        ctx.beginPath(); ctx.moveTo(0, cl); ctx.lineTo(0, 0); ctx.lineTo(cl, 0); ctx.stroke()
+                                                        ctx.beginPath(); ctx.moveTo(width - cl, 0); ctx.lineTo(width, 0); ctx.lineTo(width, cl); ctx.stroke()
+                                                        ctx.beginPath(); ctx.moveTo(0, height - cl); ctx.lineTo(0, height); ctx.lineTo(cl, height); ctx.stroke()
+                                                        ctx.beginPath(); ctx.moveTo(width - cl, height); ctx.lineTo(width, height); ctx.lineTo(width - cl, height - cl); ctx.stroke()
+                                                    }
+                                                    Component.onCompleted: requestPaint()
+                                                }
+                                            }
+                                            Rectangle {
+                                                x: guideBox.x + (guideBox.width - width) / 2
+                                                y: guideBox.y - 28
+                                                width: guideTextLabel.width + 16
+                                                height: 24
+                                                radius: 4
+                                                color: "#2563EB"
+                                                visible: guideBox.y > 30
+                                                    Text {
+                                                        id: guideTextLabel
+                                                        anchors.centerIn: parent
+                                                        text: "请将食材对准框内"
+                                                        font.pixelSize: 14
+                                                        color: "#FFFFFF"
+                                                    }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }                       // RowLayout (左右两卡片)
+                    }                           // 外层容器
+                }                               // ColumnLayout (左侧60%)
 
                 // ================================================================
                 // 右侧区域 (40%) — 自然流式布局（顶部紧凑/中部弹性/底部固定）
@@ -604,79 +603,6 @@ Item {
                         anchors.margins: 20
                         spacing: 16
 
-                    // ==================== 顶部区（紧凑）：用户信息 ====================
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: 120
-                        spacing: 14
-
-                        // 圆形头像（优先显示远程头像，回退到首字母）
-                        Rectangle {
-                            width: 72; height: 72; radius: 36
-                            color: avatarImage.status === Image.Ready ? "transparent" : "#3B82F6"
-                            clip: true   // 裁剪子元素为圆形
-                            visible: BackendAuth.avatarUrl || BackendAuth.currentUser
-
-                            Image {
-                                id: avatarImage
-                                anchors.fill: parent
-                                source: BackendAuth.avatarUrl || ""
-                                fillMode: Image.PreserveAspectCrop
-                                asynchronous: true
-                                cache: true
-                            }
-
-                            Text {
-                                anchors.centerIn: parent
-                                text: BackendAuth.currentUser ? BackendAuth.currentUser.charAt(0).toUpperCase() : "?"
-                                font.pixelSize: 27
-                                font.bold: true
-                                color: "#FFFFFF"
-                                // 有远程头像且加载成功时隐藏首字母
-                                visible: avatarImage.status !== Image.Ready || !BackendAuth.avatarUrl
-                            }
-                        }
-
-                        // 用户名称 + 岗位标签（用普通 Item 包裹，避免内部使用 anchors 时触发 Layout 警告）
-                        // 外层 RowLayout 只管理这一个 Item 的布局，内部的 ColumnLayout + MouseArea 用 anchors 定位
-                        Item {
-                            Layout.preferredHeight: 120
-                            implicitWidth: userInfoColumn.implicitWidth
-
-                            ColumnLayout {
-                                id: userInfoColumn
-                                anchors.fill: parent
-                                anchors.verticalCenter: parent.verticalCenter
-                                spacing: 5
-
-                                Text {
-                                    text: BackendAuth.currentUser || "未登录"
-                                    font.pixelSize: 35
-                                    font.bold: true
-                                    color: "#1E293B"
-                                }
-
-                            
-                            }
-
-                            // 点击区域覆盖整个用户信息区域（Item 不是 Layout，anchors 安全）
-                            MouseArea {
-                                anchors.fill: parent
-                                z: 1
-                                hoverEnabled: true
-                                onClicked: {
-                                    if (BackendAuth.currentUser) {
-                                        logoutConfirmDialog.open()
-                                    } else {
-                                        window.showLogin()
-                                    }
-                                }
-                            }
-                        }
-
-                        // 弹性 spacer 把内容推顶部对齐
-                        Item { Layout.fillWidth: true }
-                    }
 
                     // ==================== 中部区（弹性）：称重 + 物品名称 ====================
                     Item {
@@ -687,6 +613,57 @@ Item {
                             anchors.fill: parent
                             spacing: 8
 
+                            
+
+                            // 名称卡片区域（含浮标标签）
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 227
+                                Layout.minimumHeight: 180
+                                Layout.topMargin: 2
+
+                                Rectangle {
+                                    id: categoryCard
+                                    anchors.fill: parent
+                                    radius: 24
+                                    color: "#1E67DE"
+                                    border.color: "#1E67DE"
+                                    border.width: 10
+
+                                    // 点击选择品类
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: {
+                                            //console.log("打开品类选择...")
+                                            //root.categorySelectMode = true
+                                            //correctionDialog.open()
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 16
+                                        spacing: 10
+
+                                        Text {
+                                            id: ingredientNameText
+                                            Layout.fillWidth: true
+                                            horizontalAlignment: Text.AlignHCenter
+                                            text: {
+                                                var pred = root.currentPrediction;
+                                                if (!PState.isValid(pred))
+                                                    return PState.label(pred);
+                                                var translated = Translator.translate(pred);
+                                                return (translated === pred) ? "--" : translated;
+                                            }
+                                            font.pixelSize: 68
+                                            font.bold: true
+                                            color: "#FFFFFF"
+                                        }
+                                    }
+                                } // categoryCard
+                            }   // 名称卡片区域 Item
                             // ===== AI识别 + 选择食材按钮行 =====
                             RowLayout {
                                 Layout.fillWidth: true
@@ -1001,88 +978,6 @@ Item {
                                 }
                             }
 
-                            // 名称卡片区域（含浮标标签）
-                            Item {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 220
-                                Layout.minimumHeight: 180
-                                Layout.topMargin: 2
-
-                                // "食材名称" 浮标标签 — 定位在卡片左上角外侧
-                                Text {
-                                    id: categoryNameLabel
-                                    anchors.left: parent.left
-                                    anchors.bottom: parent.top
-                                    anchors.bottomMargin: 6
-                                    text: "食材名称"
-                                    font.pixelSize: 28
-                                    font.bold: true
-                                    color: "#64748B"
-                                }
-
-                                Rectangle {
-                                    id: categoryCard
-                                    anchors.fill: parent
-                                    radius: 12
-                                    color: root.currentPrediction === PState.IDLE || root.currentPrediction === PState.NOT_READY
-                                       ? "#F8FAFC" : "#EFF6FF"
-                                    border.width: 0
-
-                                    // 点击选择品类
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        onClicked: {
-                                            //console.log("打开品类选择...")
-                                            //root.categorySelectMode = true
-                                            //correctionDialog.open()
-                                        }
-                                    }
-
-                                    Canvas {
-                                        anchors.fill: parent
-                                        onPaint: {
-                                            var ctx = getContext("2d")
-                                            ctx.strokeStyle = "#1E40AF"
-                                            ctx.lineWidth = 3
-                                            ctx.setLineDash([8, 5])
-                                            ctx.strokeRect(1, 1, width - 2, height - 2)
-                                        }
-                                        Component.onCompleted: requestPaint()
-                                    }
-
-                                    RowLayout {
-                                        anchors.fill: parent
-                                        anchors.margins: 12
-                                        spacing: 10
-
-                                        // 左侧：文字展示
-                                        Text {
-                                            id: ingredientNameText
-                                            Layout.fillWidth: true
-                                            horizontalAlignment: Text.AlignHCenter
-                                            text: {
-                                                var pred = root.currentPrediction;
-                                                if (!PState.isValid(pred))
-                                                    return PState.label(pred);
-                                                var translated = Translator.translate(pred);
-                                                // translate 未命中时返回原值，此时显示灰色 "--"
-                                                return (translated === pred) ? "--" : translated;
-                                            }
-                                            font.pixelSize: 68
-                                            font.bold: true
-                                            color: {
-                                                var pred = root.currentPrediction;
-                                                if (!PState.isValid(pred)) return "#94A3B8";
-                                                var translated = Translator.translate(pred);
-                                                return (translated === pred) ? "#94A3B8" : "#1E40AF";
-                                            }
-                                        }                               
-                                    }
-                                } // categoryCard
-                            }   // 名称卡片区域 Item
-
-
                             // 称重卡片区域（含浮标标签）
                             Item {
                                 Layout.fillWidth: true
@@ -1090,16 +985,7 @@ Item {
                                 Layout.maximumHeight: 280
                                 Layout.topMargin: 2
 
-                                // "重量" 浮标标签 — 定位在卡片左上角外侧
-                                Text {
-                                    anchors.left: parent.left
-                                    anchors.bottom: parent.top
-                                    anchors.bottomMargin: 6
-                                    text: "重量"
-                                    font.pixelSize: 28
-                                    font.bold: true
-                                    color: "#64748B"
-                                }
+                               
 
                                 Rectangle {  // weightCard
                                     id: weightCard
@@ -1166,20 +1052,33 @@ Item {
                         }
 
                         // 去皮按钮
-                        ActionButton {
+                        Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            text: "去皮"
-                            enabled: !root.tareButtonLocked  // 冷却期禁用
-                            onClicked: {
-                                console.log("[WSP] 点击去皮按钮, 触发硬件去皮")
-                                // 启动冷却期，防止连击
-                                root.tareButtonLocked = true
-                                tareCooldownTimer.restart()
-                                root.lastScaleOp = "tare"
-                                WeightManager.tare()
-                                if (typeof window !== "undefined" && window.toast) {
-                                    window.toast("去皮执行中...", "info", 1500)
+                            color: root.tareButtonLocked ? "#CCCCCC" : "#0DC218"
+                            radius: 24
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "去皮"
+                                color: "#FFFFFF"
+                                font.pixelSize: 50
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: !root.tareButtonLocked
+                                onClicked: {
+                                    console.log("[WSP] 点击去皮按钮, 触发硬件去皮")
+                                    // 启动冷却期，防止连击
+                                    root.tareButtonLocked = true
+                                    tareCooldownTimer.restart()
+                                    root.lastScaleOp = "tare"
+                                    WeightManager.tare()
+                                    if (typeof window !== "undefined" && window.toast) {
+                                        window.toast("去皮执行中...", "info", 1500)
+                                    }
                                 }
                             }
                         }

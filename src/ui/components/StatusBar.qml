@@ -21,17 +21,59 @@ Rectangle {
         anchors.rightMargin: 24
         spacing: 0
         RowLayout {
-            spacing: 20
+            spacing: 12
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: root.height
+            visible: BackendAuth.avatarUrl || BackendAuth.currentUser
+
+            // 圆形头像（优先显示远程头像，回退到首字母）
+            Rectangle {
+                width: 38; height: 38; radius: 19
+                color: avatarImage.status === Image.Ready ? "transparent" : "#3B82F6"
+                clip: true
+
+                Image {
+                    id: avatarImage
+                    anchors.fill: parent
+                    source: BackendAuth.avatarUrl || ""
+                    fillMode: Image.PreserveAspectCrop
+                    asynchronous: true
+                    cache: true
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: BackendAuth.currentUser ? BackendAuth.currentUser.charAt(0).toUpperCase() : "?"
+                    font.pixelSize: 16
+                    font.bold: true
+                    color: "#FFFFFF"
+                    visible: avatarImage.status !== Image.Ready || !BackendAuth.avatarUrl
+                }
+            }
+
+            // 用户名
             Text {
-                text: "© 2026 小管事机器人集团公司 Inc."
-                font.pixelSize: 24
+                text: BackendAuth.currentUser || "未登录"
+                font.pixelSize: 22
                 font.bold: true
                 color: "#FFFFFF"
-                Layout.alignment: Qt.AlignVCenter
-                Layout.maximumWidth: 500              // 限制最大宽度，防止吃掉中间空间
-                elide: Text.ElideRight                // 超出省略号
+                elide: Text.ElideRight
+                Layout.maximumWidth: 200
+            }
+
+            // 点击跳转登录/退出
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: {
+                    if (BackendAuth.currentUser) {
+                        root.settingsRequested()   // 状态栏没有 logoutConfirmDialog，走设置入口
+                    } else {
+                        // StatusBar 无法直接调 window.showLogin()
+                        // 通过 settingsRequested 间接处理或留待后续扩展
+                        root.settingsRequested()
+                    }
+                }
             }
         }
 
