@@ -18,8 +18,8 @@ Rectangle {
     RowLayout {
         id: mainRow
         anchors.fill: parent
-        anchors.leftMargin: 24
-        anchors.rightMargin: 24
+        anchors.leftMargin: 44
+        anchors.rightMargin: 44
         spacing: 0
         height: parent.height                     // 显式约束不溢出
         RowLayout {
@@ -31,7 +31,7 @@ Rectangle {
             // 圆形头像（优先显示远程头像，回退到首字母）
             Rectangle {
                 width: 48; height: 48; radius: 24
-                color: avatarImage.status === Image.Ready ? "transparent" : "#FFFFFF"
+                color: "#FFFFFF"
                 clip: true
 
                 Image {

@@ -223,6 +223,11 @@ ApplicationWindow {
             Layout.fillWidth: true;
             initialItem: "pages/WorkstationPage.qml"
         }
+
+        BottomStatusBar {
+            id: bottomStatusBar
+            Layout.fillWidth: true
+        }
     }
 
     // 在 StackView 下方添加键盘面板（包裹容器：裁剪缩放后多余区域）

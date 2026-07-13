@@ -79,7 +79,7 @@ Item {
                 anchors.fill: parent
                 anchors.leftMargin: 44
                 anchors.rightMargin: 44
-                anchors.bottomMargin: 70
+                //anchors.bottomMargin: 70
 
                 // ================================================================
                 // 左侧区域 (60%) — 历史记录列表 + 蔬菜拍摄区域
