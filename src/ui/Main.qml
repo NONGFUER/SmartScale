@@ -521,7 +521,10 @@ ApplicationWindow {
      * @param detail   详细信息（可选，支持展开/收起）
      */
     function alert(message, type, title, detail) {
-        globalAlert.show(message, type, title, detail)
+        // 脱敏：隐藏网络错误中的接口地址（避免暴露域名/端口/路径给用户）
+        var sanitized = message.replace(/https?:\/\/[^\s]+/g, "<接口地址>")
+        if (detail) detail = detail.replace(/https?:\/\/[^\s]+/g, "<接口地址>")
+        globalAlert.show(sanitized, type, title, detail)
     }
 
     /**

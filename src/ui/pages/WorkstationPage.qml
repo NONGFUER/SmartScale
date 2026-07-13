@@ -119,7 +119,7 @@ Item {
                                         spacing: 6
                                         Text {
                                             text: "历史记录"
-                                            font.pixelSize: 24
+                                            font.pixelSize: 30
                                             font.bold: true
                                             color: "#1E293B"
                                         }
@@ -289,7 +289,7 @@ Item {
 
                                 Text {
                                     text: "水印预览"
-                                    font.pixelSize: 24
+                                    font.pixelSize: 30
                                     font.bold: true
                                     color: "#1E293B"
                                 }
@@ -374,14 +374,6 @@ Item {
                                     Text { text: "实时监控"; font.pixelSize: 24; font.bold: true; color: "#334155" }
                                 }
 
-                                // Row {
-                                //     anchors.right: parent.right
-                                //     anchors.verticalCenter: parent.verticalCenter
-                                //     anchors.rightMargin: 14
-                                //     spacing: 5
-                                //     Rectangle { width: 10; height: 10; radius: 4; color: "#22C55E" }
-                                //     Text { text: "2路在线"; font.pixelSize: 18; color: "#22C55E"; font.bold: true }
-                                // }
                             }
 
                             Item {
@@ -552,10 +544,10 @@ Item {
                                 }
                             }
                         } 
-                        } 
                     } 
-                    } 
-                    } 
+                } 
+            } 
+        } 
 
                 // ================================================================
                 // 右侧区域 (40%) — 自然流式布局（顶部紧凑/中部弹性/底部固定）
@@ -617,19 +609,7 @@ Item {
                                     color: "#1E293B"
                                 }
 
-                                // 蓝色背景岗位标签（已隐藏）
-//                                 Rectangle {
-//                                     width: 68; height: 28; radius: 5
-//                                     color: "#DBEAFE"
-//                                     visible: BackendAuth.currentUser !== "" && BackendAuth.currentUser !== undefined
-//
-//                                     Text {
-//                                         anchors.centerIn: parent
-//                                         text: "登录账号"
-//                                         font.pixelSize: 14
-//                                         color: "#2563EB"
-//                                     }
-//                                 }
+                            
                             }
 
                             // 点击区域覆盖整个用户信息区域（Item 不是 Layout，anchors 安全）
@@ -996,66 +976,64 @@ Item {
                                 Rectangle {
                                     id: categoryCard
                                     anchors.fill: parent
-                                radius: 12
-                                color: root.currentPrediction === PState.IDLE || root.currentPrediction === PState.NOT_READY
+                                    radius: 12
+                                    color: root.currentPrediction === PState.IDLE || root.currentPrediction === PState.NOT_READY
                                        ? "#F8FAFC" : "#EFF6FF"
-                                border.width: 0
+                                    border.width: 0
 
-                                // 点击选择品类
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: {
-                                        //console.log("打开品类选择...")
-                                        //root.categorySelectMode = true
-                                        //correctionDialog.open()
-                                    }
-                                }
-
-                                Canvas {
-                                    anchors.fill: parent
-                                    onPaint: {
-                                        var ctx = getContext("2d")
-                                        ctx.strokeStyle = "#1E40AF"
-                                        ctx.lineWidth = 3
-                                        ctx.setLineDash([8, 5])
-                                        ctx.strokeRect(1, 1, width - 2, height - 2)
-                                    }
-                                    Component.onCompleted: requestPaint()
-                                }
-
-                                RowLayout {
-                                    anchors.fill: parent
-                                    anchors.margins: 12
-                                    spacing: 10
-
-                                    // 左侧：文字展示
-                                    Text {
-                                        id: ingredientNameText
-                                        Layout.fillWidth: true
-                                        horizontalAlignment: Text.AlignHCenter
-                                        text: {
-                                            var pred = root.currentPrediction;
-                                            if (!PState.isValid(pred))
-                                                return PState.label(pred);
-                                            var translated = Translator.translate(pred);
-                                            // translate 未命中时返回原值，此时显示灰色 "--"
-                                            return (translated === pred) ? "--" : translated;
-                                        }
-                                        font.pixelSize: 68
-                                        font.bold: true
-                                        color: {
-                                            var pred = root.currentPrediction;
-                                            if (!PState.isValid(pred)) return "#94A3B8";
-                                            var translated = Translator.translate(pred);
-                                            return (translated === pred) ? "#94A3B8" : "#1E40AF";
+                                    // 点击选择品类
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        onClicked: {
+                                            //console.log("打开品类选择...")
+                                            //root.categorySelectMode = true
+                                            //correctionDialog.open()
                                         }
                                     }
 
-                                                                 
+                                    Canvas {
+                                        anchors.fill: parent
+                                        onPaint: {
+                                            var ctx = getContext("2d")
+                                            ctx.strokeStyle = "#1E40AF"
+                                            ctx.lineWidth = 3
+                                            ctx.setLineDash([8, 5])
+                                            ctx.strokeRect(1, 1, width - 2, height - 2)
+                                        }
+                                        Component.onCompleted: requestPaint()
+                                    }
+
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 12
+                                        spacing: 10
+
+                                        // 左侧：文字展示
+                                        Text {
+                                            id: ingredientNameText
+                                            Layout.fillWidth: true
+                                            horizontalAlignment: Text.AlignHCenter
+                                            text: {
+                                                var pred = root.currentPrediction;
+                                                if (!PState.isValid(pred))
+                                                    return PState.label(pred);
+                                                var translated = Translator.translate(pred);
+                                                // translate 未命中时返回原值，此时显示灰色 "--"
+                                                return (translated === pred) ? "--" : translated;
+                                            }
+                                            font.pixelSize: 68
+                                            font.bold: true
+                                            color: {
+                                                var pred = root.currentPrediction;
+                                                if (!PState.isValid(pred)) return "#94A3B8";
+                                                var translated = Translator.translate(pred);
+                                                return (translated === pred) ? "#94A3B8" : "#1E40AF";
+                                            }
+                                        }                               
                                     }
                                 } // categoryCard
-                            } // 名称卡片区域 Item
+                            }   // 名称卡片区域 Item
 
 
                             // 称重卡片区域（含浮标标签）
@@ -1076,7 +1054,7 @@ Item {
                                     color: "#64748B"
                                 }
 
-                                Rectangle {
+                                Rectangle {  // weightCard
                                     id: weightCard
                                     anchors.fill: parent
                                     radius: 16
@@ -1085,7 +1063,6 @@ Item {
                                     Row {
                                         anchors.centerIn: parent
                                         spacing: 6
-
                                         Text {
                                             text: WeightManager.netWeight.toFixed(2)
                                             font.pixelSize: 148
@@ -1205,9 +1182,9 @@ Item {
                             }
                         }
                     }
-                    }
                 }
             }
+        }
 
     // ===== 白屏闪光动画效果 =====
     Rectangle {
@@ -1395,6 +1372,8 @@ Item {
         }
     }
 
+
+    // 食材选择界面
     CategoryCorrectionDialog {
         id: correctionDialog
 
