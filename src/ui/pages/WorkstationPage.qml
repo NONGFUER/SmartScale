@@ -590,10 +590,19 @@ Item {
                 // ================================================================
                 // 右侧区域 (40%) — 自然流式布局（顶部紧凑/中部弹性/底部固定）
                 // ================================================================
-                ColumnLayout {
+                // ============ 右侧区域 (40%) — 白底卡片（与历史记录区块同款） ============
+                Rectangle {
                     Layout.fillHeight: true
                     Layout.preferredWidth: parent.width * 0.4
-                    spacing: 16
+                    color: "#FFFFFF"
+                    radius: 30
+                    border.color: "#33FFFFFF"
+                    border.width: 10
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 20
+                        spacing: 16
 
                     // ==================== 顶部区（紧凑）：用户信息 ====================
                     RowLayout {
@@ -1219,6 +1228,7 @@ Item {
                                 CameraController.captureVegetable(currentWeight, root.currentPrediction)
                             }
                         }
+                    }
                     }
                 }
             }
