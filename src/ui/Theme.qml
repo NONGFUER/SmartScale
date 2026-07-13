@@ -25,9 +25,9 @@ QtObject {
     // ============================================================
     // 字体族
     // ============================================================
-    readonly property string fontFamilyUi:    "Microsoft YaHei"  // 主 UI 字体
-    readonly property string fontFamilyTitle: "AlibabaPuHuiTi"   // 大标题字体
-    readonly property string fontFamilyMono:  "Monospace"        // 等宽字体（时间/数字）
+    readonly property string fontFamilyUi:    "PingFang SC"   // 主 UI 字体
+    readonly property string fontFamilyTitle: "PingFang SC"   // 大标题字体（与 UI 统一）
+    readonly property string fontFamilyMono:  "Monospace"     // 等宽字体（时间/数字）
 
     // ============================================================
     // 字号（按用途语义命名，便于全局调整）

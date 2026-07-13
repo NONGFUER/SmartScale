@@ -13,6 +13,8 @@
 #include <QFileInfo>
 #include <QTimer>
 #include <QProcess>
+#include <QFont>
+#include <QFontDatabase>
 #include <cstdio>
 
 // 硬件层
@@ -95,6 +97,25 @@ int main(int argc, char *argv[])
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");
 
     QGuiApplication app(argc, argv);
+
+    // 注册内嵌 PingFang SC 字体（Linux 主板无此字体，必须打包 + 运行时注册）
+    {
+        QFile fontFile(":/resources/fonts/PingFangSC-Regular.ttf");
+        if (fontFile.open(QIODevice::ReadOnly)) {
+            const int fontId = QFontDatabase::addApplicationFontFromData(fontFile.readAll());
+            if (fontId == -1)
+                qWarning() << "[Main] PingFang SC 字体加载失败，将 fallback 到系统默认字体";
+            else
+                qInfo() << "[Main] 已注册字体族:" << QFontDatabase::applicationFontFamilies(fontId);
+        } else {
+            qWarning() << "[Main] 无法打开字体资源文件，将 fallback 到系统默认字体";
+        }
+    }
+
+    // 全局默认字体：所有未显式指定 font.family 的 QML 文本都会继承此字体族
+    QFont defaultFont("PingFang SC");
+    defaultFont.setPixelSize(30);   // 默认字号兜底，可按需调整
+    app.setFont(defaultFont);
 
     // 打开日志文件：写到可执行文件目录的 data/smartscale.log（超过 2MB 自动截断）
     {

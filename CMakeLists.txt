@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(SmartScale VERSION 2.13.2 LANGUAGES CXX)
+project(SmartScale VERSION 2.13.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -127,6 +127,7 @@ qt_add_resources(appSmartScale "app_assets"
         resources/img/pageDown.png
         resources/icon/eye-fill.png
         resources/icon/eye-close-fill.png
+        resources/fonts/PingFangSC-Regular.ttf
 )
 
 set(ONNXRUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/onnxruntime-linux-aarch64-1.24.4")

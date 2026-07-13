@@ -60,6 +60,10 @@
   - C++（SystemInfo/WeightManager）：`qmlRegisterSingletonInstance("App.Backend",1,0,"XXX",ptr)`。
   - 两套模块并存：UI 主题用 `SmartScale`，业务服务用 `App.Backend`。
 - **主题常量**：`src/ui/Theme.qml` 集中字体/字号/颜色，新增一律走 Theme 引用，禁止硬编码。
+- **全局字体（方案一已实施）**：主字体族统一为 `PingFang SC`。`main.cpp` 经 `QFontDatabase::addApplicationFontFromData` 注册内嵌 `resources/fonts/PingFangSC-Regular.ttf`（打包进 Qt 资源 `:/resources/fonts/...`），并 `app.setFont(QFont("PingFang SC"))` 兜底全局未显式设 family 的 QML 文本；`Theme.qml` 的 `fontFamilyUi`/`fontFamilyTitle` 已改为 `PingFang SC`。
+  - 边界：`setFont` 只覆盖未写 `font.family` 的 QML 文本；已硬编码 `font.family`（如 `Monospace`、旧 `Microsoft YaHei`）需方案二/三清理才生效。
+  - 仅用 Regular 一个字重；若需 Light/Medium/Semibold 做层级，往 `resources/fonts/` 加对应文件 + CMake `FILES` + `main.cpp` 多读几个文件即可，零成本。
+  - 授权提醒：PingFang SC 为 Apple 专有字体，Linux 不可合法分发；若分发受限改用思源黑体/Noto Sans CJK SC（代码不变，只换文件名）。
 
 ## 项目关键文件索引
 - 登录：`src/services/AuthService.h/.cpp` + `src/ui/pages/LoginPage.qml` + `src/ui/components/LoginDialog.qml`，退出确认 `LogoutConfirmDialog.qml`。

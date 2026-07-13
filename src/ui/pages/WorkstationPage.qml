@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtMultimedia
+import QtQuick.Effects
 import App.Backend 1.0
 import SmartScale.Tools 1.0
 import "../components"
@@ -68,13 +69,11 @@ Item {
         function onHistoryChanged() { _selectLatestRecord() }
     }
 
-        // ===== 白色圆角主卡片 =====
-        Rectangle {
+        // 主内容容器
+        Item {
             id: mainCard
             anchors.fill: parent
             anchors.margins: 10
-            radius: 20
-            color: "#FFFFFF"
 
             RowLayout {
                 anchors.fill: parent
@@ -87,29 +86,45 @@ Item {
                 ColumnLayout {
                     Layout.fillHeight: true
                     Layout.preferredWidth: parent.width * 0.6
-                    spacing: 16
+                    spacing: 24
 
                     // ========== 历史记录区块 ==========
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: parent.height * 0.42
-                        color: "#F8FAFC"
-                        radius: 12
-                        border.color: "#E2E8F0"
-                        border.width: 1
-                        clip: true
+                        color: "#FFFFFF"
+                        radius: 30
+                        border.color: "#33FFFFFF"
+                        border.width: 10
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.margins: 16
-                            spacing: 16
+                            anchors.margins: 20
+                            spacing: 20
 
                             // ---- 左侧：历史记录列表 ----
-                            ColumnLayout {
+                            Rectangle {
                                 Layout.fillHeight: true
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 35
-                                spacing: 10
+                                color: "#FFFFFF"
+                                radius: 24
+
+                                // 阴影面板：X/Y 0, Blur 50, Spread 0, Color #002A75 10%
+                                layer.enabled: true
+                                layer.effect: MultiEffect {
+                                    shadowEnabled: true
+                                    shadowColor: "#002A75"
+                                    shadowOpacity: 0.1
+                                    shadowBlur: 1.0
+                                    shadowHorizontalOffset: 0
+                                    shadowVerticalOffset: 0
+                                }
+
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 16
+                                    spacing: 10
 
                                 // 标题行：历史记录 + 更多>
                                 RowLayout {
@@ -119,7 +134,7 @@ Item {
                                         spacing: 6
                                         Text {
                                             text: "历史记录"
-                                            font.pixelSize: 30
+                                            font.pixelSize: 28
                                             font.bold: true
                                             color: "#1E293B"
                                         }
@@ -271,82 +286,105 @@ Item {
                                         }
                                     }
                                 }
-                            }
-
-                            // ---- 垂直分隔线 ----
-                            Rectangle {
-                                Layout.fillHeight: true
-                                width: 1
-                                color: "#E2E8F0"
-                            }
+                            }                       // inner ColumnLayout
+                        }                           // 历史记录卡片 Rectangle
 
                             // ---- 右侧：水印图片预览 ----
-                            ColumnLayout {
+                            Rectangle {
                                 Layout.fillHeight: true
                                 Layout.fillWidth: true
                                 Layout.preferredWidth: 35
-                                spacing: 10
+                                color: "#FFFFFF"
+                                radius: 24
 
-                                Text {
-                                    text: "水印预览"
-                                    font.pixelSize: 30
-                                    font.bold: true
-                                    color: "#1E293B"
+                                // 阴影面板：与左侧历史记录卡片一致
+                                layer.enabled: true
+                                layer.effect: MultiEffect {
+                                    shadowEnabled: true
+                                    shadowColor: "#002A75"
+                                    shadowOpacity: 0.1
+                                    shadowBlur: 1.0
+                                    shadowHorizontalOffset: 0
+                                    shadowVerticalOffset: 0
                                 }
 
-                                Rectangle {
-                                    id: watermarkPreview
-                                    Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    color: "#E2E8F0"
-                                    radius: 8
-                                    clip: true
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 16
+                                    spacing: 10
 
-                                    // 优先显示当前选中记录，否则回退到最新一条记录
-                                    // 用显式条件而非 || 短路，确保 currentDetailRecord 变化时绑定一定重新求值
-                                    property var _displayRecord: {
-                                        if (root.currentDetailRecord) return root.currentDetailRecord
-                                        if (WeightHistoryService && WeightHistoryService.historyEntries.length > 0)
-                                            return WeightHistoryService.historyEntries[0]
-                                        return null
-                                    }
-                                    property string _imgPath: _displayRecord && _displayRecord.mainImagePath
-                                        ? (_displayRecord.mainImagePath.startsWith("file://")
-                                           ? _displayRecord.mainImagePath
-                                           : "file://" + _displayRecord.mainImagePath)
-                                        : ""
-
-                                    Image {
-                                        anchors.fill: parent
-                                        source: parent._imgPath
-                                        fillMode: Image.PreserveAspectCrop
-                                        cache: false
-                                    }
-
-                                    // 点击水印预览图片打开详情弹窗
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        enabled: parent._imgPath !== ""
-                                        onClicked: {
-                                            if (parent._displayRecord) {
-                                                root.currentDetailRecord = parent._displayRecord
-                                                detailDialog.open()
-                                            }
+                                    // 标题行：水印预览（与左侧历史记录标题风格一致）
+                                    Row {
+                                        spacing: 6
+                                        Text {
+                                            text: "水印预览"
+                                            font.pixelSize: 28
+                                            font.bold: true
+                                            color: "#1E293B"
                                         }
                                     }
 
-                                    // 无图时显示占位文字
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "暂无图片"
-                                        font.pixelSize: 14
-                                        color: "#94A3B8"
-                                        visible: parent._imgPath === ""
+                                    // 分隔线
+                                    Rectangle {
+                                        Layout.fillWidth: true
+                                        height: 1
+                                        color: "#E2E8F0"
+                                    }
+
+                                    Rectangle {
+                                        id: watermarkPreview
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        color: "transparent"
+                                        radius: 12
+                                        clip: true
+
+                                        // 优先显示当前选中记录，否则回退到最新一条记录
+                                        // 用显式条件而非 || 短路，确保 currentDetailRecord 变化时绑定一定重新求值
+                                        property var _displayRecord: {
+                                            if (root.currentDetailRecord) return root.currentDetailRecord
+                                            if (WeightHistoryService && WeightHistoryService.historyEntries.length > 0)
+                                                return WeightHistoryService.historyEntries[0]
+                                            return null
+                                        }
+                                        property string _imgPath: _displayRecord && _displayRecord.mainImagePath
+                                            ? (_displayRecord.mainImagePath.startsWith("file://")
+                                               ? _displayRecord.mainImagePath
+                                               : "file://" + _displayRecord.mainImagePath)
+                                            : ""
+
+                                        Image {
+                                            anchors.fill: parent
+                                            source: parent._imgPath
+                                            fillMode: Image.PreserveAspectCrop
+                                            cache: false
+                                        }
+
+                                        // 点击水印预览图片打开详情弹窗
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            enabled: parent._imgPath !== ""
+                                            onClicked: {
+                                                if (parent._displayRecord) {
+                                                    root.currentDetailRecord = parent._displayRecord
+                                                    detailDialog.open()
+                                                }
+                                            }
+                                        }
+
+                                        // 无图时显示占位文字
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "暂无图片"
+                                            font.pixelSize: 14
+                                            color: "#94A3B8"
+                                            visible: parent._imgPath === ""
+                                        }
                                     }
                                 }
                             }
-                        }
-                    }
+                        }                       // RowLayout
+                    }                           // 外层容器
 
                     // ========== 蔬菜拍摄区块 — 双摄像头并排 ==========
                     Rectangle {
