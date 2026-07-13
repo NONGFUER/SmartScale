@@ -5,7 +5,7 @@ import App.Backend 1.0
 
 Rectangle {
     id: root
-    height: 60
+    height: 103
     color: "transparent"
 
     // 点击设置图标发出的信号
@@ -16,10 +16,12 @@ Rectangle {
     signal networkRequested()
 
     RowLayout {
+        id: mainRow
         anchors.fill: parent
         anchors.leftMargin: 24
         anchors.rightMargin: 24
         spacing: 0
+        height: parent.height                     // 显式约束不溢出
         RowLayout {
             spacing: 12
             Layout.alignment: Qt.AlignVCenter
@@ -28,7 +30,7 @@ Rectangle {
 
             // 圆形头像（优先显示远程头像，回退到首字母）
             Rectangle {
-                width: 38; height: 38; radius: 19
+                width: 48; height: 48; radius: 24
                 color: avatarImage.status === Image.Ready ? "transparent" : "#3B82F6"
                 clip: true
 
@@ -54,7 +56,7 @@ Rectangle {
             // 用户名
             Text {
                 text: BackendAuth.currentUser || "未登录"
-                font.pixelSize: 22
+                font.pixelSize: 34
                 font.bold: true
                 color: "#FFFFFF"
                 elide: Text.ElideRight
@@ -216,12 +218,11 @@ Rectangle {
                     Component.onCompleted: requestPaint()
                 }
 
-                // WiFi 信号强度小点（紧贴图标右下角）
+                // WiFi 信号强度小点（紧贴图标右下角，不溢出）
                 Rectangle {
-                    anchors.left: wifiCanvas.right; anchors.top: wifiCanvas.bottom
-                    anchors.leftMargin: -4
-                    anchors.topMargin: -10
-                    width: 9; height: 9; radius: 4.5
+                    anchors.left: wifiCanvas.right; anchors.bottom: wifiCanvas.verticalCenter
+                    anchors.leftMargin: -2
+                    width: 8; height: 8; radius: 4
                     color: "#4ADE80"
                 }
             }
