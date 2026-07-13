@@ -73,12 +73,13 @@ Item {
         Item {
             id: mainCard
             anchors.fill: parent
-            anchors.margins: 10
+            //anchors.margins: 10
 
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 24
-                spacing: 24
+                anchors.leftMargin: 44
+                anchors.rightMargin: 44
+                anchors.bottomMargin: 70
 
                 // ================================================================
                 // 左侧区域 (60%) — 历史记录列表 + 蔬菜拍摄区域

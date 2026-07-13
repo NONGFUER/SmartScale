@@ -31,7 +31,7 @@ Rectangle {
             // 圆形头像（优先显示远程头像，回退到首字母）
             Rectangle {
                 width: 48; height: 48; radius: 24
-                color: avatarImage.status === Image.Ready ? "transparent" : "#3B82F6"
+                color: avatarImage.status === Image.Ready ? "transparent" : "#FFFFFF"
                 clip: true
 
                 Image {
@@ -48,7 +48,7 @@ Rectangle {
                     text: BackendAuth.currentUser ? BackendAuth.currentUser.charAt(0).toUpperCase() : "?"
                     font.pixelSize: 16
                     font.bold: true
-                    color: "#FFFFFF"
+                    color: "#3B82F6"
                     visible: avatarImage.status !== Image.Ready || !BackendAuth.avatarUrl
                 }
             }
@@ -87,27 +87,40 @@ Rectangle {
             spacing: 16
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: root.height       // 占满栏高，垂直方向有明确基准
-            // 日期时间显示
-            RowLayout {
-                spacing: 8
+            // 日期时间显示（上下两行）
+            ColumnLayout {
+                spacing: 2
                 Layout.alignment: Qt.AlignVCenter
 
                 Text {
                     id: dateText
                     text: ""
-                    font.pixelSize: 22
-                    font.family: "Monospace"
+                    font.pixelSize: 24
+                  
                     font.bold: true
                     color: "#FFFFFF"
                 }
 
-                Text {
-                    id: timeText
-                    text: "00:00:00"
-                    font.pixelSize: 22
-                    font.family: "Monospace"
-                    font.bold: true
-                    color: "#FFFFFF"
+                RowLayout {
+                    spacing: 8
+
+                    Text {
+                        id: weekText
+                        text: ""
+                        font.pixelSize: 24
+                       
+                        font.bold: true
+                        color: "#FFFFFF"
+                    }
+
+                    Text {
+                        id: timeText
+                        text: "00:00:00"
+                        font.pixelSize: 24
+                        font.family: "Monospace"
+                        font.bold: true
+                        color: "#FFFFFF"
+                    }
                 }
             }
 
@@ -413,9 +426,9 @@ Rectangle {
     Text {
         anchors.centerIn: parent
         height: 60                              // 框铺满状态栏高度
-        text: "AI 视 觉 识 别 智 能 网 络 秤"
-        font.family: "AlibabaPuHuiTi"
-        font.pixelSize: 36
+        text: "扬州耀阳"
+        
+        font.pixelSize: 40
         font.bold: true
         color: "#FFFFFF"
         elide: Text.ElideRight
@@ -430,8 +443,14 @@ Rectangle {
         repeat: true
         onTriggered: {
             var currentDate = new Date()
+            var y = currentDate.getFullYear()
+            var m = currentDate.getMonth() + 1
+            var d = currentDate.getDate()
+            var weekDays = ["日", "一", "二", "三", "四", "五", "六"]
+            var w = weekDays[currentDate.getDay()]
+            dateText.text = y + "年" + m + "月" + d + "日"
+            weekText.text = "星期" + w
             timeText.text = currentDate.toLocaleTimeString(Qt.locale(), "hh:mm:ss")
-            dateText.text = currentDate.toLocaleDateString(Qt.locale(), "yyyy-MM-dd")
         }
     }
 
