@@ -46,19 +46,18 @@ Dialog {
     readonly property bool hasNext: dialogRoot.currentIndex >= 0
         && dialogRoot.currentIndex < dialogRoot.recordList.length - 1
 
-    anchors.centerIn: parent
+    // 居中偏上，确保底部翻页栏不被截
+    x: (parent.width - width) / 2
+    y: Math.max(10, (parent.height - height) / 2 - 40)
 
-    // 宽度先行
-    property real dialogW: Math.min(parent.width * 0.94, 1600)
+    // 宽度适中
+    property real dialogW: Math.min(parent.width * 0.82, 1280)
     width: dialogW
     // 高度 = 图片区(16:9, 扣掉左右边距) + 标题栏 + 导航栏 + 各层 margin/padding
-    property real imgAreaW: dialogW - 56          // 图片区可用宽度(左右各28)
-    property real imgAreaH: imgAreaW * 9 / 16     // 图片区 16:9 高度
-    height: Math.min(parent.height * 0.92,
-                     imgAreaH                      // 图片区
-                     + 76                          // 标题栏(32+20+24)
-                     + 48                          // 图片区 margin(28+20)
-                     + 88)                         // 导航栏(12+52+24)
+    property real imgAreaW: dialogW - 56
+    property real imgAreaH: imgAreaW * 9 / 16
+    height: Math.min(parent.height * 0.88,
+                     imgAreaH + 76 + 48 + 88)
 
     modal: true
     Overlay.modal: Rectangle { color: "#CF000000" }
@@ -68,7 +67,7 @@ Dialog {
     // ---- 深色卡片背景 + 圆角 + 阴影 ----
     background: Rectangle {
         radius: 28
-        color: "#1E1E2E"
+        color: "#292929"
         border.color: "#14FFFFFF"
         border.width: 1
         layer.enabled: true
@@ -103,7 +102,6 @@ Dialog {
             // 居中标题
             Text {
                 text: "图片查看"
-                font.family: Theme.fontFamilyTitle
                 font.pixelSize: 28
                 font.bold: true
                 font.letterSpacing: 2
@@ -112,16 +110,16 @@ Dialog {
 
             Item { Layout.fillWidth: true }
 
-            // 关闭按钮
+            // 关闭按钮 — 使用图片图标
             Rectangle {
                 width: 44; height: 44; radius: 22
                 color: closeMA.containsMouse ? "#26EF4444" : "transparent"
 
-                Text {
+                Image {
                     anchors.centerIn: parent
-                    text: "\u2715"
-                    font.pixelSize: 36
-                    color: closeMA.containsMouse ? "#EF4444" : "#64748B"
+                    source: "qrc:/resources/img/close.png"
+                    width: 28; height: 28
+                    fillMode: Image.PreserveAspectFit
                 }
                 MouseArea {
                     id: closeMA

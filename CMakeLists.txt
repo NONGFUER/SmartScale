@@ -145,6 +145,7 @@ qt_add_resources(appSmartScale "app_assets"
         resources/img/Wifi3.png
         resources/img/Wifi4.png
         resources/img/Setting.png
+        resources/img/close.png
 )
 
 set(ONNXRUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/onnxruntime-linux-aarch64-1.24.4")
