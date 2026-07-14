@@ -27,7 +27,7 @@ namespace NetworkUtils {
         inline constexpr const char *USER_BY_ID          = "/api/ems/User/by-id";    // 获取当前登录用户信息（头像等）
 
         // === USER 域接口（user.shxgs.cn:5196）===
-        inline constexpr const char *USER_WEIGHT_CREATE     = "/api/user/WeightRecord/create";
+        inline constexpr const char *USER_WEIGHT_CREATE     = "/api/user/WeightRecord/create-kg";
         inline constexpr const char *USER_WEIGHT_UPDATE_IMG = "/api/user/WeightRecord/update-img";
         inline constexpr const char *USER_WEIGHT_REVOKE     = "/api/user/WeightRecord/revoke";
         inline constexpr const char *USER_INGR_PAGED        = "/api/user/UserIngr/paged";

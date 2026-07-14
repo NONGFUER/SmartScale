@@ -229,7 +229,10 @@ QByteArray WeightHistoryService::buildUploadJson(const WeightRecord &record)
     json["ingrId"] = ok ? QJsonValue(qlonglong(ingrIdVal)) : 0;
     json["custId"] = m_authService ? m_authService->custId() : 0;
     json["devId"] = m_authService ? m_authService->productId() : QString();
-    json["val"]    = static_cast<int>(record.weight * 1000);
+    // val 单位改为 kg，保留小数点后两位（四舍五入）
+    json["val"]    = QString::number(record.weight, 'f', 2).toDouble();
+    json["price"]  = 0;
+    json["amount"] = 0;
     json["aiDet"]  = record.aiDetected;
     //json["img"]    = record.mainImagePath;
     json["userId"] = m_authService ? QJsonValue(qlonglong(m_authService->userId())) : -1;
