@@ -459,6 +459,7 @@ Item {
 
                                         VideoOutput {
                                             id: subVideo
+                                            radius: 24
                                             anchors.fill: parent
                                             fillMode: VideoOutput.PreserveAspectCrop
                                             Component.onCompleted: {
@@ -517,6 +518,7 @@ Item {
 
                                         VideoOutput {
                                             id: mainVideo
+                                            radius: 24
                                             anchors.fill: parent
                                             fillMode: VideoOutput.PreserveAspectCrop
                                             Component.onCompleted: {
