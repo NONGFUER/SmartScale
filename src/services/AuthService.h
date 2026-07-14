@@ -8,6 +8,7 @@
 #include <QNetworkReply>
 
 class UserRepo;
+class UserIngredientService;
 
 class AuthService : public QObject
 {
@@ -68,6 +69,9 @@ public:
 
     // === 离线登录支持 ===
     void setUserRepo(UserRepo *repo);
+
+    // === 注入用户食材服务（登录成功后统一调度拉取）===
+    void setIngredientService(UserIngredientService *svc);
 
     // === Getter ===
     QString token() const { return m_token; }
@@ -179,6 +183,7 @@ private:
     // === 成员变量 ===
     QNetworkAccessManager *m_networkMgr;
     UserRepo *m_userRepo = nullptr;
+    UserIngredientService *m_ingredientSvc = nullptr;  // 登录后统一调度食材列表拉取
 
     QString m_pendingUserCode;    // 待认证的用户名（离线降级时复用）
     QString m_pendingPassword;    // 待认证的密码（离线降级时复用）

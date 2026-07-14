@@ -1,6 +1,7 @@
 #include "AuthService.h"
 #include "core/NetworkUtils.h"
 #include "data/repositories/UserRepo.h"
+#include "services/UserIngredientService.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -271,6 +272,8 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
     if (isProductBySn) {
         if (reply->error() != QNetworkReply::NoError) {
             qWarning() << "[Auth] Product/by-sn 网络错误:" << reply->errorString();
+            // 失败也继续串行链
+            tryFetchUserInfo();
             return;
         }
         QByteArray data = reply->readAll();
@@ -280,6 +283,7 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
         QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
         if (parseErr.error != QJsonParseError::NoError) {
             qWarning() << "[Auth] Product/by-sn JSON 解析失败:" << parseErr.errorString();
+            tryFetchUserInfo();
             return;
         }
 
@@ -299,6 +303,7 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
 
         if (productId.isEmpty()) {
             qWarning() << "[Auth] Product/by-sn 响应中未找到 productId, keys=" << src.keys();
+            tryFetchUserInfo();
             return;
         }
 
@@ -306,6 +311,8 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
         saveProductToCache();
         Q_EMIT productIdChanged();
         qInfo() << "[Auth] Product/by-sn 成功: productId=" << m_productId << "（已缓存）";
+        // 串行链：Product/by-sn 完成 → 触发 User/by-id
+        tryFetchUserInfo();
         return;
     }
 
@@ -313,6 +320,10 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
     if (isUserInfo) {
         if (reply->error() != QNetworkReply::NoError) {
             qWarning() << "[Auth] User/by-id 网络错误:" << reply->errorString();
+            // 失败也继续串行链
+            if (m_ingredientSvc) {
+                m_ingredientSvc->fetchIngredients();
+            }
             return;
         }
         QByteArray data = reply->readAll();
@@ -322,6 +333,9 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
         QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
         if (parseErr.error != QJsonParseError::NoError) {
             qWarning() << "[Auth] User/by-id JSON 解析失败:" << parseErr.errorString();
+            if (m_ingredientSvc) {
+                m_ingredientSvc->fetchIngredients();
+            }
             return;
         }
 
@@ -345,6 +359,10 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
             qInfo() << "[Auth] User/by-id 成功: custNm=" << m_custNm;
         } else {
             qDebug() << "[Auth] User/by-id 返回但 custNm 为空或未变化";
+        }
+        // 串行链：User/by-id 完成 → 触发食材列表拉取
+        if (m_ingredientSvc) {
+            m_ingredientSvc->fetchIngredients();
         }
         return;
     }
@@ -424,6 +442,11 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
 void AuthService::setUserRepo(UserRepo *repo)
 {
     m_userRepo = repo;
+}
+
+void AuthService::setIngredientService(UserIngredientService *svc)
+{
+    m_ingredientSvc = svc;
 }
 
 void AuthService::setDeviceSn(const QString &sn)
@@ -591,8 +614,9 @@ void AuthService::handleAuthSuccess(const QString &username,
     if (isInitialLogin) {
         Q_EMIT loginSuccess();
         if (online) {
+            // 串行调度：Product/by-sn → User/by-id → UserIngr/paged
+            // 避免并发导致 by-id 偶尔无返回
             tryFetchProductBySn();
-            tryFetchUserInfo();   // 获取用户头像等信息
         }
     }
 }

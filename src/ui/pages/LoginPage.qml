@@ -39,8 +39,6 @@ Item {
         target: BackendAuth 
         function onLoginSuccess() {
             autoSkipTimer.stop()
-            // 登录后拉取食材列表并更新翻译器缓存
-            UserIngredientService.fetchIngredients()
             stackView.push("WorkstationPage.qml")
         }
         function onLoginFailed(errorMsg) {

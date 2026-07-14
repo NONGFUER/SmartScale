@@ -25,6 +25,7 @@ Popup {
     Overlay.modal: Rectangle { color: "#80000000" }
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
+    
 
     width: 600
     height: Math.min(760, contentArea.implicitHeight + topBar.height + btnBar.height + 28)

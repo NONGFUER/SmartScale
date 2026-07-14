@@ -215,6 +215,9 @@ int main(int argc, char *argv[])
     authService->setDeviceSn(weightSensor->sn());          // 初始值（可能为空，异步读取后会更新）
     cameraController->setWeightSensor(weightSensor);        // CameraController 直接访问 WeightSensor
 
+    // === 食材服务注入 AuthService（登录成功后统一调度拉取）===
+    authService->setIngredientService(userIngredientService);
+
     // SN 异步读取完成后同步更新 AuthService
     QObject::connect(weightSensor, &WeightSensor::snChanged,
                      authService, [authService, weightSensor]() {

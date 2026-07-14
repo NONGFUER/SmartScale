@@ -70,8 +70,6 @@ Dialog {
     Connections {
         target: BackendAuth
         function onLoginSuccess() {
-            // 登录后拉取食材列表并更新翻译器缓存
-            UserIngredientService.fetchIngredients()
             loginDialog.close()
         }
         function onLoginFailed(errorMsg) {  // 登录失败时显示错误提示
