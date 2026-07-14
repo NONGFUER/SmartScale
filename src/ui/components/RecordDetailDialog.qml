@@ -46,30 +46,38 @@ Dialog {
     readonly property bool hasNext: dialogRoot.currentIndex >= 0
         && dialogRoot.currentIndex < dialogRoot.recordList.length - 1
 
-    x: (parent.width - width) / 2
-    y: ((parent.height - height) / 2)-50
+    anchors.centerIn: parent
 
-    width: Math.min(parent.width * 0.92, 1280)
-    height: Math.min(parent.height * 0.92, 860)
+    // 宽度先行
+    property real dialogW: Math.min(parent.width * 0.94, 1600)
+    width: dialogW
+    // 高度 = 图片区(16:9, 扣掉左右边距) + 标题栏 + 导航栏 + 各层 margin/padding
+    property real imgAreaW: dialogW - 56          // 图片区可用宽度(左右各28)
+    property real imgAreaH: imgAreaW * 9 / 16     // 图片区 16:9 高度
+    height: Math.min(parent.height * 0.92,
+                     imgAreaH                      // 图片区
+                     + 76                          // 标题栏(32+20+24)
+                     + 48                          // 图片区 margin(28+20)
+                     + 88)                         // 导航栏(12+52+24)
 
     modal: true
     Overlay.modal: Rectangle { color: "#CF000000" }
     padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
-    // ---- 白色卡片背景 + 圆角 + 阴影（与搜索弹窗一致）----
+    // ---- 深色卡片背景 + 圆角 + 阴影 ----
     background: Rectangle {
-        radius: 24
-        color: "#292929"
-        border.color: "#CFFFFFFF"
+        radius: 28
+        color: "#1E1E2E"
+        border.color: "#14FFFFFF"
         border.width: 1
         layer.enabled: true
         layer.effect: MultiEffect {
             shadowEnabled: true
             shadowColor: "#000000"
-            shadowBlur: 25
-            shadowOpacity: 0.18
-            shadowVerticalOffset: 8
+            shadowBlur: 40
+            shadowOpacity: 0.35
+            shadowVerticalOffset: 12
         }
     }
 
@@ -83,10 +91,10 @@ Dialog {
         // ==========================================
         RowLayout {
             Layout.fillWidth: true
-            Layout.topMargin: 28
-            Layout.leftMargin: 32
-            Layout.rightMargin: 32
-            Layout.bottomMargin: 16
+            Layout.topMargin: 32
+            Layout.leftMargin: 36
+            Layout.rightMargin: 36
+            Layout.bottomMargin: 20
             spacing: 0
 
 
@@ -96,23 +104,24 @@ Dialog {
             Text {
                 text: "图片查看"
                 font.family: Theme.fontFamilyTitle
-                font.pixelSize: 26
+                font.pixelSize: 28
                 font.bold: true
-                color: "#FFFFFF"
+                font.letterSpacing: 2
+                color: "#F1F5F9"
             }
 
             Item { Layout.fillWidth: true }
 
-            // 关闭按钮 — 透明底，hover 变红（与搜索弹窗关闭钮同款）
+            // 关闭按钮
             Rectangle {
-                width: 52; height: 52; radius: 21
-                color: closeMA.containsMouse ? "#FEE2E2" : "transparent"
+                width: 44; height: 44; radius: 22
+                color: closeMA.containsMouse ? "#26EF4444" : "transparent"
 
                 Text {
                     anchors.centerIn: parent
                     text: "\u2715"
-                    font.pixelSize: 42
-                    color: closeMA.containsMouse ? "#EF4444" : "#94A3B8"
+                    font.pixelSize: 36
+                    color: closeMA.containsMouse ? "#EF4444" : "#64748B"
                 }
                 MouseArea {
                     id: closeMA
@@ -126,18 +135,18 @@ Dialog {
         
 
         // ==========================================
-        // 图片展示区域（浅灰圆角容器，与搜索弹窗结果区一致）
+        // 图片展示区域（深色沉浸式容器 — 严格 16:9 比例）
         // ==========================================
         Rectangle {
             id: imageContainer
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.leftMargin: 24
-            Layout.rightMargin: 24
-            Layout.bottomMargin: 16
-            color: "#F8FAFC"
-            radius: 14
-            border.color: "#E2E8F0"
+            Layout.preferredHeight: imageContainer.width * (9.0 / 16.0)
+            Layout.leftMargin: 28
+            Layout.rightMargin: 28
+            Layout.bottomMargin: 20
+            color: "#12121A"
+            radius: 18
+            border.color: "#0FFFFFFF"
             border.width: 1
             clip: true
 
@@ -168,7 +177,7 @@ Dialog {
                     NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
                 }
 
-                // 图片
+                // 图片 — 宽高比 16:9 完美匹配容器
                 Image {
                     id: detailImage
                     anchors.fill: parent
@@ -192,19 +201,19 @@ Dialog {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "\u{1F4CF}"
                         font.pixelSize: 48
-                        color: "#CBD5E1"
+                        color: "#3D3D5C"
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "暂无图片"
                         font.pixelSize: 18
-                        color: Theme.colorTextTertiary
+                        color: "#52527A"
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "该称重记录未拍摄照片"
                         font.pixelSize: 15
-                        color: Theme.colorTextTertiary
+                        color: "#52527A"
                     }
                 }
             }
@@ -305,9 +314,9 @@ Dialog {
         // ==========================================
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: 8
-            Layout.bottomMargin: 16
-            spacing: 20
+            Layout.topMargin: 12
+            Layout.bottomMargin: 24
+            spacing: 24
             visible: dialogRoot.recordList && dialogRoot.recordList.length > 1
                       && dialogRoot.currentIndex >= 0
 
