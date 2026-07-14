@@ -118,114 +118,196 @@ Dialog {
             Layout.topMargin: 28
             Layout.bottomMargin: 20
 
-            GridLayout {
+            ColumnLayout {
                 anchors.fill: parent
-                columns: 2
-                rowSpacing: 20
-                columnSpacing: 16
+                spacing: 12
 
-                // --- 食材 ---
-                Text {
-                    text: "食材"
-                    font.pixelSize: 24
-                    font.family: Theme.fontFamilyUi
-                    color: "#1B2955"
-                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                }
-                Text {
-                    text: root.ingredientName
-                    font.pixelSize: 24
-                    font.bold: true
-                    font.family: Theme.fontFamilyUi
-                    color: "#1E293B"
-                    Layout.fillWidth: true
-                    elide: Text.ElideMiddle
-                }
-
-                // --- 重量 ---
-                Text {
-                    text: "重量"
-                    font.pixelSize: 24
-                    font.family: Theme.fontFamilyUi
-                    color: "#1B2955"
-                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                }
-                Text {
-                    text: root.weight.toFixed(2) + " kg"
-                    font.pixelSize: 24
-                    font.bold: true
-                    font.family: Theme.fontFamilyUi
-                    color: "#1E293B"
-                    Layout.fillWidth: true
-                }
-
-                // --- 单价 ---
-                Text {
-                    text: "单价"
-                    font.pixelSize: 24
-                    font.family: Theme.fontFamilyUi
-                    color: "#1B2955"
-                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                }
+                // ========== 行：食材 ==========
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 54
-                    radius: 8
+                    Layout.preferredHeight: 60
+                    radius: 10
+                    color: "#F8FAFC"
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 20
+                        spacing: 0
+
+                        Text {
+                            text: "食材"
+                            font.pixelSize: 22
+                            font.family: Theme.fontFamilyUi
+                            color: "#1B2955"
+                            Layout.preferredWidth: 80
+                        }
+                        Item { Layout.preferredWidth: 20 } // 间距
+                        Text {
+                            text: root.ingredientName
+                            font.pixelSize: 22
+                            font.bold: true
+                            font.family: Theme.fontFamilyUi
+                            color: "#1E293B"
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignRight
+                            elide: Text.ElideMiddle
+                        }
+                    }
+                }
+
+                // ========== 行：重量 ==========
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 60
+                    radius: 10
+                    color: "#F8FAFC"
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 20
+                        spacing: 0
+
+                        Text {
+                            text: "重量"
+                            font.pixelSize: 22
+                            font.family: Theme.fontFamilyUi
+                            color: "#1B2955"
+                            Layout.preferredWidth: 80
+                        }
+                        Item { Layout.preferredWidth: 20 }
+                        Text {
+                            text: root.weight.toFixed(2) + " kg"
+                            font.pixelSize: 22
+                            font.bold: true
+                            font.family: Theme.fontFamilyUi
+                            color: "#1E293B"
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignRight
+                        }
+                    }
+                }
+
+                // ========== 行：单价（含输入框）==========
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 60
+                    radius: 10
                     color: priceInput.activeFocus ? "#FFFFFF" : "#F8FAFC"
                     border.color: priceInput.activeFocus ? "#4361EE" : "#CBD5E1"
                     border.width: priceInput.activeFocus ? 2 : 1
 
                     Behavior on border.color { ColorAnimation { duration: 150 } }
 
-                    TextInput {
-                        id: priceInput
+                    RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 10
-                        verticalAlignment: TextInput.AlignVCenter
-                        text: "0"
-                        font.pixelSize: 24
-                        font.family: Theme.fontFamilyUi
-                        color: "#1E293B"
-                        clip: true
-                        validator: DoubleValidator {
-                            decimals: 2; bottom: 0; notation: DoubleValidator.StandardNotation
-                        }
-                        onTextEdited: {
-                            var val = parseFloat(text) || 0
-                            root._unitPrice = val
-                            root._amount = val * root.weight * 2
-                        }
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 20
+                        spacing: 0
 
-                        // 右侧单位提示
                         Text {
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.rightMargin: 10
-                            text: "元 / 斤"
-                            font.pixelSize: 24
+                            text: "单价"
+                            font.pixelSize: 22
                             font.family: Theme.fontFamilyUi
-                            color: "#1E293B"
+                            color: "#1B2955"
+                            Layout.preferredWidth: 80
+                        }
+                        Item { Layout.preferredWidth: 20 }
+
+                        // 输入框区域
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 44
+                            clip: true
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 6
+                                color: "transparent"
+                                border.color: priceInput.activeFocus ? "#4361EE" : "#CBD5E1"
+                                border.width: 1
+                            }
+
+                            TextInput {
+                                id: priceInput
+                                anchors.fill: parent
+                                anchors.margins: 4
+                                verticalAlignment: TextInput.AlignVCenter
+                                text: "0"
+                                font.pixelSize: 20
+                                font.family: Theme.fontFamilyUi
+                                color: "#1E293B"
+                                clip: true
+                                selectByMouse: true
+                                validator: DoubleValidator {
+                                    decimals: 2; bottom: 0; notation: DoubleValidator.StandardNotation
+                                }
+                                onTextEdited: {
+                                    var val = parseFloat(text) || 0
+                                    root._unitPrice = val
+                                    root._amount = val * root.weight * 2
+                                }
+
+                                // placeholder 效果
+                                Text {
+                                    anchors.fill: parent
+                                    verticalAlignment: Text.AlignVCenter
+                                    text: priceInput.text.length > 0 ? "" : "选填，请输入单价"
+                                    font.pixelSize: 20
+                                    font.family: Theme.fontFamilyUi
+                                    color: "#94A3B8"
+                                    visible: !priceInput.activeFocus && priceInput.text.length === 0
+                                }
+
+                                // 右侧单位提示
+                                Text {
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.rightMargin: 4
+                                    text: "元/斤"
+                                    font.pixelSize: 18
+                                    font.family: Theme.fontFamilyUi
+                                    color: "#94A3B8"
+                                }
+                            }
                         }
                     }
                 }
 
-                // --- 金额 ---
-                Text {
-                    text: "金额"
-                    font.pixelSize: 24
-                    font.family: Theme.fontFamilyUi
-                    color: "#1E293B"
-                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                }
-                Text {
-                    text: root._amount.toFixed(2) + " 元"
-                    font.pixelSize: 24
-                    font.bold: true
-                    font.family: Theme.fontFamilyUi
-                    color: "#4361EE"
+                // ========== 行：金额 ==========
+                Rectangle {
                     Layout.fillWidth: true
+                    Layout.preferredHeight: 60
+                    radius: 10
+                    color: "#F8FAFC"
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 20
+                        spacing: 0
+
+                        Text {
+                            text: "金额"
+                            font.pixelSize: 22
+                            font.family: Theme.fontFamilyUi
+                            color: "#1B2955"
+                            Layout.preferredWidth: 80
+                        }
+                        Item { Layout.preferredWidth: 20 }
+                        Text {
+                            text: root._amount.toFixed(2) + " 元"
+                            font.pixelSize: 22
+                            font.bold: true
+                            font.family: Theme.fontFamilyUi
+                            color: "#4361EE"
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignRight
+                        }
+                    }
                 }
-            } // GridLayout
+            } // ColumnLayout
         } // 内容区 Item
 
         // ========== 重复称重警告 ==========
