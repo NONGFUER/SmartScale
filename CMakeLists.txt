@@ -134,6 +134,17 @@ qt_add_resources(appSmartScale "app_assets"
         resources/fonts/PingFangSC-Regular.ttf
         resources/fonts/din-bold-2.ttf
         resources/fonts/AlimamaShuHeiTi-Bold.ttf
+        resources/img/Signal0.png
+        resources/img/Signal1.png
+        resources/img/Signal2.png
+        resources/img/Signal3.png
+        resources/img/Signal4.png
+        resources/img/Wifi0.png
+        resources/img/Wifi1.png
+        resources/img/Wifi2.png
+        resources/img/Wifi3.png
+        resources/img/Wifi4.png
+        resources/img/Setting.png
 )
 
 set(ONNXRUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/onnxruntime-linux-aarch64-1.24.4")

@@ -459,7 +459,6 @@ Item {
 
                                         VideoOutput {
                                             id: subVideo
-                                            radius: 24
                                             anchors.fill: parent
                                             fillMode: VideoOutput.PreserveAspectCrop
                                             Component.onCompleted: {
@@ -518,7 +517,7 @@ Item {
 
                                         VideoOutput {
                                             id: mainVideo
-                                            radius: 24
+                                            
                                             anchors.fill: parent
                                             fillMode: VideoOutput.PreserveAspectCrop
                                             Component.onCompleted: {
@@ -856,22 +855,24 @@ Item {
                                     // 居中重量数值
                                     Row {
                                         anchors.centerIn: parent
-                                        spacing: 6
                                         Text {
                                             text: WeightManager.netWeight.toFixed(2)
-                                            font.pixelSize: 80
+                                            font.pixelSize: 100
                                             font.bold: true
                                             color: "#FFFFFF"
                                             font.family: "DIN"
                                         }
+                                    }
 
-                                        Text {
-                                            text: "/kg"
-                                            font.pixelSize: 32
-                                            font.bold: true
-                                            color: "#FFFFFF"
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
+                                    // 单位显示在容器右侧
+                                    Text {
+                                        text: "kg"
+                                        font.pixelSize: 48
+                                        font.bold: true
+                                        color: "#FFFFFF"
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 24
+                                        anchors.verticalCenter: parent.verticalCenter
                                     }
                                 } // weightCard
                             } // 称重卡片区域 Item

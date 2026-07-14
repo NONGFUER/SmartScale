@@ -38,9 +38,8 @@ Dialog {
     // 遮罩层点击后的提示文字
     Text {
         id: hintText
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: parent.bottom
-        anchors.topMargin: 8
+        x: (loginDialog.width - implicitWidth) / 2
+        y: loginDialog.height + 8
         font.family: "Microsoft YaHei"
         font.pixelSize: 20
         color: "#F59E0B"
