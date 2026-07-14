@@ -18,8 +18,8 @@ Rectangle {
     RowLayout {
         id: mainRow
         anchors.fill: parent
-        anchors.leftMargin: 44
-        anchors.rightMargin: 44
+        anchors.leftMargin: 54
+        anchors.rightMargin: 54
         spacing: 0
         height: parent.height                     // 显式约束不溢出
         RowLayout {

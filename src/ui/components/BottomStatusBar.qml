@@ -10,8 +10,8 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 44
-        anchors.rightMargin: 44
+        anchors.leftMargin: 54
+        anchors.rightMargin: 54
         spacing: 20
 
         // ===== 左侧：设备型号信息 =====
@@ -26,35 +26,17 @@ Rectangle {
         // 弹性占位：把右侧推到最右
         Item { Layout.fillWidth: true }
 
-        // ===== 中间：版本号 =====
-        Text {
-            id: versionText
-            text: "版本号:" + (SystemInfo.appVersion || "2.13.2")
-            font.pixelSize: 24
-          
-            font.bold: true
-            color: "#FFFFFF"
-            Layout.alignment: Qt.AlignVCenter
-            Layout.rightMargin: 40
-        }
-
         // ===== 右侧：版权 + Logo =====
         RowLayout {
             spacing: 8
             Layout.alignment: Qt.AlignVCenter
 
-            // 公司 Logo 圆形图标
-            Rectangle {
-                width: 22; height: 22; radius: 11
-                color: "#FFFFFF"
-
-                Text {
-                    anchors.centerIn: parent
-                    text: "小"
-                    font.pixelSize: 24
-                    font.bold: true
-                    color: "#3B82F6"
-                }
+            // 公司 Logo 图标
+            Image {
+                source: "qrc:/resources/img/logo.png"
+                width: 22; height: 22
+                fillMode: Image.PreserveAspectFit
+                asynchronous: true
             }
 
             // 版权文字
@@ -66,5 +48,16 @@ Rectangle {
                 color: "#FFFFFF"
             }
         }
+    }
+
+    // ===== 版本号：绝对水平居中于整个状态栏 =====
+    Text {
+        id: versionText
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
+        text: "版本号: " + (SystemInfo.appVersion || "2.13.2")
+        font.pixelSize: 24
+        font.bold: true
+        color: "#FFFFFF"
     }
 }

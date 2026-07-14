@@ -128,6 +128,7 @@ qt_add_resources(appSmartScale "app_assets"
         resources/img/pageDown.png
         resources/img/ai.png
         resources/img/ingr.png
+        resources/img/logo.png
         resources/icon/eye-fill.png
         resources/icon/eye-close-fill.png
         resources/fonts/PingFangSC-Regular.ttf

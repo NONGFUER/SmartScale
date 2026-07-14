@@ -86,7 +86,7 @@ Item {
                 // ================================================================
                 ColumnLayout {
                     Layout.fillHeight: true
-                    Layout.preferredWidth: parent.width * 0.6
+                    Layout.preferredWidth: parent.width * 0.62
                     spacing: 24
 
                     // ========== 历史记录区块 ==========
@@ -593,7 +593,7 @@ Item {
                 // ============ 右侧区域 (40%) — 白底卡片（与历史记录区块同款） ============
                 Rectangle {
                     Layout.fillHeight: true
-                    Layout.preferredWidth: parent.width * 0.4
+                    Layout.preferredWidth: parent.width * 0.38
                     color: "#FFFFFF"
                     radius: 30
                     border.color: "#33FFFFFF"
