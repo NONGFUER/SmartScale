@@ -215,6 +215,10 @@ ApplicationWindow {
                 console.log("[Main] 收到设置请求，打开设置弹窗")
                 settingsDialog.open()
             }
+            function onUserAreaClicked() {
+                console.log("[Main] 用户区域点击，弹出退出登录确认")
+                logoutConfirmDialog.open()
+            }
         }
 
         StackView {
@@ -408,6 +412,12 @@ ApplicationWindow {
         x: (parent.width - width) / 2
         y: Math.min((parent.height - height) / 2,
                     parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+    }
+
+    // 退出登录确认弹窗
+    LogoutConfirmDialog {
+        id: logoutConfirmDialog
+        onLogoutConfirmed: window.appLogout()
     }
 
     // Wi-Fi 网络列表弹窗

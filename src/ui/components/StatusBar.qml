@@ -14,6 +14,8 @@ Rectangle {
     signal debugRequested()
     // 点击网络图标发出的信号 — 根据状态打开 WiFi 或 4G 弹窗
     signal networkRequested()
+    // 点击用户头像/名字区域发出的信号 — 弹出退出登录确认
+    signal userAreaClicked()
 
     RowLayout {
         id: mainRow
@@ -71,13 +73,11 @@ Rectangle {
                 }
             }
 
-            // 点击跳转登录/退出（覆盖整个用户区，父级是 Item 非 layout，anchors 合法）
+            // 点击用户区域触发退出登录确认（覆盖整个用户区）
             MouseArea {
                 anchors.fill: parent
                 hoverEnabled: true
-                onClicked: {
-                    root.settingsRequested()
-                }
+                onClicked: root.userAreaClicked()
             }
         }
 

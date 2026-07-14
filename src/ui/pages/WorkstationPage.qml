@@ -1265,11 +1265,4 @@ Item {
         }
     }
 
-    // ==========================================
-    //  退出登录确认弹窗（独立组件）
-    // ==========================================
-    LogoutConfirmDialog {
-        id: logoutConfirmDialog
-        onLogoutConfirmed: window.appLogout()
-    }
 }
