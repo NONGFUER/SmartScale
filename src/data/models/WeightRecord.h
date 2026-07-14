@@ -25,6 +25,10 @@ public:
     bool hasSubImage = false;        // 是否有副摄像图片
     QString subImagePath;            // 副摄像图片路径
 
+    // === 价格字段 ===
+    double unitPrice = 0.0;          // 单价（元/斤）
+    double amount = 0.0;             // 总金额（元）= unitPrice * weight * 2
+
     // === 同步预留字段 ===
     bool synced = false;             // 是否已同步到云端
     QString cloudId;                 // 云端记录 ID

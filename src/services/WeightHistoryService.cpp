@@ -95,7 +95,8 @@ void WeightHistoryService::addRecord(double weight,
                                      const QString &mainImagePath,
                                      const QString &subImagePath,
                                      const QString &ingrId,
-                                     bool aiDetected)
+                                     bool aiDetected,
+                                     double unitPrice)
 {
     if (!m_repo) {
         qWarning() << "[WHS] Repository 未设置，无法添加记录";
@@ -107,6 +108,8 @@ void WeightHistoryService::addRecord(double weight,
                        QString(), mainImagePath, subImagePath);
     model.ingrId = ingrId;
     model.aiDetected = aiDetected;
+    model.unitPrice = unitPrice;
+    model.amount = unitPrice * weight * 2;  // 金额 = 单价 × 重量(kg) × 2(转斤)
 
     // 1. 写入数据库
     int newId = m_repo->insert(model);
@@ -231,8 +234,8 @@ QByteArray WeightHistoryService::buildUploadJson(const WeightRecord &record)
     json["devId"] = m_authService ? m_authService->productId() : QString();
     // val 单位改为 kg，保留小数点后两位（四舍五入）
     json["val"]    = QString::number(record.weight, 'f', 2).toDouble();
-    json["price"]  = 0;
-    json["amount"] = 0;
+    json["price"]  = QString::number(record.unitPrice, 'f', 2).toDouble();
+    json["amount"] = QString::number(record.amount, 'f', 2).toDouble();
     json["aiDet"]  = record.aiDetected;
     //json["img"]    = record.mainImagePath;
     json["userId"] = m_authService ? QJsonValue(qlonglong(m_authService->userId())) : -1;
@@ -634,6 +637,44 @@ void WeightHistoryService::createUserWeightRecord(const QString &ingrCd,
 // POST /api/user/WeightRecord/update-img
 // Body: CustId(int64) + RecoId(int64) + File(binary) 均为 form-data 字段
 // ============================================================
+
+// ============================================================
+//  重复称重检测
+// ============================================================
+
+QVariantMap WeightHistoryService::checkDuplicate(const QString &categoryName, double weight, double tolerance)
+{
+    QVariantMap result;
+    result["duplicate"] = false;
+    result["categoryName"] = QString();
+    result["weight"] = 0.0;
+    result["recordTime"] = QString();
+
+    if (categoryName.isEmpty() || weight <= 0) {
+        return result;
+    }
+
+    // 遍历内存中的历史记录，查找相同食材 + 重量相近的记录
+    for (const auto &entry : std::as_const(m_historyEntries)) {
+        QVariantMap map = entry.toMap();
+        QString existingCategory = map.value("categoryName").toString();
+        double existingWeight = map.value("weight", 0.0).toDouble();
+
+        // 食材名称相同 且 重量在容差范围内
+        if (existingCategory == categoryName && qAbs(existingWeight - weight) <= tolerance) {
+            result["duplicate"] = true;
+            result["categoryName"] = existingCategory;
+            result["weight"] = existingWeight;
+            result["recordTime"] = map.value("recordTime").toString();
+            qDebug() << "[WHS] 检测到重复称重:" << categoryName
+                     << "重量:" << weight << "vs" << existingWeight
+                     << "时间:" << result["recordTime"].toString();
+            break;  // 只返回最近一条匹配记录
+        }
+    }
+
+    return result;
+}
 
 void WeightHistoryService::updateRecordImage(qint64 custId, const QString &recordId, const QString &imagePath)
 {

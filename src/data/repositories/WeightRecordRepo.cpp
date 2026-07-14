@@ -19,8 +19,9 @@ int WeightRecordRepo::insert(const WeightRecord &record)
             weight, category_name, ingr_id, ai_detected, record_time, operator_name,
             has_main_image, main_image_path,
             has_sub_image, sub_image_path,
+            price, amount,
             synced, cloud_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     )");
     q.addBindValue(record.weight);
     q.addBindValue(record.categoryName);
@@ -32,6 +33,8 @@ int WeightRecordRepo::insert(const WeightRecord &record)
     q.addBindValue(record.mainImagePath);
     q.addBindValue(record.hasSubImage ? 1 : 0);
     q.addBindValue(record.subImagePath);
+    q.addBindValue(record.unitPrice);
+    q.addBindValue(record.amount);
     q.addBindValue(record.synced ? 1 : 0);
     q.addBindValue(record.cloudId);
 
@@ -65,6 +68,8 @@ bool WeightRecordRepo::update(const WeightRecord &record)
             main_image_path = ?,
             has_sub_image = ?,
             sub_image_path = ?,
+            price = ?,
+            amount = ?,
             synced = ?,
             cloud_id = ?,
             updated_at = datetime('now','localtime')
@@ -80,6 +85,8 @@ bool WeightRecordRepo::update(const WeightRecord &record)
     q.addBindValue(record.mainImagePath);
     q.addBindValue(record.hasSubImage ? 1 : 0);
     q.addBindValue(record.subImagePath);
+    q.addBindValue(record.unitPrice);
+    q.addBindValue(record.amount);
     q.addBindValue(record.synced ? 1 : 0);
     q.addBindValue(record.cloudId);
     q.addBindValue(record.id);
@@ -263,6 +270,8 @@ WeightRecord WeightRecordRepo::fromQuery(QSqlQuery &q)
     r.mainImagePath= q.value("main_image_path").toString();
     r.hasSubImage  = q.value("has_sub_image").toInt() != 0;
     r.subImagePath = q.value("sub_image_path").toString();
+    r.unitPrice   = q.value("price").toDouble();
+    r.amount      = q.value("amount").toDouble();
     r.synced       = q.value("synced").toInt() != 0;
     r.cloudId      = q.value("cloud_id").toString();
     r.deleted      = q.value("deleted").toInt() != 0;

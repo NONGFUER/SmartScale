@@ -251,6 +251,10 @@ void DatabaseManager::createWeightRecordsTable()
             has_sub_image   INTEGER DEFAULT 0,
             sub_image_path  TEXT    DEFAULT '',
 
+            -- 价格字段
+            price           REAL    DEFAULT 0,
+            amount          REAL    DEFAULT 0,
+
             -- 同步预留字段
             synced          INTEGER DEFAULT 0,
             cloud_id        TEXT    DEFAULT '',
@@ -271,6 +275,31 @@ void DatabaseManager::createWeightRecordsTable()
     query.exec("CREATE INDEX IF NOT EXISTS idx_category ON weight_records(category_name)");
     // 索引: 同步状态查询加速
     query.exec("CREATE INDEX IF NOT EXISTS idx_synced ON weight_records(synced)");
+
+    // 迁移：为已存在的数据库添加 price / amount 列（先检查避免重复 ALTER 报错）
+    auto columnExists = [&](const QString &col) -> bool {
+        QSqlQuery chk(m_db);
+        chk.prepare("SELECT COUNT(*) FROM pragma_table_info('weight_records') WHERE name = ?");
+        chk.addBindValue(col);
+        if (chk.exec() && chk.next()) return chk.value(0).toInt() > 0;
+        return false;
+    };
+    if (!columnExists("price")) {
+        if (query.exec("ALTER TABLE weight_records ADD COLUMN price REAL DEFAULT 0"))
+            qDebug() << "[DB] 迁移: 已添加 price 列";
+        else
+            qWarning() << "[DB] 迁移 price 列失败:" << query.lastError().text();
+    } else {
+        qDebug() << "[DB] 迁移: price 列已存在，跳过";
+    }
+    if (!columnExists("amount")) {
+        if (query.exec("ALTER TABLE weight_records ADD COLUMN amount REAL DEFAULT 0"))
+            qDebug() << "[DB] 迁移: 已添加 amount 列";
+        else
+            qWarning() << "[DB] 迁移 amount 列失败:" << query.lastError().text();
+    } else {
+        qDebug() << "[DB] 迁移: amount 列已存在，跳过";
+    }
 }
 
 void DatabaseManager::createHardwareConfigTable()

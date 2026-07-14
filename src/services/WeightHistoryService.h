@@ -42,7 +42,8 @@ public:
                                const QString &mainImagePath = QString(),
                                const QString &subImagePath = QString(),
                                const QString &ingrId = QString(),
-                               bool aiDetected = false);
+                               bool aiDetected = false,
+                               double unitPrice = 0.0);
 
     /** @brief 删除记录 (按列表索引) */
     Q_INVOKABLE void removeRecord(int index);
@@ -71,6 +72,16 @@ public:
 
     /** @brief 撤回称重记录 (软删除 + POST /api/user/WeightRecord/revoke) */
     Q_INVOKABLE void revokeRecord(int recordId, qint64 custId, const QString &cloudRecordId);
+
+    // === 重复称重检测 ===
+    /**
+     * @brief 检测重复称重记录（相同食材 + 重量相近）
+     * @param categoryName 食材名称
+     * @param weight 重量(kg)
+     * @param tolerance 重量容差(kg)，默认 0.05kg
+     * @return QVariantMap: { "duplicate": bool, "categoryName": QString, "weight": double, "recordTime": QString }
+     */
+    Q_INVOKABLE QVariantMap checkDuplicate(const QString &categoryName, double weight, double tolerance = 0.05);
 
 Q_SIGNALS:
     void historyChanged();

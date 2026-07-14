@@ -10,6 +10,8 @@ QVariantMap WeightRecord::toMap() const
     map["aiDetected"] = aiDetected;
     map["recordTime"] = recordTime;
     map["operatorName"] = operatorName;
+    map["unitPrice"] = unitPrice;
+    map["amount"] = amount;
     map["hasMainImage"] = hasMainImage;
     map["mainImagePath"] = mainImagePath;
     map["hasSubImage"] = hasSubImage;
@@ -31,6 +33,8 @@ WeightRecord WeightRecord::fromMap(const QVariantMap &map)
     record.aiDetected = map.value("aiDetected", false).toBool();
     record.recordTime = map.value("recordTime").toString();
     record.operatorName = map.value("operatorName").toString();
+    record.unitPrice = map.value("unitPrice", 0.0).toDouble();
+    record.amount = map.value("amount", 0.0).toDouble();
     record.hasMainImage = map.value("hasMainImage", false).toBool();
     record.mainImagePath = map.value("mainImagePath").toString();
     record.hasSubImage = map.value("hasSubImage", false).toBool();

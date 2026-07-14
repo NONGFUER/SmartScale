@@ -25,6 +25,7 @@ Item {
     property bool aiRecognizing: false       // 是否正在执行 AI 识别（控制"识别"按钮 loading 状态）
     property bool currentAiDetected: false   // 当前品类是否由 AI 识别接口得出 (上传 aiDet 字段用)
     property bool pendingSaveAiDetected: false // 手动保存待写入的 aiDetected
+    property double pendingUnitPrice: 0         // 手动保存待写入的单价（元/斤）
     property var aiCandidates: CameraController.aiCandidateList  // AI 识别候选列表
 
     // ==========================================
@@ -1004,15 +1005,15 @@ Item {
                                         return
                                     }
                                     let chineseLabel = Translator.translate(root.currentPrediction)
-                                    console.log(">> 手动保存，触发拍照:", chineseLabel, currentWeight.toFixed(2) + "kg",
-                                                "ingrId=", root.currentIngrId)
-                                    root.pendingManualSave = true
+                                    // 缓存待保存数据（等弹窗确认后再用）
                                     root.pendingSaveWeight = currentWeight
                                     root.pendingSaveLabel = chineseLabel
                                     root.pendingSaveIngrId = root.currentIngrId
                                     root.pendingSaveAiDetected = root.currentAiDetected
-                                    // 传入当前已知品类标签，水印立即绘制，保存/上传独立执行
-                                    CameraController.captureVegetable(currentWeight, root.currentPrediction)
+                                    // 检测重复称重
+                                    var dupInfo = WeightHistoryService.checkDuplicate(chineseLabel, currentWeight)
+                                    // 弹出价格确认弹窗（含重复提醒，拍照在 saveConfirmed 回调中触发）
+                                    saveConfirmDialog.openDialog(chineseLabel, currentWeight, dupInfo)
                                 }
                             }
                         }
@@ -1052,10 +1053,11 @@ Item {
                     root.pendingManualSave = false
                     let w = root.pendingSaveWeight
                     let label = root.pendingSaveLabel
-                    console.log(">> 图片保存完成，立即执行记录:", label, w.toFixed(2) + "kg")
+                    let up = root.pendingUnitPrice
+                    console.log(">> 图片保存完成，立即执行记录:", label, w.toFixed(2) + "kg", "单价:", up)
                     // 清空当前选中，让 historyChanged 触发时自动选中刚写入的最新记录
                     root.currentDetailRecord = null
-                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId, root.pendingSaveAiDetected)
+                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId, root.pendingSaveAiDetected, up)
                     clearIngredientCard()
                 } else {
                     // 自动模式：照片已保存，独立触发 AI 识别（不阻塞保存管线）
@@ -1264,6 +1266,25 @@ Item {
             // 用户点击搜索结果卡片的"查看"，选中该记录并打开详情弹窗
             root.currentDetailRecord = record
             detailDialog.open()
+        }
+    }
+
+    // ==========================================
+    //  保存确认弹窗（含价格输入）
+    // ==========================================
+    SaveConfirmDialog {
+        id: saveConfirmDialog
+
+        onSaveConfirmed: function(unitPrice, amount) {
+            console.log(">> 用户确认保存，单价:", unitPrice, "金额:", amount)
+            // 缓存单价，等拍照完成后传入 addRecord
+            root.pendingUnitPrice = unitPrice
+            root.pendingManualSave = true
+            // 触发拍照（水印绘制 + 图片落盘）
+            CameraController.captureVegetable(root.pendingSaveWeight, root.currentPrediction)
+        }
+        onCancelled: {
+            console.log(">> 用户取消保存")
         }
     }
 
