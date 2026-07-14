@@ -601,8 +601,8 @@ Item {
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 20
-                        spacing: 16
+                        anchors.margins: 44
+                        spacing: 24
 
 
                     // ==================== 中部区（弹性）：称重 + 物品名称 ====================
@@ -627,9 +627,24 @@ Item {
                                     id: categoryCard
                                     anchors.fill: parent
                                     radius: 24
-                                    color: "#1E67DE"
-                                    border.color: "#1E67DE"
+                                    color: "#195DD9"
+                                    border.color: "#195DD9"
                                     border.width: 10
+
+                                    // 左上角标签
+                                    Text {
+                                        id: categoryLabel
+                                        text: "食材"
+                                        font.pixelSize: 28
+                                        font.family: "PingFang SC"
+                                        font.bold: true
+                                        color: "#FFFFFF"
+                                        anchors.left: parent.left
+                                        anchors.top: parent.top
+                                        anchors.leftMargin: 24
+                                        anchors.topMargin: 20
+                                        z: 1  // 确保在文字上方
+                                    }
 
                                     // 点击选择品类
                                     MouseArea {
@@ -668,106 +683,47 @@ Item {
                             // ===== AI识别 + 选择食材按钮行 =====
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 76
+                                Layout.preferredHeight: 99
                                 spacing: 16
+                                Layout.alignment: Qt.AlignHCenter
 
-                                Item { Layout.fillWidth: true }
-
-                                // ----- 按钮：识别（蓝色主按钮，专业商务风）-----
+                                // ----- 按钮：AI辅助识别 -----
                                 Rectangle {
                                     id: recognizeBtn
-                                    width: 220
-                                    height: 76
-                                    radius: 12
-                                    border.width: 1
-                                    border.color: recognizeMA.containsMouse ? "#60A5FA" : "#1E40AF"
-                                    opacity: root.aiRecognizing ? 0.75 : 1.0
-                                    clip: false
+                                    width: 283
+                                    height: 99
+                                    radius: 20
+                                    clip: true
 
-                                    readonly property color topColor: "#3B82F6"
-                                    readonly property color bottomColor: "#1D4ED8"
+                                    color: "transparent"
 
-                                    Behavior on border.color { ColorAnimation { duration: 140 } }
-                                    Behavior on opacity { NumberAnimation { duration: 150 } }
-
-                                    transform: Translate {
-                                        y: recognizeMA.containsMouse && !recognizeMA.pressed ? -2 : 0
-                                        Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-                                    }
-
-                                    gradient: Gradient {
-                                        GradientStop { position: 0.0; color: recognizeBtn.topColor }
-                                        GradientStop { position: 1.0; color: recognizeBtn.bottomColor }
-                                    }
-
-                                    // 顶部高光带（弧面反光）
-                                    Rectangle {
-                                        anchors.top: parent.top
-                                        anchors.topMargin: 2
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: parent.width - 20
-                                        height: 2
-                                        radius: 1
-                                        gradient: Gradient {
-                                            orientation: Qt.Horizontal
-                                            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0) }
-                                            GradientStop { position: 0.5; color: "#FFFFFF" }
-                                            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0) }
-                                        }
-                                    }
-
-                                    // 底部暗影带
-                                    Rectangle {
-                                        anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: 2
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: parent.width - 20
-                                        height: 2
-                                        radius: 1
-                                        gradient: Gradient {
-                                            orientation: Qt.Horizontal
-                                            GradientStop { position: 0.0; color: Qt.rgba(0.106, 0.149, 0.231, 0) }
-                                            GradientStop { position: 0.5; color: "#1B263B" }
-                                            GradientStop { position: 1.0; color: Qt.rgba(0.106, 0.149, 0.231, 0) }
-                                        }
-                                        opacity: recognizeMA.containsMouse ? 0.3 : 0.16
-                                        Behavior on opacity { NumberAnimation { duration: 140 } }
-                                    }
-
-                                    // 底部散光投影
-                                    Rectangle {
-                                        anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: -3
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: parent.width - 14
-                                        height: 6
-                                        radius: 3
-                                        color: "#1B263B"
-                                        opacity: recognizeMA.containsMouse ? 0.18 : 0.10
-                                        Behavior on opacity { NumberAnimation { duration: 140 } }
+                                    Image {
+                                        anchors.fill: parent
+                                        source: "qrc:/resources/img/ai.png"
+                                        fillMode: Image.PreserveAspectCrop
+                                        asynchronous: true
                                     }
 
                                     Row {
-                                        id: recognizeRow
-                                        anchors.centerIn: parent
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 103
                                         spacing: 10
 
                                         BusyIndicator {
                                             id: recognizeSpinner
                                             running: root.aiRecognizing
                                             visible: root.aiRecognizing
-                                            width: 30
-                                            height: 30
-                                            anchors.verticalCenter: parent.verticalCenter
+                                            width: 32
+                                            height: 32
                                             contentItem: Item {
-                                                implicitWidth: 30
-                                                implicitHeight: 30
+                                                implicitWidth: 32; implicitHeight: 32
                                                 Canvas {
                                                     anchors.fill: parent
                                                     onPaint: {
                                                         var ctx = getContext("2d")
                                                         ctx.clearRect(0, 0, width, height)
-                                                        ctx.strokeStyle = "#FFFFFF"
+                                                        ctx.strokeStyle = "#6366F1"
                                                         ctx.lineWidth = 3.5
                                                         ctx.lineCap = "round"
                                                         ctx.beginPath()
@@ -784,47 +740,29 @@ Item {
                                             }
                                         }
 
-                                        Canvas {
-                                            id: scanIcon
-                                            width: 32
-                                            height: 32
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            visible: !root.aiRecognizing
-                                            onPaint: {
-                                                var ctx = getContext("2d")
-                                                ctx.clearRect(0, 0, width, height)
-                                                ctx.strokeStyle = "#FFFFFF"
-                                                ctx.lineWidth = 2.5
-                                                ctx.lineCap = "round"
-                                                var s = 8
-                                                ctx.beginPath(); ctx.moveTo(5, s); ctx.lineTo(5, 5); ctx.lineTo(s, 5); ctx.stroke()
-                                                ctx.beginPath(); ctx.moveTo(width - s, 5); ctx.lineTo(width - 5, 5); ctx.lineTo(width - 5, s); ctx.stroke()
-                                                ctx.beginPath(); ctx.moveTo(width - 5, height - s); ctx.lineTo(width - 5, height - 5); ctx.lineTo(width - s, height - 5); ctx.stroke()
-                                                ctx.beginPath(); ctx.moveTo(s, height - 5); ctx.lineTo(5, height - 5); ctx.lineTo(5, height - s); ctx.stroke()
-                                                ctx.beginPath()
-                                                ctx.arc(width / 2, height / 2, 5, 0, Math.PI * 2)
-                                                ctx.stroke()
-                                            }
-                                            Component.onCompleted: requestPaint()
-                                        }
-
                                         Text {
-                                            text: root.aiRecognizing ? "识别中..." : "AI识别"
-                                            font.pixelSize: 36
+                                            text: root.aiRecognizing ? "识别中..." : "智能识别"
+                                            font.pixelSize: 30
                                             font.bold: true
-                                            color: "#FFFFFF"
-                                            anchors.verticalCenter: parent.verticalCenter
+                                            font.family: "PingFang SC"
+                                            color: "#4338CA"
+                                            visible: !root.aiRecognizing
+                                        }
+                                        Text {
+                                            text: "识别中..."
+                                            font.pixelSize: 30
+                                            font.bold: true
+                                            font.family: "PingFang SC"
+                                            color: "#4338CA"
+                                            visible: root.aiRecognizing
                                         }
                                     }
 
                                     MouseArea {
                                         id: recognizeMA
                                         anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
                                         onClicked: {
                                             console.log("[WSP] 点击识别按钮，手动触发 AI 识别")
-                                            // 登录拦截：未登录则中止识别并引导登录
                                             if (!BackendAuth.currentUser) {
                                                 console.warn("[WSP] 未登录，拦截识别操作，弹出登录窗口")
                                                 window.toast("请先登录后再识别", "warning", 2000)
@@ -838,139 +776,44 @@ Item {
                                             root.aiRecognizing = true
                                             aiRecognizeTimeout.restart()
                                             window.toast("AI 识别中...", "info", 1500)
-                                            // AI-only 模式：仅拍照裁剪给 AI 用，不画水印不落盘
                                             CameraController.aiOnlyMode = true
                                             CameraController.captureVegetable(WeightManager.netWeight, root.currentPrediction)
                                         }
                                     }
                                 }
 
-                                // ----- 按钮：选择食材（绿色填充按钮，专业商务风）-----
+                                // ----- 按钮：选择食材 -----
                                 Rectangle {
                                     id: selectFoodBtn
-                                    width: 220
-                                    height: 76
-                                    radius: 12
-                                    border.width: 1
-                                    border.color: selectFoodMA.containsMouse ? "#4ADE80" : "#166534"
-                                    clip: false
+                                    width: 283
+                                    height: 99
+                                    radius: 20
+                                    clip: true
+                                    color: "transparent"
 
-                                    readonly property color topColor: "#16A34A"
-                                    readonly property color bottomColor: "#15803D"
-
-                                    Behavior on border.color { ColorAnimation { duration: 140 } }
-
-                                    transform: Translate {
-                                        y: selectFoodMA.containsMouse && !selectFoodMA.pressed ? -2 : 0
-                                        Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
+                                    Image {
+                                        anchors.fill: parent
+                                        source: "qrc:/resources/img/ingr.png"
+                                        fillMode: Image.PreserveAspectCrop
+                                        asynchronous: true
                                     }
 
-                                    gradient: Gradient {
-                                        GradientStop { position: 0.0; color: selectFoodBtn.topColor }
-                                        GradientStop { position: 1.0; color: selectFoodBtn.bottomColor }
-                                    }
-
-                                    // 顶部高光带（弧面反光）
-                                    Rectangle {
-                                        anchors.top: parent.top
-                                        anchors.topMargin: 2
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: parent.width - 20
-                                        height: 2
-                                        radius: 1
-                                        gradient: Gradient {
-                                            orientation: Qt.Horizontal
-                                            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0) }
-                                            GradientStop { position: 0.5; color: "#FFFFFF" }
-                                            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0) }
-                                        }
-                                    }
-
-                                    // 底部暗影带
-                                    Rectangle {
-                                        anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: 2
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: parent.width - 20
-                                        height: 2
-                                        radius: 1
-                                        gradient: Gradient {
-                                            orientation: Qt.Horizontal
-                                            GradientStop { position: 0.0; color: Qt.rgba(0.024, 0.18, 0.11, 0) }
-                                            GradientStop { position: 0.5; color: "#064E3B" }
-                                            GradientStop { position: 1.0; color: Qt.rgba(0.024, 0.18, 0.11, 0) }
-                                        }
-                                        opacity: selectFoodMA.containsMouse ? 0.3 : 0.16
-                                        Behavior on opacity { NumberAnimation { duration: 140 } }
-                                    }
-
-                                    // 底部散光投影
-                                    Rectangle {
-                                        anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: -3
-                                        anchors.horizontalCenter: parent.horizontalCenter
-                                        width: parent.width - 14
-                                        height: 6
-                                        radius: 3
-                                        color: "#064E3B"
-                                        opacity: selectFoodMA.containsMouse ? 0.18 : 0.10
-                                        Behavior on opacity { NumberAnimation { duration: 140 } }
-                                    }
-
-                                    Row {
-                                        id: selectFoodRow
-                                        anchors.centerIn: parent
-                                        spacing: 10
-
-                                        Canvas {
-                                            id: foodIcon
-                                            width: 32
-                                            height: 32
-                                            anchors.verticalCenter: parent.verticalCenter
-                                            onPaint: {
-                                                var ctx = getContext("2d")
-                                                ctx.clearRect(0, 0, width, height)
-                                                ctx.strokeStyle = "#FFFFFF"
-                                                ctx.lineWidth = 2.5
-                                                ctx.lineCap = "round"
-                                                ctx.lineJoin = "round"
-                                                ctx.beginPath()
-                                                ctx.moveTo(16, 4)
-                                                ctx.lineTo(4, 15)
-                                                ctx.lineTo(8, 15)
-                                                ctx.lineTo(8, 25)
-                                                ctx.lineTo(24, 25)
-                                                ctx.lineTo(24, 15)
-                                                ctx.lineTo(28, 15)
-                                                ctx.closePath()
-                                                ctx.stroke()
-                                                ctx.beginPath()
-                                                ctx.moveTo(16, 19)
-                                                ctx.quadraticCurveTo(11, 16, 16, 11)
-                                                ctx.quadraticCurveTo(21, 16, 16, 19)
-                                                ctx.fillStyle = "#FFFFFF"
-                                                ctx.fill()
-                                            }
-                                            Component.onCompleted: requestPaint()
-                                        }
-
-                                        Text {
-                                            text: "选择食材"
-                                            font.pixelSize: 36
-                                            font.bold: true
-                                            color: "#FFFFFF"
-                                            anchors.verticalCenter: parent.verticalCenter
-                                        }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 114
+                                        text: "选择食材"
+                                        font.pixelSize: 30
+                                        font.bold: true
+                                        font.family: "PingFang SC"
+                                        color: "#166534"
                                     }
 
                                     MouseArea {
                                         id: selectFoodMA
                                         anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
                                         onClicked: {
                                             console.log("[WSP] 点击选择食材按钮，打开品类选择弹窗")
-                                            // 拉取食材品类全量并写入本地缓存 (~/.cache/smartscale/ingr_categories.json)
                                             CategoryService.fetchIngrCategories()
                                             root.categorySelectMode = true
                                             correctionDialog.open()
@@ -982,8 +825,8 @@ Item {
                             // 称重卡片区域（含浮标标签）
                             Item {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 240
-                                Layout.maximumHeight: 280
+                                Layout.preferredHeight: 227
+                                Layout.maximumHeight: 227
                                 Layout.topMargin: 2
 
                                
@@ -992,22 +835,37 @@ Item {
                                     id: weightCard
                                     anchors.fill: parent
                                     radius: 16
-                                    color: "#3B82F6"
+                                    color: "#195DD9"
 
+                                    // 左上角标签
+                                    Text {
+                                        id: weightLabel
+                                        text: "重量"
+                                        font.pixelSize: 28
+                                        font.family: "PingFang SC"
+                                        font.bold: true
+                                        color: "#FFFFFF"
+                                        anchors.left: parent.left
+                                        anchors.top: parent.top
+                                        anchors.leftMargin: 24
+                                        anchors.topMargin: 20
+                                    }
+
+                                    // 居中重量数值
                                     Row {
                                         anchors.centerIn: parent
                                         spacing: 6
                                         Text {
                                             text: WeightManager.netWeight.toFixed(2)
-                                            font.pixelSize: 148
+                                            font.pixelSize: 80
                                             font.bold: true
                                             color: "#FFFFFF"
-                                            font.family: "Monospace"
+                                            font.family: "PingFang SC"
                                         }
 
                                         Text {
                                             text: "/kg"
-                                            font.pixelSize: 48
+                                            font.pixelSize: 32
                                             font.bold: true
                                             color: "#FFFFFF"
                                             anchors.verticalCenter: parent.verticalCenter
@@ -1026,29 +884,42 @@ Item {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.fillHeight: false
-                        Layout.minimumHeight: 96
-                        Layout.maximumHeight: 104
-                        Layout.bottomMargin: 24  // 与屏幕底部保持安全距离，防止贴边
+                        Layout.minimumHeight: 192
+                        Layout.maximumHeight: 192
+                        //Layout.bottomMargin: 24  // 与屏幕底部保持安全距离，防止贴边
                         spacing: 16
 
                         // 归零按钮
-                        ActionButton {
+                        Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            text: "归零"
-                            enabled: !root.tareButtonLocked  // 冷却期禁用
-                            onClicked: {
-                                console.log("[WSP] 点击归零按钮")
-                                if (WeightManager.netWeight > 8.0) {
-                                    window.toast("无法归零", "error", 2000)
-                                    return
+                            color: root.tareButtonLocked ? "#CCCCCC" : "#FE9819"
+                            radius: 24
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "归零"
+                                color: "#FFFFFF"
+                                font.pixelSize: 50
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                enabled: !root.tareButtonLocked
+                                onClicked: {
+                                    console.log("[WSP] 点击归零按钮")
+                                    if (WeightManager.netWeight > 8.0) {
+                                        window.toast("无法归零", "error", 2000)
+                                        return
+                                    }
+                                    // 启动冷却期，防止连击
+                                    root.tareButtonLocked = true
+                                    tareCooldownTimer.restart()
+                                    root.lastScaleOp = "zero"
+                                    WeightManager.zero()
+                                    window.toast("归零执行中...", "info", 1500)
                                 }
-                                // 启动冷却期，防止连击
-                                root.tareButtonLocked = true
-                                tareCooldownTimer.restart()
-                                root.lastScaleOp = "zero"
-                                WeightManager.zero()
-                                window.toast("归零执行中...", "info", 1500)
                             }
                         }
 
@@ -1084,48 +955,60 @@ Item {
                             }
                         }
 
-                        // 保存按钮（蓝色主按钮）
-                        ActionButton {
+                        // 保存按钮
+                        Rectangle {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            text: "保存"
-                            primary: true
-                            onClicked: {
-                                // 保存需要登录：未登录则弹登录窗口，中止本次保存
-                                if (!BackendAuth.currentUser) {
-                                    console.warn("[WSP] 未登录，拦截保存操作，弹出登录窗口")
-                                    window.toast("请先登录后再保存", "warning", 2000)
-                                    window.showLogin()
-                                    return
+                            color: "#D42D0B"
+                            radius: 24
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "保存"
+                                color: "#FFFFFF"
+                                font.pixelSize: 50
+                                font.bold: true
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: {
+                                    // 保存需要登录：未登录则弹登录窗口，中止本次保存
+                                    if (!BackendAuth.currentUser) {
+                                        console.warn("[WSP] 未登录，拦截保存操作，弹出登录窗口")
+                                        window.toast("请先登录后再保存", "warning", 2000)
+                                        window.showLogin()
+                                        return
+                                    }
+                                    let currentWeight = WeightManager.netWeight
+                                    if (currentWeight <= 0.01) {
+                                        console.warn("重量不足，无法提交记录")
+                                        window.toast("重量不足，无法保存", "warning", 2000)
+                                        return
+                                    }
+                                    // 品类校验：必须先识别成功或手动选择有效食材
+                                    if (!PState.isValid(root.currentPrediction)) {
+                                        console.warn("[WSP] 品类无效，拦截保存:", root.currentPrediction)
+                                        window.toast("请先识别或选择食材", "warning", 2500)
+                                        return
+                                    }
+                                    // ingrId 校验：雪花 ID 必须有效，否则上传会落库孤儿记录
+                                    if (!root.currentIngrId || root.currentIngrId === "") {
+                                        console.warn("[WSP] ingrId 为空，拦截保存, prediction=", root.currentPrediction)
+                                        window.toast("食材数据异常，请重新选择", "warning", 2500)
+                                        return
+                                    }
+                                    let chineseLabel = Translator.translate(root.currentPrediction)
+                                    console.log(">> 手动保存，触发拍照:", chineseLabel, currentWeight.toFixed(2) + "kg",
+                                                "ingrId=", root.currentIngrId)
+                                    root.pendingManualSave = true
+                                    root.pendingSaveWeight = currentWeight
+                                    root.pendingSaveLabel = chineseLabel
+                                    root.pendingSaveIngrId = root.currentIngrId
+                                    root.pendingSaveAiDetected = root.currentAiDetected
+                                    // 传入当前已知品类标签，水印立即绘制，保存/上传独立执行
+                                    CameraController.captureVegetable(currentWeight, root.currentPrediction)
                                 }
-                                let currentWeight = WeightManager.netWeight
-                                if (currentWeight <= 0.01) {
-                                    console.warn("重量不足，无法提交记录")
-                                    window.toast("重量不足，无法保存", "warning", 2000)
-                                    return
-                                }
-                                // 品类校验：必须先识别成功或手动选择有效食材
-                                if (!PState.isValid(root.currentPrediction)) {
-                                    console.warn("[WSP] 品类无效，拦截保存:", root.currentPrediction)
-                                    window.toast("请先识别或选择食材", "warning", 2500)
-                                    return
-                                }
-                                // ingrId 校验：雪花 ID 必须有效，否则上传会落库孤儿记录
-                                if (!root.currentIngrId || root.currentIngrId === "") {
-                                    console.warn("[WSP] ingrId 为空，拦截保存, prediction=", root.currentPrediction)
-                                    window.toast("食材数据异常，请重新选择", "warning", 2500)
-                                    return
-                                }
-                                let chineseLabel = Translator.translate(root.currentPrediction)
-                                console.log(">> 手动保存，触发拍照:", chineseLabel, currentWeight.toFixed(2) + "kg",
-                                            "ingrId=", root.currentIngrId)
-                                root.pendingManualSave = true
-                                root.pendingSaveWeight = currentWeight
-                                root.pendingSaveLabel = chineseLabel
-                                root.pendingSaveIngrId = root.currentIngrId
-                                root.pendingSaveAiDetected = root.currentAiDetected
-                                // 传入当前已知品类标签，水印立即绘制，保存/上传独立执行
-                                CameraController.captureVegetable(currentWeight, root.currentPrediction)
                             }
                         }
                     }

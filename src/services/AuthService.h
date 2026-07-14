@@ -22,6 +22,7 @@ class AuthService : public QObject
     Q_PROPERTY(qint64 devId READ devId NOTIFY userInfoChanged)
     Q_PROPERTY(QString productId READ productId NOTIFY productIdChanged)
     Q_PROPERTY(QString avatarUrl READ avatarUrl NOTIFY avatarChanged)
+    Q_PROPERTY(QString custNm READ custNm NOTIFY custNmChanged)
     Q_PROPERTY(QString deviceSn READ deviceSn NOTIFY deviceSnChanged)
     Q_PROPERTY(bool rememberLogin READ rememberLogin WRITE setRememberLogin NOTIFY rememberLoginChanged)
     Q_PROPERTY(QString lastUserCode READ lastUserCode NOTIFY lastLoginChanged)
@@ -80,6 +81,8 @@ public:
     QString productId() const { return m_productId; }
     /** @brief 用户头像 URL（登录后由 /api/ems/User/by-id 返回） */
     QString avatarUrl() const { return m_avatarUrl; }
+    /** @brief 客户名称（登录后由 /api/ems/User/by-id 返回） */
+    QString custNm() const { return m_custNm; }
 
     // === 设备序列号（由 WeightSensor 注入）===
     void setDeviceSn(const QString &sn);
@@ -115,6 +118,7 @@ Q_SIGNALS:
     void modeChanged();
     void productIdChanged();
     void avatarChanged();
+    void custNmChanged();
     void deviceSnChanged();
     void rememberLoginChanged();
     void lastLoginChanged();
@@ -190,6 +194,7 @@ private:
     qint64 m_devId = 0;
     QString m_productId;          // 产品 ID（来自 /api/ems/Product/by-sn）
     QString m_avatarUrl;           // 用户头像 URL（来自 /api/ems/User/by-id）
+    QString m_custNm;              // 客户名称（来自 /api/ems/User/by-id）
     QString m_deviceSn;            // 从 WeightSensor 读取的真实设备 SN
 
     // === 记住登录 ===

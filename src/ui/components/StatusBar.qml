@@ -426,7 +426,7 @@ Rectangle {
     Text {
         anchors.centerIn: parent
         height: 60                              // 框铺满状态栏高度
-        text: "扬州耀阳"
+        text: BackendAuth.custNm || ""
         
         font.pixelSize: 40
         font.bold: true

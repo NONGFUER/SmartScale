@@ -337,6 +337,15 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
         } else {
             qDebug() << "[Auth] User/by-id 返回但 avatar 为空或未变化";
         }
+
+        QString custNm = src.value("custNm").toString();
+        if (!custNm.isEmpty() && custNm != m_custNm) {
+            m_custNm = custNm;
+            Q_EMIT custNmChanged();
+            qInfo() << "[Auth] User/by-id 成功: custNm=" << m_custNm;
+        } else {
+            qDebug() << "[Auth] User/by-id 返回但 custNm 为空或未变化";
+        }
         return;
     }
 
