@@ -14,6 +14,8 @@
 #include <QHttpMultiPart>
 #include <QBuffer>
 #include <QJsonDocument>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QJsonObject>
 #include <QCryptographicHash>
 #include <QPainterPath>
@@ -968,20 +970,48 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
     bool success = obj["success"].toBool(false);
     QString message = obj["message"].toString();
 
-    // ★ 兼容两种 data 格式：
-    //   新格式: { "data": { "code": "tudou", "name": "土豆" } }  → 取 code 作为 emsCd
-    //   旧格式: { "data": "POTATO" }                              → 直接取字符串
+    // ★ 兼容三种 data 格式：
+    //   新格式: { "data": [{ "code": "tudou", "name": "土豆" }, ...] }  → 数组，取首个 code
+    //   中间格式: { "data": { "code": "tudou", "name": "土豆" } }      → 单对象
+    //   旧格式: { "data": "POTATO" }                                   → 纯字符串
     QString label;
     QJsonValue dataVal = obj.value("data");
-    if (dataVal.isObject()) {
+    m_aiCandidateList.clear();          // 每次先清空
+
+    if (dataVal.isArray()) {
+        // ★ 新格式：[{code,name}, ...] 数组
+        QJsonArray arr = dataVal.toArray();
+        for (const auto &v : arr) {
+            if (v.isObject()) {
+                QJsonObject o = v.toObject();
+                QVariantMap m;
+                m["code"] = o.value("code").toString();
+                m["name"] = o.value("name").toString();
+                if (!m["code"].toString().isEmpty())
+                    m_aiCandidateList.append(m);
+            }
+        }
+        label = !m_aiCandidateList.isEmpty()
+            ? m_aiCandidateList.first().toMap()["code"].toString()
+            : PState::NONE;
+        qInfo() << "[在线AI] 新格式数组响应, candidates=" << m_aiCandidateList.size()
+                << " label=" << label;
+        Q_EMIT aiCandidateListChanged();
+
+    } else if (dataVal.isObject()) {
+        // 兼容中间格式单对象
         QJsonObject dataObj = dataVal.toObject();
         label = dataObj.value("code").toString();
         QString name = dataObj.value("name").toString();
-        qInfo() << "[在线AI] 新格式响应, code=" << label << "name=" << name;
+        qInfo() << "[在线AI] 单对象响应, code=" << label << "name=" << name;
+        Q_EMIT aiCandidateListChanged();
+
     } else {
+        // 兼容更早格式纯字符串
         label = dataVal.toString(PState::NONE);
         if (!label.isEmpty() && label != PState::NONE)
             qInfo() << "[在线AI] 旧格式响应, label=" << label;
+        Q_EMIT aiCandidateListChanged();
     }
 
     // 业务结果判定：success 为假、label 为空/NONE 均视为识别失败

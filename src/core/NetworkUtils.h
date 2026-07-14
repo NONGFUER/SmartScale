@@ -22,7 +22,7 @@ namespace NetworkUtils {
         inline constexpr const char *REFRESH_TOKEN  = "/api/Auth/refresh-token";
         // inline constexpr const char *WEIGHT_CREATE  = "/api/ems/WeightRecord/create";  // 已废弃，统一走 USER 域
         inline constexpr const char *CATEGORY_LIST  = "/api/ems/Ingr/paged";  // 品类列表
-        inline constexpr const char *AI_RECOGNIZE_FILE  = "/api/ems/AiDet/recognize-ingr/file";  // 识别食材
+        inline constexpr const char *AI_RECOGNIZE_FILE  = "/api/ems/AiDet/recognize-ingr/file-list";  // 识别食材
         inline constexpr const char *PRODUCT_BY_SN      = "/api/ems/Product/by-sn";  // 根据 SN 获取产品
         inline constexpr const char *USER_BY_ID          = "/api/ems/User/by-id";    // 获取当前登录用户信息（头像等）
 

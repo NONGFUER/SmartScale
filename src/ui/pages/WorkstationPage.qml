@@ -25,6 +25,7 @@ Item {
     property bool aiRecognizing: false       // 是否正在执行 AI 识别（控制"识别"按钮 loading 状态）
     property bool currentAiDetected: false   // 当前品类是否由 AI 识别接口得出 (上传 aiDet 字段用)
     property bool pendingSaveAiDetected: false // 手动保存待写入的 aiDetected
+    property var aiCandidates: CameraController.aiCandidateList  // AI 识别候选列表
 
     // ==========================================
     // 归零/去皮按钮防抖：冷却期内禁止重复点击
@@ -817,6 +818,7 @@ Item {
                                             console.log("[WSP] 点击选择食材按钮，打开品类选择弹窗")
                                             CategoryService.fetchIngrCategories()
                                             root.categorySelectMode = true
+                                            correctionDialog.recommendCandidates = root.aiCandidates
                                             correctionDialog.open()
                                         }
                                     }

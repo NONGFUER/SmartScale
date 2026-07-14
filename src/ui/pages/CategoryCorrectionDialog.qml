@@ -15,6 +15,9 @@ Dialog {
     signal labelConfirmed(string confirmedLabel, string ingrId)
     signal selectModeToggled(bool isActive)
 
+    // AI 候选列表（从 WorkstationPage 注入，用于"推荐"标签展示）
+    property var recommendCandidates: []
+
     x: (parent.width - width) / 2
     // 键盘弹出时上移避让，避免搜索框被键盘遮挡
     y: Math.min((parent.height - height) / 2,
@@ -370,6 +373,41 @@ Dialog {
                     id: topTagRow
                     spacing: 28
 
+                    // ★ 「推荐」标签 — AI 候选入口，仅当有候选数据时显示
+                    Item {
+                        width: recTxt.implicitWidth + 8
+                        height: 36
+                        visible: dialogRoot.recommendCandidates.length > 0
+
+                        Text {
+                            id: recTxt
+                            anchors.centerIn: parent
+                            text: "\u63A8\u8350"
+                            font.pixelSize: 22
+                            font.bold: (dialogRoot.selectedTopIndex === -999)
+                            color: (dialogRoot.selectedTopIndex === -999) ? "#F59E0B" : "#666666"
+                        }
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: recTxt.width * 0.7
+                            height: 3
+                            radius: 1.5
+                            visible: (dialogRoot.selectedTopIndex === -999)
+                            color: "#F59E0B"
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: {
+                                dialogRoot.selectedTopIndex = -999
+                                dialogRoot.selectedSubCateId = ""
+                                dialogRoot.selectedSubCateName = ""
+                                dialogRoot.selectedLabel = ""
+                            }
+                        }
+                    }
+
                     Repeater {
                         model: CategoryService.categoryTree
 
@@ -582,8 +620,72 @@ Dialog {
                 color: "#6B7280"
             }
 
+            // ====== AI 候选列表（推荐模式）======
+            ListView {
+                visible: dialogRoot.selectedTopIndex === -999 && dialogRoot.recommendCandidates.length > 0
+                anchors.fill: parent
+                clip: true
+                model: dialogRoot.recommendCandidates
+
+                delegate: Rectangle {
+                    width: parent ? parent.width : 0
+                    height: 64
+                    radius: 12
+                    color: recMouse.containsHover ? "#FEF3C7" : "#FFFFFF"
+                    border.width: dialogRoot.selectedLabel === modelData.code ? 2 : 1
+                    border.color: dialogRoot.selectedLabel === modelData.code ? "#F59E0B" : "#E5E7EB"
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 20
+                        anchors.rightMargin: 16
+                        spacing: 12
+
+                        // 序号圆圈
+                        Rectangle {
+                            width: 28; height: 28; radius: 14
+                            color: dialogRoot.selectedLabel === modelData.code ? "#F59E0B" : "#FEF3C7"
+                            visible: index < 3
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: (index + 1).toString()
+                                font.pixelSize: 14
+                                font.bold: true
+                                color: dialogRoot.selectedLabel === modelData.code ? "#FFFFFF" : "#D97706"
+                            }
+                        }
+
+                        Text {
+                            text: modelData.name || ""
+                            font.pixelSize: 22
+                            font.family: "PingFang SC"
+                            color: "#1E293B"
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        Text {
+                            text: modelData.code || ""
+                            font.pixelSize: 16
+                            font.family: "PingFang SC"
+                            color: "#9CA3AF"
+                        }
+                    }
+
+                    MouseArea {
+                        id: recMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: {
+                            dialogRoot.selectedLabel = modelData.code || ""
+                        }
+                    }
+                }
+            }
+
             GridView {
                 id: foodGridView
+                visible: dialogRoot.selectedTopIndex !== -999
                 anchors.fill: parent
                 cellWidth: (foodGridView.width - 40) / 5
                 cellHeight: 160

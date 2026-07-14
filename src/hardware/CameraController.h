@@ -40,6 +40,10 @@ public:
     bool aiOnlyMode() const { return m_aiOnlyMode; }
     void setAiOnlyMode(bool on) { if (m_aiOnlyMode != on) { m_aiOnlyMode = on; Q_EMIT aiOnlyModeChanged(); } }
 
+    // AI 候选列表（新接口返回多个候选时，供 QML 在选择食材弹窗中展示）
+    Q_PROPERTY(QVariantList aiCandidateList READ aiCandidateList NOTIFY aiCandidateListChanged)
+    QVariantList aiCandidateList() const { return m_aiCandidateList; }
+
     // 最后一次 AI 识别错误信息（QML 读取后弹 alert）
     Q_PROPERTY(QString lastAiError READ lastAiError NOTIFY lastAiErrorChanged)
     QString lastAiError() const { return m_lastAiError; }
@@ -57,6 +61,7 @@ Q_SIGNALS:
     void cameraStatusChanged(const QString &statusText);
     void aiOnlyModeChanged();
     void lastAiErrorChanged();
+    void aiCandidateListChanged();
 
 private Q_SLOTS:
     void readSubCameraData();
@@ -136,6 +141,7 @@ private:
     QString m_lastSavePath;        // 最后一次主摄保存路径（供独立 AI 识别上下文）
     bool m_aiOnlyMode = false;     // true=仅拍照用于AI识别，不画水印不落盘
     QString m_lastAiError;         // 最后一次 AI 识别错误信息
+    QVariantList m_aiCandidateList; // AI 候选列表 [{code,name}, ...]
 
     // === Token 刷新协调 ===
     bool m_refreshingToken = false;
