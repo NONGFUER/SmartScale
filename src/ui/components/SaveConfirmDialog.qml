@@ -47,8 +47,8 @@ Dialog {
 
     // Dialog 基础配置
     modal: true
-    width: 520
-    height: 420
+    width: 680
+    height: 630
     anchors.centerIn: parent
     padding: 0
     background: Rectangle {
@@ -89,12 +89,12 @@ Dialog {
         // ========== 标题区 ==========
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 56
+            Layout.preferredHeight: 76
 
             Text {
                 anchors.centerIn: parent
                 text: "确认保存"
-                font.pixelSize: 24
+                font.pixelSize: 30
                 font.bold: true
                 font.family: Theme.fontFamilyUi
                 color: "#1E293B"
@@ -127,14 +127,14 @@ Dialog {
                 // --- 食材 ---
                 Text {
                     text: "食材"
-                    font.pixelSize: 18
+                    font.pixelSize: 24
                     font.family: Theme.fontFamilyUi
-                    color: "#64748B"
+                    color: "#1B2955"
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                 }
                 Text {
                     text: root.ingredientName
-                    font.pixelSize: 20
+                    font.pixelSize: 24
                     font.bold: true
                     font.family: Theme.fontFamilyUi
                     color: "#1E293B"
@@ -145,14 +145,14 @@ Dialog {
                 // --- 重量 ---
                 Text {
                     text: "重量"
-                    font.pixelSize: 18
+                    font.pixelSize: 24
                     font.family: Theme.fontFamilyUi
-                    color: "#64748B"
+                    color: "#1B2955"
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                 }
                 Text {
                     text: root.weight.toFixed(2) + " kg"
-                    font.pixelSize: 20
+                    font.pixelSize: 24
                     font.bold: true
                     font.family: Theme.fontFamilyUi
                     color: "#1E293B"
@@ -162,14 +162,14 @@ Dialog {
                 // --- 单价 ---
                 Text {
                     text: "单价"
-                    font.pixelSize: 18
+                    font.pixelSize: 24
                     font.family: Theme.fontFamilyUi
-                    color: "#64748B"
+                    color: "#1B2955"
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                 }
                 Rectangle {
                     Layout.fillWidth: true
-                    height: 44
+                    height: 54
                     radius: 8
                     color: priceInput.activeFocus ? "#FFFFFF" : "#F8FAFC"
                     border.color: priceInput.activeFocus ? "#4361EE" : "#CBD5E1"
@@ -183,7 +183,7 @@ Dialog {
                         anchors.margins: 10
                         verticalAlignment: TextInput.AlignVCenter
                         text: "0"
-                        font.pixelSize: 20
+                        font.pixelSize: 24
                         font.family: Theme.fontFamilyUi
                         color: "#1E293B"
                         clip: true
@@ -202,9 +202,9 @@ Dialog {
                             anchors.verticalCenter: parent.verticalCenter
                             anchors.rightMargin: 10
                             text: "元 / 斤"
-                            font.pixelSize: 14
+                            font.pixelSize: 24
                             font.family: Theme.fontFamilyUi
-                            color: "#94A3B8"
+                            color: "#1E293B"
                         }
                     }
                 }
@@ -212,14 +212,14 @@ Dialog {
                 // --- 金额 ---
                 Text {
                     text: "金额"
-                    font.pixelSize: 18
+                    font.pixelSize: 24
                     font.family: Theme.fontFamilyUi
-                    color: "#64748B"
+                    color: "#1E293B"
                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
                 }
                 Text {
                     text: root._amount.toFixed(2) + " 元"
-                    font.pixelSize: 20
+                    font.pixelSize: 24
                     font.bold: true
                     font.family: Theme.fontFamilyUi
                     color: "#4361EE"
@@ -321,7 +321,7 @@ Dialog {
         // ========== 按钮区 ==========
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 72
+            Layout.preferredHeight: 90
 
             RowLayout {
                 anchors.centerIn: parent
@@ -329,21 +329,20 @@ Dialog {
 
                 // 取消按钮
                 Rectangle {
-                    width: 160
-                    height: 48
-                    radius: 10
-                    color: cancelMA.containsMouse ? "#F1F5F9" : "#FFFFFF"
-                    border.color: "#CBD5E1"
-                    border.width: 1
+                    width: 180
+                    height: 60
+                    radius: 15
+                    color: cancelMA.containsMouse ? "#FFFFFF" : "#ECF1FE"
+    
 
                     Behavior on color { ColorAnimation { duration: 120 } }
 
                     Text {
                         anchors.centerIn: parent
                         text: "取消"
-                        font.pixelSize: 18
-                        font.family: Theme.fontFamilyUi
-                        color: "#64748B"
+                        font.pixelSize: 24
+                        font.bold:true
+                        color: "#4649E5"
                     }
 
                     MouseArea {
@@ -360,23 +359,16 @@ Dialog {
                 // 确认保存按钮
                 Rectangle {
                     width: 180
-                    height: 48
-                    radius: 10
+                    height: 60
+                    radius: 15
 
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0; color: "#4361EE" }
-                        GradientStop { position: 1.0; color: "#3A0CA3" }
-                    }
-
-                    color: confirmMA.containsMouse ? "#3A56C4" : "#4361EE"
+                    color: confirmMA.containsMouse ? "#4649E5" : "#4361EE"
 
                     Text {
                         anchors.centerIn: parent
                         text: "确认保存"
-                        font.pixelSize: 18
+                        font.pixelSize: 24
                         font.bold: true
-                        font.family: Theme.fontFamilyUi
                         color: "#FFFFFF"
                     }
 
