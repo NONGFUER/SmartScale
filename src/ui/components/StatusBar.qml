@@ -81,232 +81,156 @@ Rectangle {
             }
         }
 
-        // 弹性占位：把右侧推到最右
+        // 弹性占位：把右侧图标组推到最右
         Item { Layout.fillWidth: true }
 
-        // ===== 右侧：日期时间 + 状态图标行 =====
+        // ===== 右侧：状态图标行 =====
         RowLayout {
-            spacing: 16
+            spacing: 12
             Layout.alignment: Qt.AlignVCenter
-            Layout.preferredHeight: root.height       // 占满栏高，垂直方向有明确基准
-            // 日期时间显示（上下两行）
-            ColumnLayout {
-                spacing: 2
-                Layout.alignment: Qt.AlignVCenter
 
-                Text {
-                    id: dateText
-                    text: ""
-                    font.pixelSize: 24
-                  
-                    font.bold: true
-                    color: "#FFFFFF"
-                }
+            // ---- 4G 信号图标 ----
+            Item {
+                width: 44; height: 44
+                visible: isCellularActive()
 
-                RowLayout {
-                    spacing: 8
+                Rectangle {
+                    id: cellBg
+                    anchors.fill: parent
+                    radius: 6
+                    color: "transparent"
 
-                    Text {
-                        id: weekText
-                        text: ""
-                        font.pixelSize: 24
-                       
-                        font.bold: true
-                        color: "#FFFFFF"
-                    }
-
-                    Text {
-                        id: timeText
-                        text: "00:00:00"
-                        font.pixelSize: 24
-                        font.family: "Monospace"
-                        font.bold: true
-                        color: "#FFFFFF"
+                    states: State {
+                        name: "hovered"; when: cellMouse.containsMouse
+                        PropertyChanges { target: cellBg; color: "#25FFFFFF" }
                     }
                 }
-            }
-
-    // ===== 智能网络状态图标（根据当前连接状态自动切换） =====
-    // 逻辑: 4G开→显示4G+信号 | WiFi开4G关→显示WiFi波形 | 都关→断网图标
-    Item {
-        id: networkIconArea
-        width: 44; height: 44
-        Layout.alignment: Qt.AlignVCenter
-
-        // ---- 4G 图标 (cellularEnabled 时显示) ----
-        Item {
-            id: icon4g
-            anchors.fill: parent
-            visible: isCellularActive() && NetworkManager.wifiStatus !== NetworkManager.Connected
-
-            Row {
-                anchors.centerIn: parent
-                spacing: 4
-
-                
 
                 Image {
+                    anchors.centerIn: parent
                     source: "qrc:/resources/img/Signal" + signalLevel(NetworkManager.cellularSignal) + ".png"
-                    width: 44; height: 44
+                    width: 40; height: 40
                     fillMode: Image.PreserveAspectFit
-                    anchors.verticalCenter: parent.verticalCenter
                 }
-            }
-        }
 
-        // ---- WiFi 图标 (WiFi已连接时显示) ----
-        Item {
-            id: iconWifi
-            anchors.fill: parent
-            visible: NetworkManager.wifiStatus === NetworkManager.Connected
-
-            Connections {
-                target: NetworkManager
-                function onWifiStatusChanged() {
-                    console.log("[StatusBar-DBG] onWifiStatusChanged:",
-                                "status=", NetworkManager.wifiStatus,
-                                "ssid='", NetworkManager.wifiSsid, "'",
-                                "signal=", NetworkManager.wifiSignal,
-                                "ip=", NetworkManager.wifiIpAddress,
-                                "iconWifi.visible=", iconWifi.visible)
+                MouseArea {
+                    id: cellMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.networkRequested()
                 }
             }
 
-            Image {
-                anchors.centerIn: parent
-                source: "qrc:/resources/img/Wifi" + signalLevel(NetworkManager.wifiSignal) + ".png"
+            // ---- WiFi 图标 ----
+            Item {
                 width: 44; height: 44
-                fillMode: Image.PreserveAspectFit
-            }
-        }
+                visible: NetworkManager.wifiStatus === NetworkManager.Connected
 
-        // ---- 断网图标 (都未连接时显示) ----
-        Item {
-            id: iconDisconnected
-            anchors.fill: parent
-            visible: !isCellularActive() && NetworkManager.wifiStatus !== NetworkManager.Connected
-
-            Image {
-                anchors.centerIn: parent
-                source: "qrc:/resources/img/Wifi0.png"
-                width: 40; height: 40
-                fillMode: Image.PreserveAspectFit
-            }
-        }
-
-        // 点击区域 — 统一打开网络弹窗
-        MouseArea {
-            id: networkMouse
-            anchors.fill: parent
-            hoverEnabled: true
-
-            property bool hovered: containsMouse
-
-            Rectangle {
-                anchors.fill: parent
-                radius: 4
-                color: networkMouse.hovered ? "#25FFFFFF" : "transparent"
-                visible: networkMouse.hovered
-            }
-
-            onClicked: {
-                console.log("[StatusBar] 网络图标被点击, 当前状态:"
-                            , "wifi=" + NetworkManager.wifiStatus
-                            , "4g=" + NetworkManager.cellularStatus)
-                root.networkRequested()
-            }
-        }
-    }
-
-            // 调试按钮（测试阶段，放在设置齿轮左侧）
-            // Item {
-            //     width: 46; height: 46
-            //     Layout.alignment: Qt.AlignVCenter
-
-            //         Rectangle {
-            //             id: debugBg
-            //             anchors.fill: parent
-            //             radius: 6
-            //             color: "transparent"
-
-            //             states: State {
-            //                 name: "hovered"; when: debugMouse.containsMouse
-            //                 PropertyChanges { target: debugBg; color: "#25FFFFFF" }
-            //             }
-            //         }
-
-            //         // 调试图标 (bug / 终端风格)
-            //         Canvas {
-            //             anchors.centerIn: parent
-            //             width: 30; height: 30
-            //             onPaint: {
-            //                 var ctx = getContext("2d")
-            //                 ctx.strokeStyle = "#FFFFFF"
-            //                 ctx.lineWidth = 2.6
-            //                 ctx.lineCap = "round"
-            //                 ctx.lineJoin = "round"
-            //                 var cx = width / 2, cy = height / 2
-            //                 ctx.strokeRect(cx - 11, cy - 7.5, 22, 15)
-            //                 ctx.beginPath()
-            //                 ctx.moveTo(cx - 6, cy + 4)
-            //                 ctx.lineTo(cx, cy + 4)
-            //                 ctx.moveTo(cx + 5, cy)
-            //                 ctx.lineTo(cx + 5, cy + 6)
-            //                 ctx.stroke()
-            //             }
-            //             Component.onCompleted: requestPaint()
-            //         }
-
-            //         MouseArea {
-            //             id: debugMouse
-            //             anchors.fill: parent
-            //             hoverEnabled: true
-            //             onClicked: {
-            //                 console.log("[StatusBar] 调试按钮被点击")
-            //                 root.debugRequested()
-            //             }
-            //         }
-            //     }
-
-                // 设置齿轮图标
-                Item {
-                    width: 44; height: 44
-                    Layout.alignment: Qt.AlignVCenter
-
-                    Rectangle {
-                        id: gearBg
-                        anchors.fill: parent
-                        radius: 6
-                        color: "transparent"
-
-                        states: State {
-                            name: "hovered"; when: setGearMouse.containsMouse
-                            PropertyChanges { target: gearBg; color: "#25FFFFFF" }
-                        }
-                    }
-
-                    Image {
-                        anchors.centerIn: parent
-                        source: "qrc:/resources/img/Setting.png"
-                        width: 30; height: 30
-                        fillMode: Image.PreserveAspectFit
-                    }
-
-                    MouseArea {
-                        id: setGearMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: {
-                            console.log("[StatusBar] 设置图标被点击")
-                            root.settingsRequested()
-                        }
+                Connections {
+                    target: NetworkManager
+                    function onWifiStatusChanged() {
+                        console.log("[StatusBar-DBG] onWifiStatusChanged:",
+                                    "status=", NetworkManager.wifiStatus,
+                                    "ssid='", NetworkManager.wifiSsid, "'",
+                                    "signal=", NetworkManager.wifiSignal)
                     }
                 }
+
+                Rectangle {
+                    id: wifiBg
+                    anchors.fill: parent
+                    radius: 6
+                    color: "transparent"
+
+                    states: State {
+                        name: "hovered"; when: wifiMouse.containsMouse
+                        PropertyChanges { target: wifiBg; color: "#25FFFFFF" }
+                    }
+                }
+
+                Image {
+                    anchors.centerIn: parent
+                    source: "qrc:/resources/img/Wifi" + signalLevel(NetworkManager.wifiSignal) + ".png"
+                    width: 40; height: 40
+                    fillMode: Image.PreserveAspectFit
+                }
+
+                MouseArea {
+                    id: wifiMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.networkRequested()
+                }
             }
+
+            // ---- 断网占位（都未连接时显示，避免布局塌缩） ----
+            Item {
+                width: 44; height: 44
+                visible: !isCellularActive() && NetworkManager.wifiStatus !== NetworkManager.Connected
+
+                Rectangle {
+                    id: discBg
+                    anchors.fill: parent
+                    radius: 6
+                    color: "transparent"
+
+                    states: State {
+                        name: "hovered"; when: discMouse.containsMouse
+                        PropertyChanges { target: discBg; color: "#25FFFFFF" }
+                    }
+                }
+
+                Image {
+                    anchors.centerIn: parent
+                    source: "qrc:/resources/img/Wifi0.png"
+                    width: 40; height: 40
+                    fillMode: Image.PreserveAspectFit
+                }
+
+                MouseArea {
+                    id: discMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.networkRequested()
+                }
+            }
+
+            // ---- 设置齿轮图标 ----
+            Item {
+                width: 44; height: 44
+
+                Rectangle {
+                    id: gearBg
+                    anchors.fill: parent
+                    radius: 6
+                    color: "transparent"
+
+                    states: State {
+                        name: "hovered"; when: setGearMouse.containsMouse
+                        PropertyChanges { target: gearBg; color: "#25FFFFFF" }
+                    }
+                }
+
+                Image {
+                    anchors.centerIn: parent
+                    source: "qrc:/resources/img/Setting.png"
+                    width: 40; height: 40
+                    fillMode: Image.PreserveAspectFit
+                }
+
+                MouseArea {
+                    id: setGearMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.settingsRequested()
+                }
+            }
+        }
     }
 
     // ===== 中间：大标题（独立锚定到 root 中心，不参与 RowLayout） =====
     Text {
+        id: titleText
         anchors.centerIn: parent
         height: 60                              // 框铺满状态栏高度
         text: BackendAuth.custNm || ""
@@ -316,9 +240,48 @@ Rectangle {
         font.family: "Alimama ShuHeiTi"
         color: "#FFFFFF"
         elide: Text.ElideRight
-        width: Math.min(implicitWidth, parent.width - 600)   // 极端情况也不溢出
+        width: 900                              // 固定占位宽度，避免字数变化影响布局
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter                // 文字在框内垂直居中
+    }
+
+    // ===== 日期时间显示（上下两行）— 锚定到大标题右侧 =====
+    ColumnLayout {
+        id: dateTimeCol
+        anchors.left: titleText.right
+        anchors.leftMargin: 30
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: 2
+
+        Text {
+            id: dateText
+            text: ""
+            font.pixelSize: 24
+            font.bold: true
+            color: "#FFFFFF"
+        }
+
+        Row {
+            spacing: 8
+            Layout.alignment: Qt.AlignHCenter
+
+            Text {
+                id: weekText
+                text: ""
+                font.pixelSize: 24
+                font.bold: true
+                color: "#FFFFFF"
+            }
+
+            Text {
+                id: timeText
+                text: "00:00:00"
+                font.pixelSize: 24
+                font.family: "Monospace"
+                font.bold: true
+                color: "#FFFFFF"
+            }
+        }
     }
 
     Timer {

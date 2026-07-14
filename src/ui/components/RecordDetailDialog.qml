@@ -47,7 +47,7 @@ Dialog {
         && dialogRoot.currentIndex < dialogRoot.recordList.length - 1
 
     x: (parent.width - width) / 2
-    y: (parent.height - height) / 2
+    y: ((parent.height - height) / 2)-50
 
     width: Math.min(parent.width * 0.92, 1280)
     height: Math.min(parent.height * 0.92, 860)
@@ -60,8 +60,8 @@ Dialog {
     // ---- 白色卡片背景 + 圆角 + 阴影（与搜索弹窗一致）----
     background: Rectangle {
         radius: 24
-        color: "#FFFFFF"
-        border.color: "#E2E8F0"
+        color: "#292929"
+        border.color: "#CFFFFFFF"
         border.width: 1
         layer.enabled: true
         layer.effect: MultiEffect {
@@ -98,7 +98,7 @@ Dialog {
                 font.family: Theme.fontFamilyTitle
                 font.pixelSize: 26
                 font.bold: true
-                color: Theme.colorTextPrimary
+                color: "#FFFFFF"
             }
 
             Item { Layout.fillWidth: true }
