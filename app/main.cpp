@@ -112,6 +112,34 @@ int main(int argc, char *argv[])
         }
     }
 
+    // 注册内嵌 DIN Bold 字体（用于称重数值显示）
+    {
+        QFile dinFile(":/resources/fonts/din-bold-2.ttf");
+        if (dinFile.open(QIODevice::ReadOnly)) {
+            const int dinId = QFontDatabase::addApplicationFontFromData(dinFile.readAll());
+            if (dinId == -1)
+                qWarning() << "[Main] DIN 字体加载失败，称重数值将 fallback 到系统默认字体";
+            else
+                qInfo() << "[Main] 已注册字体族:" << QFontDatabase::applicationFontFamilies(dinId);
+        } else {
+            qWarning() << "[Main] 无法打开 DIN 字体资源文件";
+        }
+    }
+
+    // 注册内嵌 Alimama ShuHeiTi 字体（用于状态栏大标题）
+    {
+        QFile titleFile(":/resources/fonts/AlimamaShuHeiTi-Bold.ttf");
+        if (titleFile.open(QIODevice::ReadOnly)) {
+            const int titleId = QFontDatabase::addApplicationFontFromData(titleFile.readAll());
+            if (titleId == -1)
+                qWarning() << "[Main] Alimama ShuHeiTi 字体加载失败，大标题将 fallback 到系统默认字体";
+            else
+                qInfo() << "[Main] 已注册字体族:" << QFontDatabase::applicationFontFamilies(titleId);
+        } else {
+            qWarning() << "[Main] 无法打开 Alimama ShuHeiTi 字体资源文件";
+        }
+    }
+
     // 全局默认字体：所有未显式指定 font.family 的 QML 文本都会继承此字体族
     QFont defaultFont("PingFang SC");
     defaultFont.setPixelSize(30);   // 默认字号兜底，可按需调整

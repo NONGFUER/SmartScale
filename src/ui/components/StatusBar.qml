@@ -430,6 +430,7 @@ Rectangle {
         
         font.pixelSize: 40
         font.bold: true
+        font.family: "Alimama ShuHeiTi"
         color: "#FFFFFF"
         elide: Text.ElideRight
         width: Math.min(implicitWidth, parent.width - 600)   // 极端情况也不溢出

@@ -132,6 +132,8 @@ qt_add_resources(appSmartScale "app_assets"
         resources/icon/eye-fill.png
         resources/icon/eye-close-fill.png
         resources/fonts/PingFangSC-Regular.ttf
+        resources/fonts/din-bold-2.ttf
+        resources/fonts/AlimamaShuHeiTi-Bold.ttf
 )
 
 set(ONNXRUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/onnxruntime-linux-aarch64-1.24.4")

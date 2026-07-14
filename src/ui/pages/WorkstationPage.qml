@@ -834,7 +834,7 @@ Item {
                                 Rectangle {  // weightCard
                                     id: weightCard
                                     anchors.fill: parent
-                                    radius: 16
+                                    radius: 24
                                     color: "#195DD9"
 
                                     // 左上角标签
@@ -860,7 +860,7 @@ Item {
                                             font.pixelSize: 80
                                             font.bold: true
                                             color: "#FFFFFF"
-                                            font.family: "PingFang SC"
+                                            font.family: "DIN"
                                         }
 
                                         Text {

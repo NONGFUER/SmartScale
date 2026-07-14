@@ -12,7 +12,7 @@
 SystemInfoService::SystemInfoService(QObject *parent)
     : QObject(parent)
 {
-    m_appVersion = QString("v%1_%2").arg(APP_VERSION_FULL).arg(APP_BUILD_DATE);
+    m_appVersion = QString("V%1_%2").arg(APP_VERSION_FULL).arg(APP_BUILD_DATE);
     parseLog();
     parseCpuInfo();
 
