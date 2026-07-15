@@ -1191,9 +1191,12 @@ Item {
     // ==========================================
 
     // 品类弹窗外部遮罩（替代 modal:true，避免 Qt 内部 modal 层遮挡虚拟键盘）
-    // z 低于 correctionDialog(50)，远低于 window 级 inputPanel(99)
+    // parent 提升到窗口 contentItem：撑满整窗，覆盖顶部 StatusBar 与底部 BottomStatusBar
+    // （原 anchors.fill: parent 仅覆盖 StackView 区域，盖不到状态栏）
+    // z:40 < 键盘(99)，不遮挡虚拟键盘；correctionDialog 浮于 overlay 层，在遮罩之上
     Rectangle {
         id: categoryOverlay
+        parent: window.contentItem
         anchors.fill: parent
         color: "#000000"
         opacity: correctionDialog.visible ? 0.5 : 0

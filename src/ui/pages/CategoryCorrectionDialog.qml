@@ -537,13 +537,13 @@ Dialog {
                         anchors.fill: parent
                         anchors.margins: 20
                         cellWidth: (foodGridView.width - 24) / 3
-                        cellHeight: 200
+                        cellHeight: 250
                         clip: true
                         model: dialogRoot.getDisplayItems()
 
                         delegate: Rectangle {
                             id: cardWrapper
-                            width: foodGridView.cellWidth - 12
+                            width: foodGridView.cellWidth - 18
                             height: cardColumn.implicitHeight + 20
                             radius: 16
                             color: "#FFFFFF"
@@ -587,7 +587,7 @@ Dialog {
                                 Rectangle {
                                     id: imageContainer
                                     width: parent.width
-                                    height: foodGridView.cellHeight - 70
+                                    height: foodGridView.cellHeight - 80
                                     // 关键细节3：内层圆角比外层(16)略小，视觉协调
                                     radius: 12
                                     // 关键细节4：极柔和浅灰底，与白底形成对比，统一灰/白底图

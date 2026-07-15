@@ -18,6 +18,7 @@
 - **弹窗遮罩**：`modal:true` + 显式 `Overlay.modal: Rectangle { color:"#80000000" }`，**删除 `dim:false`**。
   - 根因：从 LoginDialog 照搬"外部遮罩"策略，但 LoginDialog 用 Main.qml 手绘 `loginOverlay` 且为避让虚拟键盘才 `modal:false`，其他弹窗无此约束，勿照搬。
   - LoginDialog 例外：保留 `modal:false`+外部遮罩，勿动。已修复：CategoryCorrectionDialog、SystemInfoDialog。
+  - **CategoryCorrectionDialog 外部遮罩必须 reparent 到 `window.contentItem`**：其 `categoryOverlay` 声明在 WorkstationPage（StackView 内），原 `anchors.fill: parent` 只盖 StackView 中段，盖不到顶部 StatusBar/底部 BottomStatusBar（它们在 mainLayout 的独立垂直条带）。改 `parent: window.contentItem`+`anchors.fill: parent`+`z:40`（同 loginOverlay），即可撑满整窗且 z<键盘(99) 不挡虚拟键盘。注意：该弹窗不可改 `modal:true`——Qt modal 层 z 高于 InputPanel(99) 会遮键盘（2026-06-25 实测）。`window`（Main.qml ApplicationWindow id）跨文件可见。
 
 ## 雪花 ID 类型安全
 - 字段（ingrId/emsId/cateId/recoId/userId/productId/custId/devId）一律 `qint64`/`QString`，禁止 `toInt()`。
