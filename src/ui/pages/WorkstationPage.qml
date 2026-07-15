@@ -25,7 +25,7 @@ Item {
     property bool aiRecognizing: false       // 是否正在执行 AI 识别（控制"识别"按钮 loading 状态）
     property bool currentAiDetected: false   // 当前品类是否由 AI 识别接口得出 (上传 aiDet 字段用)
     property bool pendingSaveAiDetected: false // 手动保存待写入的 aiDetected
-    property double pendingUnitPrice: 0         // 手动保存待写入的单价（元/斤）
+    property double pendingUnitPrice: 0         // 手动保存待写入的单价（元/斤，上传时 ×2 转 元/kg）
     property var aiCandidates: CameraController.aiCandidateList  // AI 识别候选列表
 
     // ==========================================
@@ -1057,7 +1057,7 @@ Item {
                     console.log(">> 图片保存完成，立即执行记录:", label, w.toFixed(2) + "kg", "单价:", up)
                     // 清空当前选中，让 historyChanged 触发时自动选中刚写入的最新记录
                     root.currentDetailRecord = null
-                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId, root.pendingSaveAiDetected, up)
+                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId, root.pendingSaveAiDetected, up * 2)   // 元/斤 → 元/kg
                     clearIngredientCard()
                 } else {
                     // 自动模式：照片已保存，独立触发 AI 识别（不阻塞保存管线）

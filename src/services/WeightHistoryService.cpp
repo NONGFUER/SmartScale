@@ -109,7 +109,7 @@ void WeightHistoryService::addRecord(double weight,
     model.ingrId = ingrId;
     model.aiDetected = aiDetected;
     model.unitPrice = unitPrice;
-    model.amount = unitPrice * weight * 2;  // 金额 = 单价 × 重量(kg) × 2(转斤)
+    model.amount = unitPrice * weight;  // 金额 = 单价(元/kg) × 重量(kg)，unitPrice 已由调用方转为元/kg
 
     // 1. 写入数据库
     int newId = m_repo->insert(model);

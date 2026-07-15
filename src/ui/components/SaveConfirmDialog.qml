@@ -30,7 +30,7 @@ Dialog {
     // ===== 接口 =====
     function openDialog(name, w, dupInfo) {
         root.ingredientName = name
-        root.weight = w
+        root.weight = Number(w.toFixed(2))          // 统一2位小数，保证显示与计算完全一致
         root._unitPrice = 0
         root._amount = 0
         priceInput.text = "0"
@@ -244,9 +244,9 @@ Dialog {
                                     decimals: 2; bottom: 0; notation: DoubleValidator.StandardNotation
                                 }
                                 onTextEdited: {
-                                    var val = parseFloat(text) || 0
+                                    var val = Number((parseFloat(text) || 0).toFixed(2))
                                     root._unitPrice = val
-                                    root._amount = val * root.weight * 2
+                                    root._amount = Number((val * root.weight * 2).toFixed(2))
                                 }
 
                                 // placeholder 效果

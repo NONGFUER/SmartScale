@@ -19,14 +19,13 @@ Dialog {
     property var recommendCandidates: []
 
     x: (parent.width - width) / 2
-    // 键盘弹出时上移避让，避免搜索框被键盘遮挡
     y: Math.min((parent.height - height) / 2,
                 parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
-    width: Math.min(parent.width * 0.92, 1200)
-    height: Math.min(parent.height * 0.88, 780)
+    width: Math.min(parent.width * 0.95, 1280)
+    height: Math.min(parent.height * 0.90, 820)
     padding: 0
 
-    // 非模态 + 外部遮罩（Main.qml 的 categoryOverlay），避免 Qt 内部 modal 层遮挡虚拟键盘
+    // 非模态 + 外部遮罩（Main.qml 的 categoryOverlay）
     modal: false
     closePolicy: Popup.NoAutoClose
     title: ""
@@ -34,27 +33,29 @@ Dialog {
 
     background: Rectangle {
         color: "#FFFFFF"
-        radius: 48
+        radius: 24
         layer.enabled: true
         layer.effect: MultiEffect {
             shadowEnabled: true
             shadowColor: "#000000"
-            shadowBlur: 30
+            shadowBlur: 48
             shadowOpacity: 0.25
-            shadowVerticalOffset: 10
+            shadowVerticalOffset: 12
         }
     }
 
+    // ===== 状态属性 =====
     property string selectedLabel: ""
     property string selectedIngrId: ""
-    property int activeCategoryIndex: 0   // categorySelectMode 下的单级分类下标
-    property int selectedTopIndex: -1     // 一级品类下标（categoryTree）
-    property string selectedSubCateId: "" // 二级品类 cateId
-    property string selectedSubCateName: "" // 二级品类 cateNm
-    property string searchText: ""        // 当前搜索关键词
-    property var searchResults: []        // 搜索结果列表（跨分类）
+    property int activeCategoryIndex: 0
+    property int selectedTopIndex: 0          // 一级品类下标（categoryTree）
+    property string selectedSubCateId: ""     // 二级品类 cateId
+    property string selectedSubCateName: ""   // 二级品类 cateNm
+    property string searchText: ""
+    property var searchResults: []
 
-    // 扁平化分类列表为食材项数组
+
+    // ===== 数据方法 =====
     function flattenItems(cats) {
         var all = []
         for (var c = 0; c < cats.length; c++) {
@@ -65,56 +66,44 @@ Dialog {
         return all
     }
 
-    // 当前模式下全部食材项
     function getAllItems() {
         if (dialogRoot.categorySelectMode)
             return dialogRoot.flattenItems(UserIngredientService.categories)
         return dialogRoot.flattenItems(CategoryService.categories)
     }
 
-    // 本地搜索：跨全部食材按 cn/en 模糊匹配
     function doSearch(key) {
         var trimmed = key.trim()
-        if (trimmed === "") {
-            dialogRoot.searchResults = []
-            return
-        }
+        if (trimmed === "") { dialogRoot.searchResults = []; return }
         var lower = trimmed.toLowerCase()
         var results = []
         var items = dialogRoot.getAllItems()
         for (var i = 0; i < items.length; i++) {
             var cn = (items[i].cn || "").toLowerCase()
             var en = (items[i].en || "").toLowerCase()
-            if (cn.indexOf(lower) >= 0 || en.indexOf(lower) >= 0) {
+            if (cn.indexOf(lower) >= 0 || en.indexOf(lower) >= 0)
                 results.push(items[i])
-            }
         }
         dialogRoot.searchResults = results
-        console.log("[CategoryDialog] 搜索 '", trimmed, "' 命中", results.length, "项")
     }
 
-    // 在 categoryTree 中定位某个二级 cateId 对应的一级下标与二级 id
     function findCategoryTreePosition(cateId) {
         var tree = CategoryService.categoryTree
         for (var i = 0; i < tree.length; i++) {
             var children = tree[i].children || []
             for (var j = 0; j < children.length; j++) {
-                if (String(children[j].cateId) === String(cateId)) {
+                if (String(children[j].cateId) === String(cateId))
                     return { topIndex: i, subCateId: String(cateId) }
-                }
             }
         }
         return null
     }
 
-    // GridView 当前应显示的数据源
     function getDisplayItems() {
         if (dialogRoot.searchText.trim() !== "")
             return dialogRoot.searchResults
-        // 食材选择/纠错模式统一按二级品类 cateId 过滤
         var subId = dialogRoot.selectedSubCateId
-        if (subId === "")
-            return []
+        if (subId === "") return []
         var all = dialogRoot.getAllItems()
         var filtered = []
         for (var i = 0; i < all.length; i++) {
@@ -124,7 +113,6 @@ Dialog {
         return filtered
     }
 
-    // 根据当前选中标签取完整食材项
     function getSelectedItem() {
         var items = dialogRoot.getAllItems()
         for (var i = 0; i < items.length; i++) {
@@ -134,32 +122,41 @@ Dialog {
         return null
     }
 
+    // 获取当前一级分类的子列表
+    function getCurrentChildren() {
+        if (dialogRoot.selectedTopIndex >= 0 && dialogRoot.selectedTopIndex < CategoryService.categoryTree.length)
+            return CategoryService.categoryTree[dialogRoot.selectedTopIndex].children || []
+        return []
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
 
-        // ====== 顶部栏：返回 + 搜索框 + 搜索按钮 ======
-        RowLayout {
+        // ============================================================
+        //  顶部导航栏：返回(左) + 标题(中) + 搜索框(右)
+        // ============================================================
+        Item {
             Layout.fillWidth: true
-            Layout.topMargin: 24
-            Layout.leftMargin: 22
-            Layout.rightMargin: 22
-            spacing: 12
+            Layout.preferredHeight: 64
 
-            // 返回按钮
+            // ← 返回按钮（左）
             Rectangle {
-                Layout.preferredWidth: 40
-                Layout.preferredHeight: 40
+                id: backBtn
+                x: 16
+                anchors.verticalCenter: parent.verticalCenter
+                width: 80; height: 40
                 radius: 10
-                color: backMouse.containsMouse ? "#EEF1F6" : "transparent"
+                color: backMouse.containsMouse ? "#F1F5F9" : "transparent"
 
-                Text {
+                RowLayout {
                     anchors.centerIn: parent
-                    text: "\u2039"
-                    font.pixelSize: 38
-                    font.bold: true
-                    color: "#333333"
+                    spacing: 4
+
+                    Text { text: "\u2190"; font.pixelSize: 30; color: "#4361EE"; font.bold: true }
+                    Text { text: "返回"; font.pixelSize: 30; color: "#4361EE" }
                 }
+
                 MouseArea {
                     id: backMouse
                     anchors.fill: parent
@@ -168,735 +165,489 @@ Dialog {
                 }
             }
 
-            // 搜索胶囊容器
+            // 标题（居中）
+            Text {
+                anchors.centerIn: parent
+                text: "选择食材"
+                font.pixelSize: 30
+                font.bold: true
+                font.family: Theme.fontFamilyUi
+                color: "#1E293B"
+            }
+
+            // 搜索框（右侧）
             Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 52
-                radius: 21
-                color: "#FFFFFF"
-                border.color: catSearchInput.activeFocus ? "#4361EE" : "#E8EAED"
+                id: searchBox
+                anchors.right: parent.right
+                anchors.rightMargin: 16
+                anchors.verticalCenter: parent.verticalCenter
+                width: 280; height: 44
+                radius: 16
+                color: "#F8FAFC"
+                border.color: catSearchInput.activeFocus ? "#4361EE" : "#E2E8F0"
                 border.width: 1
+
+                Behavior on border.color { ColorAnimation { duration: 150 } }
 
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 16
-                    anchors.rightMargin: 4
+                    anchors.rightMargin: 14
+                    anchors.topMargin: 4
+                    anchors.bottomMargin: 4
                     spacing: 8
 
-                    // // 搜索图标
-                    // Text {
-                    //     font.pixelSize: 18
-                    //     color: "#9CA3AF"
-                    //     Layout.preferredWidth: 20
-                    //     Layout.preferredHeight: 38
-                    //     Layout.alignment: Qt.AlignVCenter
-                    //     verticalAlignment: Text.AlignVCenter
-                    //     text: "\u{1F50D}"
-                    // }
+                    Text {
+                        text: "\uD83D\uDD0D"
+                        font.pixelSize: 18
+                        color: "#94A3B8"
+                        Layout.alignment: Qt.AlignVCenter
+                    }
 
                     TextField {
                         id: catSearchInput
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 42
-                        placeholderText: "请输入搜索内容"
-                        font.pixelSize: 24
-                        color: "#1B263B"
+                        Layout.preferredHeight: 36
+                        placeholderText: "搜索食材名称"
+                        font.pixelSize: 17
+                        font.family: Theme.fontFamilyUi
+                        color: "#1E293B"
                         verticalAlignment: TextInput.AlignVCenter
-                        inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhPreferLowercase  // 不自动大写首字母
                         background: null
-                        // 实时本地搜索：输入即过滤
                         onTextChanged: {
                             dialogRoot.searchText = text
                             dialogRoot.doSearch(text)
                         }
-                        // 清空快捷
                         Keys.onEscapePressed: {
-                            text = ""
-                            dialogRoot.searchText = ""
-                            dialogRoot.searchResults = []
-                        }
-                    }
-
-                    Rectangle {
-                        Layout.preferredWidth: 80
-                        Layout.preferredHeight: 42
-                        radius: 17
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: "#3B82F6" }
-                            GradientStop { position: 1.0; color: "#1D4ED8" }
-                        }
-
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: 4
-
-                            // 搜索图标（放大镜）
-                            Item {
-                                width: 18; height: 18
-                                anchors.verticalCenter: parent.verticalCenter
-                                Canvas {
-                                    anchors.fill: parent
-                                    onPaint: {
-                                        var ctx = getContext("2d")
-                                        ctx.clearRect(0, 0, width, height)
-                                        ctx.strokeStyle = "#FFFFFF"
-                                        ctx.lineWidth = 2
-                                        ctx.lineCap = "round"
-                                        // 圆圈部分（放大镜头部）
-                                        ctx.beginPath()
-                                        ctx.arc(7, 7, 5.5, 0, Math.PI * 2)
-                                        ctx.stroke()
-                                        // 手柄部分
-                                        ctx.beginPath()
-                                        ctx.moveTo(11, 11)
-                                        ctx.lineTo(16.5, 16.5)
-                                        ctx.stroke()
-                                    }
-                                    Component.onCompleted: requestPaint()
-                                }
-                            }
-
-                            Text {
-                                text: "搜索"
-                                font.pixelSize: 22
-                                font.bold: true
-                                color: "white"
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            // 已是实时搜索，点击按钮只做焦点切换 + 日志
-                            onClicked: {
-                                dialogRoot.searchText = catSearchInput.text
-                                dialogRoot.doSearch(catSearchInput.text)
-                                console.log("[CategoryDialog] 搜索:", catSearchInput.text)
-                            }
-                        }
-                    }
-
-                    // 添加食材按钮（与搜索按钮同风格）
-                    Rectangle {
-                        Layout.preferredWidth: 120
-                        Layout.preferredHeight: 42
-                        radius: 17
-                        gradient: Gradient {
-                            orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0; color: "#3B82F6" }
-                            GradientStop { position: 1.0; color: "#1D4ED8" }
-                        }
-
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: 4
-
-                            // 添加图标（圆圈内 +）
-                            Rectangle {
-                                width: 18; height: 18; radius: 9
-                                color: "transparent"
-                                border.width: 2
-                                border.color: "#FFFFFF"
-                                anchors.verticalCenter: parent.verticalCenter
-
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: "+"
-                                    font.pixelSize: 14
-                                    font.bold: true
-                                    color: "#FFFFFF"
-                                }
-                            }
-
-                            Text {
-                                text: "添加食材"
-                                font.pixelSize: 20
-                                font.bold: true
-                                color: "white"
-                                anchors.verticalCenter: parent.verticalCenter
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: addIngredientDialog.open()
+                            text = ""; dialogRoot.searchText = ""; dialogRoot.searchResults = []
                         }
                     }
                 }
             }
         }
 
-        // ====== 分类标签 + 品类网格容器（统一背景，与顶部栏产生隔离感）=====
+        // 底部分隔线
         Rectangle {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            Layout.leftMargin: 22
-            Layout.rightMargin: 22
-            Layout.topMargin: 16
-            color: '#F2F7FF'
-            radius: 16
-            border.color: "#E2E8F0"
-            border.width: 1
-            clip: true
-
-            ColumnLayout {
-                anchors.fill: parent
-                spacing: 0
-
-        // ====== 一级品类标签行（食材纠错模式，使用 categoryTree 两级）=====
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.topMargin: 12
-            Layout.leftMargin: 22
-            Layout.rightMargin: 22
-            Layout.bottomMargin: 4
-            spacing: 12
-            visible: dialogRoot.searchText.trim() === ""
-
-            Text {
-                text: "一级:"
-                font.pixelSize: 18
-                color: "#999999"
-                verticalAlignment: Text.AlignVCenter
-            }
-
-            Flickable {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 36
-                contentWidth: topTagRow.width
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-
-                Row {
-                    id: topTagRow
-                    spacing: 28
-
-                    // ★ 「推荐」标签 — AI 候选入口，仅当有候选数据时显示
-                    Item {
-                        width: recTxt.implicitWidth + 8
-                        height: 36
-                        visible: dialogRoot.recommendCandidates.length > 0
-
-                        Text {
-                            id: recTxt
-                            anchors.centerIn: parent
-                            text: "\u63A8\u8350"
-                            font.pixelSize: 22
-                            font.bold: (dialogRoot.selectedTopIndex === -999)
-                            color: (dialogRoot.selectedTopIndex === -999) ? "#F59E0B" : "#666666"
-                        }
-                        Rectangle {
-                            anchors.bottom: parent.bottom
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            width: recTxt.width * 0.7
-                            height: 3
-                            radius: 1.5
-                            visible: (dialogRoot.selectedTopIndex === -999)
-                            color: "#F59E0B"
-                        }
-                        MouseArea {
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            onClicked: {
-                                dialogRoot.selectedTopIndex = -999
-                                dialogRoot.selectedSubCateId = ""
-                                dialogRoot.selectedSubCateName = ""
-                                dialogRoot.selectedLabel = ""
-                            }
-                        }
-                    }
-
-                    Repeater {
-                        model: CategoryService.categoryTree
-
-                        Item {
-                            width: tTxt.implicitWidth + 4
-                            height: 36
-
-                            Text {
-                                id: tTxt
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: modelData.cateNm || ""
-                                font.pixelSize: 22
-                                font.bold: (dialogRoot.selectedTopIndex === index)
-                                color: (dialogRoot.selectedTopIndex === index) ? "#4361EE" : "#666666"
-                            }
-
-                            Rectangle {
-                                anchors.bottom: parent.bottom
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: tTxt.width * 0.7
-                                height: 3
-                                visible: (dialogRoot.selectedTopIndex === index)
-                                radius: 1.5
-                                color: "#4361EE"
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    dialogRoot.selectedTopIndex = index
-                                    // 选中一级后默认选中第一个二级分类
-                                    var kids = modelData.children || []
-                                    if (kids.length > 0) {
-                                        dialogRoot.selectedSubCateId = String(kids[0].cateId)
-                                        dialogRoot.selectedSubCateName = (kids[0].cateNm !== undefined) ? kids[0].cateNm : ""
-                                    } else {
-                                        dialogRoot.selectedSubCateId = ""
-                                        dialogRoot.selectedSubCateName = ""
-                                    }
-                                    dialogRoot.selectedLabel = ""
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            height: 1
+            color: "#EEF2F6"
         }
 
-        // ====== 二级品类标签行（食材纠错模式）=====
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.leftMargin: 22
-            Layout.rightMargin: 22
-            Layout.bottomMargin: 10
-            spacing: 12
-            visible: dialogRoot.selectedTopIndex >= 0
-                      && dialogRoot.searchText.trim() === ""
-
-            Text {
-                text: "二级:"
-                font.pixelSize: 18
-                color: "#999999"
-                verticalAlignment: Text.AlignVCenter
-            }
-
-            Flickable {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 36
-                contentWidth: subTagRow.width
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-
-                Row {
-                    id: subTagRow
-                    spacing: 28
-
-                    Repeater {
-                        model: (dialogRoot.selectedTopIndex >= 0
-                                && dialogRoot.selectedTopIndex < CategoryService.categoryTree.length)
-                               ? (CategoryService.categoryTree[dialogRoot.selectedTopIndex].children || [])
-                               : []
-
-                        Item {
-                            width: sTxt.implicitWidth + 4
-                            height: 36
-
-                            Text {
-                                id: sTxt
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: modelData.cateNm || ""
-                                property string myId: (modelData.cateId !== undefined) ? String(modelData.cateId) : ""
-                                font.pixelSize: 22
-                                font.bold: (dialogRoot.selectedSubCateId === sTxt.myId)
-                                color: (dialogRoot.selectedSubCateId === sTxt.myId) ? "#4361EE" : "#666666"
-                            }
-
-                            Rectangle {
-                                anchors.bottom: parent.bottom
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: sTxt.width * 0.7
-                                height: 3
-                                visible: (dialogRoot.selectedSubCateId === sTxt.myId)
-                                radius: 1.5
-                                color: "#4361EE"
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    dialogRoot.selectedSubCateId = sTxt.myId
-                                    dialogRoot.selectedSubCateName = (modelData.cateNm !== undefined) ? modelData.cateNm : ""
-                                    dialogRoot.selectedLabel = ""
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ====== 分类标签行（categorySelectMode 单级，保留旧逻辑）=====
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.topMargin: 12
-            Layout.leftMargin: 22
-            Layout.rightMargin: 22
-            Layout.bottomMargin: 12
-            spacing: 28
-            visible: false
-
-            Flickable {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 36
-                contentWidth: catTagRow.width
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-
-                Row {
-                    id: catTagRow
-                    spacing: 28
-
-                    Repeater {
-                        model: UserIngredientService.categories
-
-                        Item {
-                            width: catLabelTxt.implicitWidth + 4
-                            height: 36
-
-                            Text {
-                                id: catLabelTxt
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: modelData.cateNm || modelData.name
-                                font.pixelSize: 24
-                                font.bold: (dialogRoot.activeCategoryIndex === index)
-                                color: (dialogRoot.activeCategoryIndex === index) ? "#4361EE" : "#666666"
-                            }
-
-                            Rectangle {
-                                anchors.bottom: parent.bottom
-                                anchors.horizontalCenter: parent.horizontalCenter
-                                width: catLabelTxt.width * 0.7
-                                height: 3
-                                visible: (dialogRoot.activeCategoryIndex === index)
-                                radius: 1.5
-                                color: "#4361EE"
-                            }
-
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: {
-                                    dialogRoot.activeCategoryIndex = index
-                                    dialogRoot.selectedLabel = ""
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // ====== 品类网格区域 ======
+        // ============================================================
+        //  三栏主体区域
+        // ============================================================
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: 16
-            clip: true
 
-            // 搜索无结果时的空状态提示
-            Text {
-                anchors.centerIn: parent
-                visible: dialogRoot.searchText.trim() !== "" && dialogRoot.searchResults.length === 0
-                text: "未找到匹配的食材"
-                font.pixelSize: 24
-                color: "#9CA3AF"
-            }
-
-            // 搜索结果计数提示（顶部居中）
-            Text {
-                anchors.top: parent.top
-                anchors.horizontalCenter: parent.horizontalCenter
-                visible: dialogRoot.searchText.trim() !== "" && dialogRoot.searchResults.length > 0
-                text: "找到 " + dialogRoot.searchResults.length + " 个结果"
-                font.pixelSize: 16
-                color: "#6B7280"
-            }
-
-            // ====== AI 候选列表（推荐模式）======
-            ListView {
-                visible: dialogRoot.selectedTopIndex === -999 && dialogRoot.recommendCandidates.length > 0
+            RowLayout {
                 anchors.fill: parent
-                clip: true
-                model: dialogRoot.recommendCandidates
+                spacing: 12
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                anchors.topMargin: 16
+                anchors.bottomMargin: 16
 
-                delegate: Rectangle {
-                    width: parent ? parent.width : 0
-                    height: 64
-                    radius: 12
-                    color: recMouse.containsHover ? "#FEF3C7" : "#FFFFFF"
-                    border.width: dialogRoot.selectedLabel === modelData.code ? 2 : 1
-                    border.color: dialogRoot.selectedLabel === modelData.code ? "#F59E0B" : "#E5E7EB"
+                // =============================================
+                //  左侧栏：一级分类导航
+                // =============================================
+                Rectangle {
+                    Layout.preferredWidth: 280
+                    Layout.fillHeight: true
+                    radius: 16
+                    color: "#FFFFFF"
+                    
+                    // 阴影面板
+                    layer.enabled: true
+                    layer.effect: MultiEffect {
+                        shadowEnabled: true
+                        shadowColor: "#002A75"
+                        shadowOpacity: 0.1
+                        shadowBlur: 1.0
+                        shadowHorizontalOffset: 0
+                        shadowVerticalOffset: 0
+                    }
 
-                    RowLayout {
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 20
-                        anchors.rightMargin: 16
-                        spacing: 12
+                        spacing: 4
+                        anchors.topMargin: 8
+                        anchors.bottomMargin: 8
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
 
-                        // 序号圆圈
+                        Repeater {
+                            model: CategoryService.categoryTree
+
+                            // 分类项容器
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 56
+                                radius: 8
+                                color: dialogRoot.selectedTopIndex === index
+                                        ? "#EFF6FF" : (catMouse.containsHover ? "#F5F7FA" : "transparent")
+
+                                Behavior on color { ColorAnimation { duration: 120 } }
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 12
+                                    anchors.rightMargin: 12
+                                    spacing: 10
+
+                                    Text {
+                                        text: modelData.cateNm || ""
+                                        font.pixelSize: 22
+                                        font.family: Theme.fontFamilyUi
+                                        font.bold: (dialogRoot.selectedTopIndex === index)
+                                        color: dialogRoot.selectedTopIndex === index ? "#4361EE" : "#475569"
+                                        Layout.fillWidth: true
+                                        elide: Text.ElideRight
+                                        Layout.alignment: Qt.AlignVCenter
+                                    }
+
+                                    // 右箭头（选中时显示）
+                                    Text {
+                                        text: "\u25B6"
+                                        font.pixelSize: 22
+                                        color: dialogRoot.selectedTopIndex === index ? "#4361EE" : "#CBD5E1"
+                                        visible: dialogRoot.selectedTopIndex === index
+                                        Layout.alignment: Qt.AlignVCenter
+                                    }
+                                }
+
+                                MouseArea {
+                                    id: catMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: {
+                                        dialogRoot.selectedTopIndex = index
+                                        var kids = modelData.children || []
+                                        if (kids.length > 0) {
+                                            dialogRoot.selectedSubCateId = String(kids[0].cateId)
+                                            dialogRoot.selectedSubCateName = kids[0].cateNm || ""
+                                        } else {
+                                            dialogRoot.selectedSubCateId = ""
+                                            dialogRoot.selectedSubCateName = ""
+                                        }
+                                        dialogRoot.selectedLabel = ""
+                                    }
+                                }
+                            }
+                        } // Repeater 一级分类
+
+                        Item { Layout.preferredHeight: 8 } // 间距
+
+                        // 分隔线
                         Rectangle {
-                            width: 28; height: 28; radius: 14
-                            color: dialogRoot.selectedLabel === modelData.code ? "#F59E0B" : "#FEF3C7"
-                            visible: index < 3
+                            Layout.fillWidth: true
+                            height: 1
+                            color: "#EEF2F6"
+                            Layout.leftMargin: 8
+                            Layout.rightMargin: 8
+                        }
 
-                            Text {
-                                anchors.centerIn: parent
-                                text: (index + 1).toString()
-                                font.pixelSize: 14
-                                font.bold: true
-                                color: dialogRoot.selectedLabel === modelData.code ? "#FFFFFF" : "#D97706"
+                    } // ColumnLayout 左侧内容
+                } // Rectangle 左侧栏
+
+                // =============================================
+                //  中间面板：二级品类列表
+                // =============================================
+                Rectangle {
+                    Layout.preferredWidth: 170
+                    Layout.fillHeight: true
+                    radius: 16
+                    color: "#FFFFFF"
+                    
+                    visible: dialogRoot.selectedTopIndex >= 0
+                              && dialogRoot.searchText.trim() === ""
+
+                    // 阴影面板
+                    layer.enabled: true
+                    layer.effect: MultiEffect {
+                        shadowEnabled: true
+                        shadowColor: "#002A75"
+                        shadowOpacity: 0.1
+                        shadowBlur: 1.0
+                        shadowHorizontalOffset: 0
+                        shadowVerticalOffset: 0
+                    }
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        spacing: 2
+                        anchors.topMargin: 12
+                        anchors.bottomMargin: 12
+                        anchors.leftMargin: 12
+                        anchors.rightMargin: 12
+
+                        // 面板标题
+                        Text {
+                            text: dialogRoot.getCurrentChildren().length > 0
+                                  ? CategoryService.categoryTree[dialogRoot.selectedTopIndex].cateNm || ""
+                                  : ""
+                            font.pixelSize: 24
+                            font.bold: true
+                            font.family: Theme.fontFamilyUi
+                            color: "#64748B"
+                            Layout.bottomMargin: 6
+                        }
+
+                        // 二级品类列表
+                        ListView {
+                            id: subList
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Math.min(subList.count * 44 + (subList.count - 1) * 2, 480)
+                            clip: true
+                            model: dialogRoot.getCurrentChildren()
+
+                            delegate: Rectangle {
+                                id: subDelegate
+                                width: subList.width
+                                height: 48
+                                radius: 8
+                                property string sMyId: (modelData.cateId !== undefined)
+                                                        ? String(modelData.cateId) : ""
+                                color: dialogRoot.selectedSubCateId === sMyId
+                                        ? "#EFF6FF" : "transparent"
+
+                                Behavior on color { ColorAnimation { duration: 120 } }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData.cateNm || ""
+                                    font.pixelSize: 20
+                                    font.family: Theme.fontFamilyUi
+                                    font.bold: (dialogRoot.selectedSubCateId === subDelegate.sMyId)
+                                    color: dialogRoot.selectedSubCateId === subDelegate.sMyId
+                                           ? "#4361EE" : "#475569"
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    onClicked: {
+                                        dialogRoot.selectedSubCateId
+                                            = (modelData.cateId !== undefined)
+                                              ? String(modelData.cateId) : ""
+                                        dialogRoot.selectedSubCateName = modelData.cateNm || ""
+                                        dialogRoot.selectedLabel = ""
+                                    }
+                                }
                             }
                         }
+                    } // ColumnLayout 中间内容
+                } // Rectangle 中间面板
 
-                        Text {
-                            text: modelData.name || ""
-                            font.pixelSize: 22
-                            font.family: "PingFang SC"
-                            color: "#1E293B"
-                            elide: Text.ElideRight
-                            Layout.fillWidth: true
-                        }
-                        Text {
-                            text: modelData.code || ""
-                            font.pixelSize: 16
-                            font.family: "PingFang SC"
-                            color: "#9CA3AF"
-                        }
-                    }
-
-                    MouseArea {
-                        id: recMouse
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        onClicked: {
-                            dialogRoot.selectedLabel = modelData.code || ""
-                        }
-                    }
-                }
-            }
-
-            GridView {
-                id: foodGridView
-                visible: dialogRoot.selectedTopIndex !== -999
-                anchors.fill: parent
-                cellWidth: (foodGridView.width - 40) / 5
-                cellHeight: 160
-                clip: true
-
-                model: dialogRoot.getDisplayItems()
-
-                delegate: Rectangle {
-                    id: foodCard
-                    width: foodGridView.cellWidth - 16
-                    height: foodGridView.cellHeight - 16
-                    radius: 12
+                // =============================================
+                //  右侧区域：食材网格 / 推荐列表 / 搜索结果
+                // =============================================
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    radius: 16
+                    color: "#FFFFFF"
+                    border.color: "#EEF2F6"
                     border.width: 1
-                    border.color: dialogRoot.selectedLabel === modelData.en
-                                  ? "#4361EE" : (cardHover.containsHover ? "#9DBBFF" : "#E2E8F0")
-                    Behavior on border.color { ColorAnimation { duration: 140 } }
+                    clip: true
 
-                    // 卡片背景垂直渐变（顶亮底暗，模拟顶光照射）
-                    gradient: Gradient {
-                        GradientStop {
-                            position: 0.0
-                            color: dialogRoot.selectedLabel === modelData.en ? "#F0F6FF" : "#FFFFFF"
-                            Behavior on color { ColorAnimation { duration: 140 } }
-                        }
-                        GradientStop {
-                            position: 1.0
-                            color: dialogRoot.selectedLabel === modelData.en ? "#D6E4FF" : "#EEF2F7"
-                            Behavior on color { ColorAnimation { duration: 140 } }
-                        }
-                    }
-
-                    // hover 时卡片轻微上浮
-                    transform: Translate {
-                        id: cardLift
-                        y: cardHover.containsHover ? -2 : 0
-                        Behavior on y { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
-                    }
-
-                    // 顶部高光带（水平渐变：两端透明→中间白，呈弧面反光）
-                    Rectangle {
-                        anchors.top: parent.top
-                        anchors.topMargin: 2
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        width: parent.width - 20
-                        height: 2
-                        radius: 1
-                        gradient: Gradient {
-                            orientation: Qt.Horizontal
-                            GradientStop { position: 0.0; color: Qt.rgba(1, 1, 1, 0) }
-                            GradientStop { position: 0.5; color: "#FFFFFF" }
-                            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0) }
-                        }
-                        opacity: (cardHover.containsHover
-                                  || dialogRoot.selectedLabel === modelData.en) ? 1.0 : 0.7
-                        Behavior on opacity { NumberAnimation { duration: 140 } }
-                    }
-
-                    // 底部暗影带（水平渐变：两端透明→中间深）
-                    Rectangle {
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 2
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        width: parent.width - 20
-                        height: 2
-                        radius: 1
-                        gradient: Gradient {
-                            orientation: Qt.Horizontal
-                            GradientStop { position: 0.0; color: Qt.rgba(0.106, 0.149, 0.231, 0) }
-                            GradientStop { position: 0.5; color: "#1B263B" }
-                            GradientStop { position: 1.0; color: Qt.rgba(0.106, 0.149, 0.231, 0) }
-                        }
-                        opacity: (cardHover.containsHover
-                                  || dialogRoot.selectedLabel === modelData.en) ? 0.3 : 0.16
-                        Behavior on opacity { NumberAnimation { duration: 140 } }
-                    }
-
-                    // 底部散光投影（随卡片上浮显现，模拟悬浮阴影）
-                    Rectangle {
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: -3
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        width: parent.width - 14
-                        height: 6
-                        radius: 3
-                        color: "#1B263B"
-                        opacity: cardHover.containsHover ? 0.18
-                                : (dialogRoot.selectedLabel === modelData.en ? 0.10 : 0.04)
-                        Behavior on opacity { NumberAnimation { duration: 140 } }
-                    }
-
-                    // 食材图片：本地缓存优先，缺失/损坏时回退远程 URL
-                    Image {
-                        id: foodImg
-                        anchors.fill: parent
-                        fillMode: Image.PreserveAspectCrop
-                        cache: false
-                        source: {
-                            var local = modelData.imgLocal || ""
-                            if (local !== "")
-                                return "file://" + local
-                            return modelData.img || ""
-                        }
-                        onStatusChanged: {
-                            // 本地缓存缺失或损坏时回退到远程 URL
-                            if (status === Image.Error && modelData.imgLocal && modelData.img)
-                                source = modelData.img
-                        }
-                    }
-
-                    // 图片就绪时的整体暗化遮罩，保证文字可读
-                    Rectangle {
-                        anchors.fill: parent
-                        color: "#000000"
-                        opacity: foodImg.status === Image.Ready ? 0.28 : 0
-                        visible: foodImg.status === Image.Ready
-                    }
-
-                    Text {
+                    // 搜索无结果空状态
+                    Column {
                         anchors.centerIn: parent
-                        text: modelData.cn
-                        font.pixelSize: 28
-                        font.family: "Microsoft YaHei"
-                        font.bold: true
-                        color: foodImg.status === Image.Ready ? "#FFFFFF"
-                               : (dialogRoot.selectedLabel === modelData.en ? "#4361EE" : "#1B263B")
-                    }
+                        spacing: 12
+                        visible: dialogRoot.searchText.trim() !== "" && dialogRoot.searchResults.length === 0
 
-                    HoverHandler { id: cardHover }
-
-                    TapHandler {
-                        onTapped: {
-                            dialogRoot.selectedLabel = modelData.en
-                            dialogRoot.selectedIngrId = (modelData.id !== undefined) ? String(modelData.id) : ""
+                        Text { text: "\uD83D\uDD0D"; font.pixelSize: 48; anchors.horizontalCenter: parent.horizontalCenter }
+                        Text {
+                            text: "未找到匹配的食材"
+                            font.pixelSize: 24
+                            font.family: Theme.fontFamilyUi
+                            color: "#94A3B8"
+                            anchors.horizontalCenter: parent.horizontalCenter
                         }
                     }
-                }
-            }
-        }
-            }
-        }
 
-        // ====== 底部按钮栏 ======
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignRight
-            Layout.leftMargin: 22
-            Layout.rightMargin: 22
-            Layout.bottomMargin: 22
-            Layout.topMargin: 14
-            spacing: 14
+                    // ===== AI 推荐模式（ListView）=====
+                    ListView {
+                        visible: dialogRoot.selectedTopIndex === -999 && dialogRoot.recommendCandidates.length > 0
+                                  && dialogRoot.searchText.trim() === ""
+                        anchors.fill: parent
+                        anchors.margins: 16
+                        clip: true
+                        model: dialogRoot.recommendCandidates
 
-            // 取消按钮
-            Rectangle {
-                Layout.preferredWidth: 110
-                Layout.preferredHeight: 52
-                radius: 10
-                color: cancelHover.hovered ? "#F1F5F9" : "#FFFFFF"
-                border.color: "#D1D5DB"
-                border.width: 1.2
+                        delegate: Rectangle {
+                            width: parent ? parent.width : 0
+                            height: 72
+                            radius: 14
+                            color: recMouse.containsHover ? "#FEF3C7" : "#FFFBEB"
+                            border.width: dialogRoot.selectedLabel === modelData.code ? 2 : 1
+                            border.color: dialogRoot.selectedLabel === modelData.code ? "#F59E0B" : "#FDE68A"
 
-                HoverHandler { id: cancelHover }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 20
+                                anchors.rightMargin: 16
+                                spacing: 14
 
-                Text {
-                    anchors.centerIn: parent
-                    text: "取消"
-                    font.pixelSize: 24
-                    font.bold: true
-                    color: "#64748B"
-                }
+                                // 序号徽章
+                                Rectangle {
+                                    width: 32; height: 32; radius: 16
+                                    color: dialogRoot.selectedLabel === modelData.code ? "#F59E0B" : "#FCD34D"
+                                    visible: index < 3
 
-                TapHandler { onTapped: dialogRoot.reject() }
-            }
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: (index + 1).toString()
+                                        font.pixelSize: 15
+                                        font.bold: true
+                                        color: dialogRoot.selectedLabel === modelData.code ? "#FFFFFF" : "#92400E"
+                                    }
+                                }
 
-            // 确认按钮
-            Rectangle {
-                Layout.preferredWidth: 110
-                Layout.preferredHeight: 52
-                radius: 10
-                enabled: dialogRoot.selectedLabel !== ""
-                opacity: enabled ? 1.0 : 0.45
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: dialogRoot.selectedLabel === "" ? "#94A3B8" : "#4361EE" }
-                    GradientStop { position: 1.0; color: dialogRoot.selectedLabel === "" ? "#CBD5E1" : "#6BA3FF" }
-                }
+                                Text {
+                                    text: modelData.name || ""
+                                    font.pixelSize: 20
+                                    font.family: Theme.fontFamilyUi
+                                    color: "#1E293B"
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    text: modelData.code || ""
+                                    font.pixelSize: 15
+                                    color: "#9CA3AF"
+                                }
+                            }
 
-                Text {
-                    anchors.centerIn: parent
-                    text: "确认"
-                    font.pixelSize: 24
-                    font.bold: true
-                    color: "white"
-                }
+                            MouseArea {
+                                id: recMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: { dialogRoot.selectedLabel = modelData.code || "" }
+                            }
+                        }
+                    }
 
-                TapHandler {
-                    enabled: dialogRoot.selectedLabel !== ""
-                    onTapped: dialogRoot.accept()
-                }
-            }
-        }
-    }
+                    // ===== 食材网格（GridView）=====
+                    GridView {
+                        id: foodGridView
+                        visible: dialogRoot.selectedTopIndex !== -999
+                                  || dialogRoot.searchText.trim() !== ""
+                        anchors.fill: parent
+                        anchors.margins: 20
+                        cellWidth: (foodGridView.width - 24) / 3
+                        cellHeight: 160
+                        clip: true
+                        model: dialogRoot.getDisplayItems()
 
+                        delegate: Rectangle {
+                            id: cardWrapper
+                            width: foodGridView.cellWidth - 12
+                            height: cardColumn.implicitHeight + 16
+                            radius: 16
+                            color: "#FFFFFF"
+                            clip: true
+
+                            // 选中边框：包裹整张卡片（图片+文字）
+                            border.width: dialogRoot.selectedLabel === modelData.en ? 2 : 0
+                            border.color: dialogRoot.selectedLabel === modelData.en ? "#4361EE" : "transparent"
+                            Behavior on border.color { ColorAnimation { duration: 120 } }
+                            Behavior on border.width { NumberAnimation { duration: 120 } }
+
+                            // 阴影覆盖整个卡片（图片+文字）
+                            layer.enabled: true
+                            layer.effect: MultiEffect {
+                                shadowEnabled: true
+                                shadowColor: "#002A75"
+                                shadowOpacity: 0.1
+                                shadowBlur: 1.0
+                                shadowHorizontalOffset: 0
+                                shadowVerticalOffset: 0
+                            }
+
+                            HoverHandler { id: foodHover }
+
+                            TapHandler {
+                                onTapped: {
+                                    dialogRoot.selectedLabel = modelData.en
+                                    dialogRoot.selectedIngrId = (modelData.id !== undefined) ? String(modelData.id) : ""
+                                }
+                            }
+
+                            Column {
+                                id: cardColumn
+                                anchors.fill: parent
+                                anchors.margins: 8
+                                spacing: 8
+
+                                // 图片卡片
+                                Rectangle {
+                                    width: parent.width
+                                    height: foodGridView.cellHeight - 62
+                                    radius: 14
+                                    color: foodHover.hovered ? "#F8FAFC" : "#F5F7FA"
+                                    clip: true
+
+                                    Image {
+                                        id: foodImg
+                                        anchors.fill: parent
+                                        fillMode: Image.PreserveAspectFit
+                                        cache: false
+                                        source: {
+                                            var local = modelData.imgLocal || ""
+                                            if (local !== "") return "file://" + local
+                                            return modelData.img || ""
+                                        }
+                                        onStatusChanged: {
+                                            if (status === Image.Error && modelData.imgLocal && modelData.img)
+                                                source = modelData.img
+                                        }
+                                    }
+
+                                    // 无图片时的文字回退
+                                    Text {
+                                        anchors.centerIn: parent
+                                        visible: foodImg.status !== Image.Ready
+                                        text: modelData.cn
+                                        font.pixelSize: 22
+                                        font.bold: true
+                                        font.family: Theme.fontFamilyUi
+                                        color: "#94A3B8"
+                                    }
+                                }
+
+                                // 名称文字
+                                Text {
+                                    width: parent.width
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: modelData.cn
+                                    font.pixelSize: 24
+                                    font.family: Theme.fontFamilyUi
+                                    font.bold: (dialogRoot.selectedLabel === modelData.en)
+                                    color: dialogRoot.selectedLabel === modelData.en ? "#4361EE" : "#374151"
+                                    elide: Text.ElideMiddle
+                                }
+                            }
+                        } // Rectangle cardWrapper
+                    }
+                } // Rectangle 右侧网格区
+            } // RowLayout 三栏
+        } // Item 主体
+    } // ColumnLayout 根
+
+    // ============================================================
+    //  生命周期 & 信号处理
+    // ============================================================
     onOpened: {
         selectedLabel = ""
         selectedIngrId = ""
         activeCategoryIndex = 0
-        selectedTopIndex = -1
+        selectedTopIndex = 0
         selectedSubCateId = ""
         selectedSubCateName = ""
         catSearchInput.text = ""
-        searchText = ""            // 清空搜索状态
+        searchText = ""
         searchResults = []
 
         if (categorySelectMode) {
@@ -911,14 +662,10 @@ Dialog {
     onAccepted: {
         var m = dialogRoot.getSelectedItem()
         if (m) {
-            console.log("[CategoryDialog] \u9009\u4E2D\u98DF\u6750 \u25B6"
+            console.log("[CategoryDialog] 选中食材 \u25B6"
                         + " ingrId=" + (m.id !== undefined ? m.id : "")
                         + " ingrCd=" + (m.en !== undefined ? m.en : "")
-                        + " ingrNm=" + (m.cn !== undefined ? m.cn : "")
-                        + " cateId=" + (m.cateId !== undefined ? m.cateId : "")
-                        + " emsId="  + (m.emsId !== undefined ? m.emsId : "")
-                        + " emsCd="  + (m.emsCd !== undefined ? m.emsCd : "")
-                        + " cateNm=" + (m.cateNm !== undefined ? m.cateNm : ""))
+                        + " ingrNm=" + (m.cn !== undefined ? m.cn : ""))
         }
 
         let correctLabel = selectedLabel
@@ -941,10 +688,7 @@ Dialog {
     // ==========================================
     AddIngredientDialog {
         id: addIngredientDialog
-        onConfirmed: function(name, categoryIndex, categoryId) {
-            // 此信号已不再由确认按钮触发（改用 C++ API），
-            // 保留兼容以防外部手动调用 confirmed
-        }
+        onConfirmed: function(name, categoryIndex, categoryId) {}
     }
 
     Connections {
@@ -970,18 +714,16 @@ Dialog {
         }
     }
 
-    // 两级品类树加载完成后，默认选中第一个一级 + 第一个二级，避免网格空白
     Connections {
         target: CategoryService
         function onCategoryTreeChanged() {
-            if (dialogRoot.selectedTopIndex >= 0
-                || CategoryService.categoryTree.length === 0)
+            if (dialogRoot.selectedTopIndex >= 0 || CategoryService.categoryTree.length === 0)
                 return
             dialogRoot.selectedTopIndex = 0
             var kids = CategoryService.categoryTree[0].children || []
             if (kids.length > 0) {
                 dialogRoot.selectedSubCateId = String(kids[0].cateId)
-                dialogRoot.selectedSubCateName = (kids[0].cateNm !== undefined) ? kids[0].cateNm : ""
+                dialogRoot.selectedSubCateName = kids[0].cateNm || ""
             }
         }
     }
