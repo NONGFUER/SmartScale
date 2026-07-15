@@ -12,6 +12,7 @@
 #include <QNetworkReply>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QUuid>
 #include <QHttpMultiPart>
 #include <QHttpPart>
@@ -389,8 +390,130 @@ void WeightHistoryService::revokeRecord(int recordId, qint64 custId, const QStri
     }
 }
 
+// ============================================================
+//  云端分页查询称重记录 (POST /api/user/WeightRecord/paged)
+// ============================================================
+
+void WeightHistoryService::fetchPagedRecords(int page, int pageSize,
+                                             const QString &keyword,
+                                             const QString &dateS,
+                                             const QString &dateE)
+{
+    if (!m_authService || m_authService->token().isEmpty()) {
+        qWarning() << "[WHS] 分页查询失败：未登录或无 Token";
+        Q_EMIT pagedRecordsReady(false, 0, {}, QStringLiteral("未登录，请先登录"));
+        return;
+    }
+
+    // 缓存参数供 401 重试使用
+    m_pendingPagedParams.page = page;
+    m_pendingPagedParams.pageSize = pageSize;
+    m_pendingPagedParams.keyword = keyword;
+    m_pendingPagedParams.dateS = dateS;
+    m_pendingPagedParams.dateE = dateE;
+
+    QString token = m_authService->token();
+    QNetworkRequest request = NetworkUtils::createUserApiRequest(
+        NetworkUtils::Api::USER_WEIGHT_PAGED, token);
+
+    // 构造请求体 — custId/devId/userId 从 AuthService 取（雪花 ID 用 qint64）
+    QJsonObject bodyObj;
+    bodyObj["page"] = page;
+    bodyObj["pageSize"] = pageSize;
+    bodyObj["keyword"] = keyword;
+    bodyObj["custId"] = m_authService ? QJsonValue(qlonglong(m_authService->custId())) : QJsonValue(qlonglong(0));
+    bodyObj["userId"] = m_authService ? QJsonValue(qlonglong(m_authService->userId())) : QJsonValue(qlonglong(0));
+    bodyObj["devId"] = m_authService ? QJsonValue(qlonglong(m_authService->devId())) : QJsonValue(qlonglong(0));
+    bodyObj["ingrId"] = QJsonValue(qlonglong(0));  // 0 = 不按食材过滤
+    bodyObj["del"] = QStringLiteral("All");
+    bodyObj["dateS"] = dateS;
+    bodyObj["dateE"] = dateE;
+
+    QByteArray bodyData = QJsonDocument(bodyObj).toJson(QJsonDocument::Compact);
+    qInfo() << "[WHS] 分页查询称重记录 page=" << page << "pageSize=" << pageSize
+            << "keyword=" << keyword;
+
+    QNetworkReply *reply = m_networkMgr->post(request, bodyData);
+    reply->setProperty("_isPaged", true);
+}
+
 void WeightHistoryService::onCloudReply(QNetworkReply *reply)
 {
+    // === 处理分页查询回复 ===
+    if (reply->property("_isPaged").isValid() && reply->property("_isPaged").toBool()) {
+        if (reply->error() != QNetworkReply::NoError) {
+            // 401/403 自动刷新重试
+            if (AuthService::isUnauthorizedError(reply) && m_authService) {
+                qDebug() << "[WHS] 分页查询收到 401，触发 Token 刷新并重试";
+                if (!m_refreshingToken && !m_authService->isRefreshingToken()) {
+                    m_refreshingToken = true;
+                    m_authService->requestTokenRefresh();
+                }
+                reply->deleteLater();
+                return;
+            }
+            qWarning() << "[WHS] 分页查询失败:" << reply->errorString()
+                       << "HTTP=" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+            Q_EMIT pagedRecordsReady(false, 0, {}, reply->errorString());
+            reply->deleteLater();
+            return;
+        }
+
+        QByteArray data = reply->readAll();
+        QJsonParseError parseErr;
+        QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
+        if (parseErr.error != QJsonParseError::NoError) {
+            qCritical() << "[WHS] 分页查询响应 JSON 解析错误:" << parseErr.errorString();
+            Q_EMIT pagedRecordsReady(false, 0, {}, QStringLiteral("响应解析失败"));
+            reply->deleteLater();
+            return;
+        }
+
+        QJsonObject rootObj = doc.object();
+        QJsonObject dataObj = rootObj.value("data").toObject();
+
+        // total 是字符串，兼容 string/number
+        int total = 0;
+        QJsonValue totalVal = dataObj.value("total");
+        if (totalVal.isString())
+            total = totalVal.toString().toInt();
+        else
+            total = totalVal.toInt();
+
+        // 解析 items 数组 — 雪花 ID 字段全部保持 QString，禁止 toInt()
+        QVariantList items;
+        QJsonArray itemsArr = dataObj.value("items").toArray();
+        for (const QJsonValue &v : itemsArr) {
+            QJsonObject obj = v.toObject();
+            QVariantMap item;
+            // 雪花 ID 字段：用 toVariant().toString() 兼容 string/number
+            item["recoId"] = obj.value("recoId").toVariant().toString();
+            item["ingrId"] = obj.value("ingrId").toVariant().toString();
+            item["custId"] = obj.value("custId").toVariant().toString();
+            item["devId"] = obj.value("devId").toVariant().toString();
+            item["userId"] = obj.value("userId").toVariant().toString();
+            // 业务字段
+            item["val"] = obj.value("val").toVariant().toString();
+            item["price"] = obj.value("price").toVariant().toString();
+            item["amount"] = obj.value("amount").toVariant().toString();
+            item["aiDet"] = obj.value("aiDet").toBool(false);
+            item["img"] = obj.value("img").toVariant().toString();
+            item["crdAt"] = obj.value("crdAt").toVariant().toString();
+            item["del"] = obj.value("del").toBool(false);
+            item["bill"] = obj.value("bill").toVariant().toString();
+            item["custNm"] = obj.value("custNm").toVariant().toString();
+            item["ingrNm"] = obj.value("ingrNm").toVariant().toString();
+            item["userNm"] = obj.value("userNm").toVariant().toString();
+            item["devNm"] = obj.value("devNm").toVariant().toString();
+            items.append(item);
+        }
+
+        qInfo() << "[WHS] 分页查询成功: total=" << total << "返回条数=" << items.size();
+        Q_EMIT pagedRecordsReady(true, total, items, QString());
+        reply->deleteLater();
+        return;
+    }
+
     // === 处理撤回回复 ===
     if (reply->property("_isRevoke").isValid() && reply->property("_isRevoke").toBool()) {
         int localRecordId = reply->property("_localRecordId").toInt();
@@ -560,16 +683,28 @@ void WeightHistoryService::onTokenReadyForUpload()
 {
     m_refreshingToken = false;
 
-    if (m_pendingUploadQueue.isEmpty()) {
-        qDebug() << "[WHS] Token 刷新完成，无待上传记录";
-        return;
+    // 重发待上传记录
+    if (!m_pendingUploadQueue.isEmpty()) {
+        qDebug() << "[WHS] Token 刷新成功，开始重发" << m_pendingUploadQueue.size() << "条待上传记录";
+        while (!m_pendingUploadQueue.isEmpty()) {
+            WeightRecord r = m_pendingUploadQueue.dequeue();
+            uploadSingleRecord(r);
+        }
     }
 
-    qDebug() << "[WHS] Token 刷新成功，开始重发" << m_pendingUploadQueue.size() << "条待上传记录";
+    // 重发待重试的分页查询（如果有缓存的有效参数）
+    if (m_pendingPagedParams.pageSize > 0) {
+        qDebug() << "[WHS] Token 刷新成功，重发分页查询 page=" << m_pendingPagedParams.page;
+        fetchPagedRecords(m_pendingPagedParams.page,
+                          m_pendingPagedParams.pageSize,
+                          m_pendingPagedParams.keyword,
+                          m_pendingPagedParams.dateS,
+                          m_pendingPagedParams.dateE);
+        m_pendingPagedParams = {};  // 清空缓存
+    }
 
-    while (!m_pendingUploadQueue.isEmpty()) {
-        WeightRecord r = m_pendingUploadQueue.dequeue();
-        uploadSingleRecord(r);
+    if (m_pendingUploadQueue.isEmpty() && m_pendingPagedParams.pageSize == 0) {
+        qDebug() << "[WHS] Token 刷新完成，无待处理请求";
     }
 }
 

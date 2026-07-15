@@ -146,13 +146,24 @@ Item {
                                     Item { Layout.fillWidth: true }
 
                                     Text {
+                                        text: "表格"
+                                        font.pixelSize: 18
+                                        color: "#6366F1"
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            // [入口] 点击打开称重记录表格弹窗
+                                            onClicked: tableDialog.open()
+                                        }
+                                    }
+
+                                    Text {
                                         text: "更多 >"
                                         font.pixelSize: 18
                                         color: "#3B82F6"
                                         MouseArea {
                                             anchors.fill: parent
                                             hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
                                             // [入口] 点击打开称重记录查询弹窗
                                             onClicked: searchDialog.open()
                                         }
@@ -1270,6 +1281,14 @@ Item {
             root.currentDetailRecord = record
             detailDialog.open()
         }
+    }
+
+    // ==========================================
+    //  称重记录表格弹窗（独立组件，云端分页）
+    // ==========================================
+    // 入口：历史记录区域右上角"表格"按钮 (tableDialog.open())
+    WeightRecordTableDialog {
+        id: tableDialog
     }
 
     // ==========================================

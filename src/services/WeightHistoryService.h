@@ -73,6 +73,22 @@ public:
     /** @brief 撤回称重记录 (软删除 + POST /api/user/WeightRecord/revoke) */
     Q_INVOKABLE void revokeRecord(int recordId, qint64 custId, const QString &cloudRecordId);
 
+    // === 云端分页查询 ===
+    /**
+     * @brief 分页查询云端称重记录 (POST /api/user/WeightRecord/paged)
+     * @param page     页码（从 1 开始）
+     * @param pageSize 每页条数
+     * @param keyword  关键字（按食材名称/单号过滤，空=不过滤）
+     * @param dateS    起始时间（ISO 8601，空=不限制）
+     * @param dateE    结束时间（ISO 8601，空=不限制）
+     *
+     * 结果通过 pagedRecordsReady 信号返回。custId/devId/userId 自动从 AuthService 取。
+     */
+    Q_INVOKABLE void fetchPagedRecords(int page, int pageSize,
+                                       const QString &keyword = QString(),
+                                       const QString &dateS = QString(),
+                                       const QString &dateE = QString());
+
     // === 重复称重检测 ===
     /**
      * @brief 检测重复称重记录（相同食材 + 重量相近）
@@ -91,6 +107,9 @@ Q_SIGNALS:
     void cloudSyncProgress(int done, int total);
     void userRecordCreated(bool success, const QString &msg);
     void recordRevoked(bool success, const QString &errorMsg);  // 撤回结果通知
+    void pagedRecordsReady(bool success, int total,
+                           const QVariantList &items,
+                           const QString &errorMsg);  // 分页查询结果
 
 private Q_SLOTS:
     void onCloudReply(QNetworkReply *reply);
@@ -120,6 +139,16 @@ private:
     // Token 预检相关
     QQueue<WeightRecord> m_pendingUploadQueue;  // 等待 Token 刷新后上传的记录
     bool m_refreshingToken = false;                  // 是否正在刷新 Token
+
+    // 分页查询 Token 刷新重试缓存
+    struct PagedParams {
+        int page = 1;
+        int pageSize = 10;
+        QString keyword;
+        QString dateS;
+        QString dateE;
+    };
+    PagedParams m_pendingPagedParams;  // 401 重试时缓存的请求参数
 };
 
 #endif // WEIGHTHISTORYSERVICE_H

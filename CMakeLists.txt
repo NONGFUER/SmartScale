@@ -79,6 +79,7 @@ qt_add_qml_module(appSmartScale
         src/ui/components/AddIngredientDialog.qml   # 添加食材弹窗
         src/ui/components/WeightRecordSearchDialog.qml  # 称重记录查询弹窗
         src/ui/components/SaveConfirmDialog.qml         # 保存确认弹窗（含价格输入）
+        src/ui/components/WeightRecordTableDialog.qml   # 称重记录表格弹窗（云端分页）
 
     # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
