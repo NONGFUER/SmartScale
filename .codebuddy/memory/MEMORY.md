@@ -60,6 +60,8 @@
   - C++（SystemInfo/WeightManager）：`qmlRegisterSingletonInstance("App.Backend",1,0,"XXX",ptr)`。
   - 两套模块并存：UI 主题用 `SmartScale`，业务服务用 `App.Backend`。
 - **主题常量**：`src/ui/Theme.qml` 集中字体/字号/颜色，新增一律走 Theme 引用，禁止硬编码。
+- **图片圆角（Qt6 关键坑）**：`Rectangle.clip:true` 只裁矩形包围盒，**不跟随 `radius`**，所以 `Rectangle{radius;clip:true;Image{anchors.fill:parent}}` 的图片四角仍是直角。正确做法用 `MultiEffect` mask：源 `Image{visible:false}` + 遮罩 `Rectangle{id:mask;radius;color:"#FFFFFF";visible:false;layer.enabled:true}` + 显示项 `MultiEffect{source:img;maskEnabled:true;maskSource:mask;anchors.fill:img}`（需 `import QtQuick.Effects`）。mask 用 alpha 通道，须 `layer.enabled:true` 才渲染成纹理。若配合 hover 缩放，把 `scale` 放外层容器（整瓦缩放），勿放被 clip 的 Image 上（会切出直角）。
+- **MultiEffect 阴影标准参数**：`shadowColor:"#002A75"`, `shadowOpacity:0.1`, `shadowBlur:1.0`, `shadowHorizontalOffset:0`, `shadowVerticalOffset:0`。
 - **全局字体（方案一已实施）**：主字体族统一为 `PingFang SC`。`main.cpp` 经 `QFontDatabase::addApplicationFontFromData` 注册内嵌 `resources/fonts/PingFangSC-Regular.ttf`（打包进 Qt 资源 `:/resources/fonts/...`），并 `app.setFont(QFont("PingFang SC"))` 兜底全局未显式设 family 的 QML 文本；`Theme.qml` 的 `fontFamilyUi`/`fontFamilyTitle` 已改为 `PingFang SC`。
   - 边界：`setFont` 只覆盖未写 `font.family` 的 QML 文本；已硬编码 `font.family`（如 `Monospace`、旧 `Microsoft YaHei`）需方案二/三清理才生效。
   - 仅用 Regular 一个字重；若需 Light/Medium/Semibold 做层级，往 `resources/fonts/` 加对应文件 + CMake `FILES` + `main.cpp` 多读几个文件即可，零成本。

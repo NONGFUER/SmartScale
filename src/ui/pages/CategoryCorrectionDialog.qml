@@ -537,25 +537,26 @@ Dialog {
                         anchors.fill: parent
                         anchors.margins: 20
                         cellWidth: (foodGridView.width - 24) / 3
-                        cellHeight: 160
+                        cellHeight: 200
                         clip: true
                         model: dialogRoot.getDisplayItems()
 
                         delegate: Rectangle {
                             id: cardWrapper
                             width: foodGridView.cellWidth - 12
-                            height: cardColumn.implicitHeight + 16
+                            height: cardColumn.implicitHeight + 20
                             radius: 16
                             color: "#FFFFFF"
                             clip: true
 
-                            // 选中边框：包裹整张卡片（图片+文字）
-                            border.width: dialogRoot.selectedLabel === modelData.en ? 2 : 0
-                            border.color: dialogRoot.selectedLabel === modelData.en ? "#4361EE" : "transparent"
+                            // 关键细节1：极细浅灰边框 + 极微弱阴影，显得更干净
+                            // 选中蓝 2px，未选中浅灰 1px（替代纯透明，给每张卡一个精致描边）
+                            border.width: dialogRoot.selectedLabel === modelData.en ? 2 : 1
+                            border.color: dialogRoot.selectedLabel === modelData.en ? "#4361EE" : "#F3F4F6"
                             Behavior on border.color { ColorAnimation { duration: 120 } }
                             Behavior on border.width { NumberAnimation { duration: 120 } }
 
-                            // 阴影覆盖整个卡片（图片+文字）
+                            // 极微弱阴影（项目标准：blur 1.0 / opacity 0.1）
                             layer.enabled: true
                             layer.effect: MultiEffect {
                                 shadowEnabled: true
@@ -578,22 +579,31 @@ Dialog {
                             Column {
                                 id: cardColumn
                                 anchors.fill: parent
-                                anchors.margins: 8
-                                spacing: 8
+                                // 关键细节2：四周 10px 纯白内边距，形成"相框"效果
+                                anchors.margins: 10
+                                spacing: 12
 
-                                // 图片卡片
+                                // 上半部：图片专属容器（内层独立圆角）
                                 Rectangle {
+                                    id: imageContainer
                                     width: parent.width
-                                    height: foodGridView.cellHeight - 62
-                                    radius: 14
-                                    color: foodHover.hovered ? "#F8FAFC" : "#F5F7FA"
-                                    clip: true
+                                    height: foodGridView.cellHeight - 70
+                                    // 关键细节3：内层圆角比外层(16)略小，视觉协调
+                                    radius: 12
+                                    // 关键细节4：极柔和浅灰底，与白底形成对比，统一灰/白底图
+                                    color: "#F7F8FA"
 
+                                    // 悬浮时整个图片瓦微微放大（圆角随之缩放，不出现直角）
+                                    scale: foodHover.hovered ? 1.05 : 1.0
+                                    Behavior on scale { NumberAnimation { duration: 150; easing.type: Easing.OutQuad } }
+
+                                    // 源图片（隐藏，仅作 MultiEffect 的 source）
                                     Image {
                                         id: foodImg
                                         anchors.fill: parent
-                                        fillMode: Image.PreserveAspectFit
+                                        fillMode: Image.PreserveAspectCrop
                                         cache: false
+                                        visible: false
                                         source: {
                                             var local = modelData.imgLocal || ""
                                             if (local !== "") return "file://" + local
@@ -605,7 +615,26 @@ Dialog {
                                         }
                                     }
 
-                                    // 无图片时的文字回退
+                                    // 圆角遮罩：白色圆角矩形提供 Alpha 模板（隐藏，仅作 maskSource）
+                                    Rectangle {
+                                        id: imgMask
+                                        anchors.fill: parent
+                                        radius: 12
+                                        color: "#FFFFFF"
+                                        visible: false
+                                        layer.enabled: true
+                                    }
+
+                                    // 实际显示的图片：对源图应用圆角遮罩
+                                    // （Rectangle.clip 不跟随 radius，必须用 MultiEffect mask 才能裁出圆角）
+                                    MultiEffect {
+                                        anchors.fill: foodImg
+                                        source: foodImg
+                                        maskEnabled: true
+                                        maskSource: imgMask
+                                    }
+
+                                    // 无图片时的占位文字：灰底容器即为占位背景，字色加深显正式
                                     Text {
                                         anchors.centerIn: parent
                                         visible: foodImg.status !== Image.Ready
@@ -613,11 +642,11 @@ Dialog {
                                         font.pixelSize: 22
                                         font.bold: true
                                         font.family: Theme.fontFamilyUi
-                                        color: "#94A3B8"
+                                        color: "#64748B"
                                     }
                                 }
 
-                                // 名称文字
+                                // 下半部：食材名称
                                 Text {
                                     width: parent.width
                                     horizontalAlignment: Text.AlignHCenter
