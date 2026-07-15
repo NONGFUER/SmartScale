@@ -181,7 +181,7 @@ Dialog {
                     anchors.fill: parent
                     fillMode: Image.PreserveAspectFit
                     source: dialogRoot.record && dialogRoot.record.mainImagePath
-                           ? (dialogRoot.record.mainImagePath.startsWith("file://")
+                           ? (dialogRoot.record.mainImagePath.indexOf("://") >= 0
                               ? dialogRoot.record.mainImagePath
                               : "file://" + dialogRoot.record.mainImagePath)
                            : ""

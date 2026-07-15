@@ -45,6 +45,11 @@ Dialog {
         root.open()
     }
 
+    onOpened: {
+        // 把焦点从价格输入框移走，防止虚拟键盘自动弹出
+        Qt.callLater(function() { cancelMA.forceActiveFocus() })
+    }
+
     // Dialog 基础配置
     modal: true
     width: 680
@@ -231,6 +236,7 @@ Dialog {
 
                             TextInput {
                                 id: priceInput
+                                focus: false          // 禁止打开弹窗时自动聚焦（避免虚拟键盘弹出）
                                 anchors.fill: parent
                                 anchors.margins: 4
                                 verticalAlignment: TextInput.AlignVCenter

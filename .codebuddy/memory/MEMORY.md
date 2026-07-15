@@ -10,6 +10,7 @@
 - 目标设备无鼠标光标。
 - `main.cpp` 中 `QGuiApplication` 创建后立即 `setOverrideCursor(QCursor(Qt::BlankCursor))`（需 `#include <QCursor>`）。
 - QML 所有 `MouseArea` 禁止写 `cursorShape` 行（PointingHand/Arrow/Blank 等均不要）。清理进行中：CategoryCorrectionDialog 已清；WorkstationPage/AddIngredientDialog/AlertDialog/SettingsDialog/WeightRecordSearchDialog/WifiListDialog/SettingsPage 仍有残留，待后续遇到相关改动时顺手清理。
+- **弹窗输入框禁止自动聚焦**（强制）：Dialog/Popup 内的 `TextField`/`TextInput` 必须加 `focus: false`，且在 `onOpened` 末尾用 `Qt.callLater(function(){ someCloseBtnMouseArea.forceActiveFocus() })` 把焦点移到关闭/返回按钮的 MouseArea，防止虚拟键盘自动弹出压缩弹窗。用户主动点输入框时仍正常聚焦弹键盘。已修复：WeightRecordTableDialog(backMouse)、CategoryCorrectionDialog(backMouse)、AddIngredientDialog(closeMouse)、SaveConfirmDialog(cancelMA)。LoginDialog/WifiPasswordDialog 例外（打开即为输入，需键盘）。
 
 ## QML 浮层与弹窗规则（强制）
 - **Toast/通知根节点必须用 `Popup`/`Dialog`**，禁止裸 `Item`+`anchors`+`z:9999`（会被 StackView 覆盖，即使 z:9999 也不可见）。

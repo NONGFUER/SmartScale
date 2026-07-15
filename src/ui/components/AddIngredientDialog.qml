@@ -116,6 +116,7 @@ Dialog {
 
                 TextField {
                     id: nameInput
+                    focus: false          // 禁止打开弹窗时自动聚焦（避免虚拟键盘弹出）
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.rightMargin: 50
@@ -484,6 +485,8 @@ Dialog {
         subCombo.currentIndex = -1
         // 确保食材品类两级树已加载（无网络时也可用本地缓存）
         CategoryService.fetchIngrCategories()
+        // 把焦点从名称输入框移走，防止虚拟键盘自动弹出
+        Qt.callLater(function() { closeMouse.forceActiveFocus() })
     }
 
     Connections {

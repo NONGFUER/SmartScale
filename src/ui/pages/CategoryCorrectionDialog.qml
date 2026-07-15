@@ -261,6 +261,7 @@ Dialog {
 
                     TextField {
                         id: catSearchInput
+                        focus: false          // 禁止打开弹窗时自动聚焦（避免虚拟键盘弹出）
                         Layout.fillWidth: true
                         Layout.preferredHeight: 36
                         placeholderText: "搜索食材名称"
@@ -823,6 +824,8 @@ Dialog {
             CategoryService.fetchCategories()
             CategoryService.fetchIngrCategories()
         }
+        // 把焦点从搜索框移走，防止虚拟键盘自动弹出
+        Qt.callLater(function() { backMouse.forceActiveFocus() })
     }
 
     onAccepted: {
