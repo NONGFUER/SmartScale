@@ -140,21 +140,21 @@ Dialog {
             Layout.fillWidth: true
             Layout.preferredHeight: 64
 
-            // ← 返回按钮（左）
+            // ← 返回按钮（左）— 使用 back.png（原为宽矩形盛放"← 返回"文字，现改为方形圆形图标按钮与其他两个一致）
             Rectangle {
                 id: backBtn
                 x: 16
                 anchors.verticalCenter: parent.verticalCenter
-                width: 80; height: 40
-                radius: 10
+                width: 44; height: 44
+                radius: 22
                 color: backMouse.containsMouse ? "#F1F5F9" : "transparent"
 
-                RowLayout {
+                Image {
                     anchors.centerIn: parent
-                    spacing: 4
-
-                    Text { text: "\u2190"; font.pixelSize: 30; color: "#4361EE"; font.bold: true }
-                    Text { text: "返回"; font.pixelSize: 30; color: "#4361EE" }
+                    width: parent.width * 0.6
+                    height: parent.height * 0.6
+                    fillMode: Image.PreserveAspectFit
+                    source: "qrc:/resources/img/back.png"
                 }
 
                 MouseArea {
@@ -828,13 +828,20 @@ Dialog {
     Connections {
         target: CategoryService
         function onCategoryTreeChanged() {
-            if (dialogRoot.selectedTopIndex >= 0 || CategoryService.categoryTree.length === 0)
+            if (CategoryService.categoryTree.length === 0)
                 return
+            // 二级品类已选（用户手动点击过）→ 不覆盖默认选中
+            if (dialogRoot.selectedSubCateId !== "")
+                return
+            // 默认选中第一级 + 第二级首个分类
             dialogRoot.selectedTopIndex = 0
             var kids = CategoryService.categoryTree[0].children || []
             if (kids.length > 0) {
                 dialogRoot.selectedSubCateId = String(kids[0].cateId)
                 dialogRoot.selectedSubCateName = kids[0].cateNm || ""
+            } else {
+                dialogRoot.selectedSubCateId = ""
+                dialogRoot.selectedSubCateName = ""
             }
         }
     }

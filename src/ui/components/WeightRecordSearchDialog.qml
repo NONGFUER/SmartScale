@@ -175,23 +175,22 @@ Dialog {
             Layout.bottomMargin: 20
             spacing: 0
 
-            // 返回按钮 — 浅蓝圆形背景
+            // 返回按钮 — 使用 back.png（图标自含蓝色，故去掉浅蓝圆底，改透明 + 浅灰悬浮）
             Rectangle {
                 width: 46; height: 46; radius: 23
-                color: backMouse.containsMouse ? "#D6EBFF" : "#E8F4FD"
+                color: backMouse.containsMouse ? "#F1F5F9" : "transparent"
 
-                Text {
+                Image {
                     anchors.centerIn: parent
-                    text: "\u2039"
-                    font.pixelSize: 32
-                    font.bold: true
-                    color: "#2196F3"
+                    width: parent.width * 0.6
+                    height: parent.height * 0.6
+                    fillMode: Image.PreserveAspectFit
+                    source: "qrc:/resources/img/back.png"
                 }
                 MouseArea {
                     id: backMouse
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
                     onClicked: root.close()
                 }
             }
