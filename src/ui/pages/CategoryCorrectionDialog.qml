@@ -160,7 +160,7 @@ Dialog {
         spacing: 0
 
         // ============================================================
-        //  顶部导航栏：返回(左) + 标题(中) + 搜索框(右)
+        //  顶部导航栏：返回(左) + 标题(中) + 添加食材(右) + 搜索框(右)
         // ============================================================
         Item {
             Layout.fillWidth: true
@@ -199,6 +199,35 @@ Dialog {
                 font.bold: true
                 font.family: Theme.fontFamilyUi
                 color: "#1E293B"
+            }
+
+            // 添加食材按钮（搜索框左侧，文字按钮无图标）
+            Rectangle {
+                id: addFoodBtn
+                anchors.right: searchBox.left
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                width: 130; height: 44
+                radius: 16
+                color: addFoodMouse.containsMouse ? "#3651D4" : "#4361EE"
+
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "添加食材"
+                    font.pixelSize: 20
+                    font.bold: true
+                    font.family: Theme.fontFamilyUi
+                    color: "white"
+                }
+
+                MouseArea {
+                    id: addFoodMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: addIngredientDialog.open()
+                }
             }
 
             // 搜索框（右侧）
