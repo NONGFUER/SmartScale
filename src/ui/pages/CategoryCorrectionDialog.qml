@@ -102,6 +102,32 @@ Dialog {
     function getDisplayItems() {
         if (dialogRoot.searchText.trim() !== "")
             return dialogRoot.searchResults
+
+        // 推荐模式：把候选 {code,name} 适配为 FoodCard 期望的 {cn,en,id,img,imgLocal}
+        // 优先通过 emsCd 反查完整食材信息（含图片），反查不到则用候选基本信息（无图，卡片显示占位文字）
+        if (dialogRoot.selectedTopIndex === -999) {
+            var recs = dialogRoot.recommendCandidates
+            var adapted = []
+            for (var i = 0; i < recs.length; i++) {
+                var r = recs[i]
+                var code = r.code || ""
+                var full = UserIngredientService.findByEmsCd(code)
+                if (full && full["id"]) {
+                    adapted.push(full)
+                } else {
+                    adapted.push({
+                        cn: r.name || "",
+                        en: code,
+                        id: "",
+                        img: "",
+                        imgLocal: "",
+                        cateId: ""
+                    })
+                }
+            }
+            return adapted
+        }
+
         var subId = dialogRoot.selectedSubCateId
         if (subId === "") return []
         var all = dialogRoot.getAllItems()
@@ -275,6 +301,67 @@ Dialog {
                         anchors.bottomMargin: 8
                         anchors.leftMargin: 8
                         anchors.rightMargin: 8
+
+                        // ===== AI 推荐标签（仅在有候选时显示）=====
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 56
+                            radius: 8
+                            visible: dialogRoot.recommendCandidates.length > 0
+                            color: dialogRoot.selectedTopIndex === -999
+                                    ? "#FFF7ED" : (recTagMouse.containsHover ? "#F5F7FA" : "transparent")
+
+                            Behavior on color { ColorAnimation { duration: 120 } }
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 12
+                                spacing: 10
+
+                                Text {
+                                    text: "推荐"
+                                    font.pixelSize: 22
+                                    font.family: Theme.fontFamilyUi
+                                    font.bold: (dialogRoot.selectedTopIndex === -999)
+                                    color: dialogRoot.selectedTopIndex === -999 ? "#F59E0B" : "#475569"
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+
+                                // 右箭头（选中时显示）
+                                Text {
+                                    text: "\u25B6"
+                                    font.pixelSize: 22
+                                    color: dialogRoot.selectedTopIndex === -999 ? "#F59E0B" : "#CBD5E1"
+                                    visible: dialogRoot.selectedTopIndex === -999
+                                    Layout.alignment: Qt.AlignVCenter
+                                }
+                            }
+
+                            MouseArea {
+                                id: recTagMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    dialogRoot.selectedTopIndex = -999
+                                    dialogRoot.selectedSubCateId = ""
+                                    dialogRoot.selectedSubCateName = ""
+                                    dialogRoot.selectedLabel = ""
+                                }
+                            }
+                        }
+
+                        // 推荐标签与分类列表之间的分隔线（仅在有推荐时显示）
+                        Rectangle {
+                            Layout.fillWidth: true
+                            height: 1
+                            color: "#EEF2F6"
+                            Layout.leftMargin: 8
+                            Layout.rightMargin: 8
+                            visible: dialogRoot.recommendCandidates.length > 0
+                        }
 
                         Repeater {
                             model: CategoryService.categoryTree
@@ -467,73 +554,11 @@ Dialog {
                         }
                     }
 
-                    // ===== AI 推荐模式（ListView）=====
-                    ListView {
-                        visible: dialogRoot.selectedTopIndex === -999 && dialogRoot.recommendCandidates.length > 0
-                                  && dialogRoot.searchText.trim() === ""
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        clip: true
-                        model: dialogRoot.recommendCandidates
-
-                        delegate: Rectangle {
-                            width: parent ? parent.width : 0
-                            height: 72
-                            radius: 14
-                            color: recMouse.containsHover ? "#FEF3C7" : "#FFFBEB"
-                            border.width: dialogRoot.selectedLabel === modelData.code ? 2 : 1
-                            border.color: dialogRoot.selectedLabel === modelData.code ? "#F59E0B" : "#FDE68A"
-
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 20
-                                anchors.rightMargin: 16
-                                spacing: 14
-
-                                // 序号徽章
-                                Rectangle {
-                                    width: 32; height: 32; radius: 16
-                                    color: dialogRoot.selectedLabel === modelData.code ? "#F59E0B" : "#FCD34D"
-                                    visible: index < 3
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: (index + 1).toString()
-                                        font.pixelSize: 15
-                                        font.bold: true
-                                        color: dialogRoot.selectedLabel === modelData.code ? "#FFFFFF" : "#92400E"
-                                    }
-                                }
-
-                                Text {
-                                    text: modelData.name || ""
-                                    font.pixelSize: 20
-                                    font.family: Theme.fontFamilyUi
-                                    color: "#1E293B"
-                                    Layout.fillWidth: true
-                                    elide: Text.ElideRight
-                                }
-                                Text {
-                                    text: modelData.code || ""
-                                    font.pixelSize: 15
-                                    color: "#9CA3AF"
-                                }
-                            }
-
-                            MouseArea {
-                                id: recMouse
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: { dialogRoot.selectedLabel = modelData.code || "" }
-                            }
-                        }
-                    }
-
                     // ===== 食材网格（GridView）=====
+                    // 推荐模式 / 正常分类模式 / 搜索模式 统一复用 GridView + FoodCard delegate
+                    // 推荐模式下 getDisplayItems() 会把候选 {code,name} 适配为卡片期望的 {cn,en,id,img,imgLocal}
                     GridView {
                         id: foodGridView
-                        visible: dialogRoot.selectedTopIndex !== -999
-                                  || dialogRoot.searchText.trim() !== ""
                         anchors.fill: parent
                         anchors.margins: 20
                         cellWidth: (foodGridView.width - 24) / 3
@@ -754,7 +779,8 @@ Dialog {
         selectedLabel = ""
         selectedIngrId = ""
         activeCategoryIndex = 0
-        selectedTopIndex = 0
+        // 有推荐候选时优先展示推荐，否则默认第一个一级分类
+        selectedTopIndex = (dialogRoot.recommendCandidates.length > 0) ? -999 : 0
         selectedSubCateId = ""
         selectedSubCateName = ""
         catSearchInput.text = ""
@@ -829,6 +855,9 @@ Dialog {
         target: CategoryService
         function onCategoryTreeChanged() {
             if (CategoryService.categoryTree.length === 0)
+                return
+            // 推荐模式 → 不覆盖
+            if (dialogRoot.selectedTopIndex === -999)
                 return
             // 二级品类已选（用户手动点击过）→ 不覆盖默认选中
             if (dialogRoot.selectedSubCateId !== "")
