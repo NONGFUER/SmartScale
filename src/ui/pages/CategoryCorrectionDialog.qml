@@ -184,8 +184,8 @@ Dialog {
                 width: 280; height: 44
                 radius: 16
                 color: "#F8FAFC"
-                border.color: catSearchInput.activeFocus ? "#4361EE" : "#E2E8F0"
-                border.width: 1
+                border.color: catSearchInput.activeFocus ? "#4649E5" : "#E2E8F0"
+                border.width: 3
 
                 Behavior on border.color { ColorAnimation { duration: 150 } }
 
@@ -397,7 +397,7 @@ Dialog {
                         ListView {
                             id: subList
                             Layout.fillWidth: true
-                            Layout.preferredHeight: Math.min(subList.count * 44 + (subList.count - 1) * 2, 480)
+                            Layout.preferredHeight: subList.count * 50 + (subList.count - 1) * 2
                             clip: true
                             model: dialogRoot.getCurrentChildren()
 
@@ -634,6 +634,88 @@ Dialog {
                 } // Rectangle 右侧网格区
             } // RowLayout 三栏
         } // Item 主体
+        // ===== 底部按钮栏：取消 + 确认 =====
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 82
+
+            Rectangle {
+                anchors.fill: parent
+                color: "#FFFFFF"
+                radius: 10
+
+                // 顶部分隔线
+                Rectangle {
+                    anchors.top: parent.top
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 1
+                    color: "#EEF2F6"
+                }
+
+                RowLayout {
+                    anchors.centerIn: parent
+                    spacing: 20
+
+                    // 取消按钮
+                    Rectangle {
+                        Layout.preferredWidth: 180
+                        Layout.preferredHeight: 60
+                        radius: 12
+                        color: cancelMouse.containsMouse ? "#F1F5F9" : "#FFFFFF"
+                        border.color: "#D1D5DB"
+                        border.width: 1.2
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "取消"
+                            font.pixelSize: 24
+                            font.bold: true
+                            font.family: Theme.fontFamilyUi
+                            color: "#4361EE"
+                        }
+
+                        MouseArea {
+                            id: cancelMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            onClicked: dialogRoot.reject()
+                        }
+                    }
+
+                    // 确认按钮（需选中食材才可用）
+                    Rectangle {
+                        id: confirmBtn
+                        Layout.preferredWidth: 180
+                        Layout.preferredHeight: 60
+                        radius: 12
+                        enabled: dialogRoot.selectedLabel !== "" && dialogRoot.selectedIngrId !== ""
+                        opacity: enabled ? 1.0 : 0.45
+                        color: enabled ? "#4361EE" : "#D1D5DB"
+                        Behavior on opacity { NumberAnimation { duration: 150 } }
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "确认选择"
+                            font.pixelSize: 24
+                            font.bold: true
+                            font.family: Theme.fontFamilyUi
+                            color: "white"
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (!confirmBtn.enabled) return
+                                dialogRoot.accept()
+                            }
+                        }
+                    }
+                }
+            }
+        }
     } // ColumnLayout 根
 
     // ============================================================

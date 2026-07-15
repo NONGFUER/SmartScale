@@ -109,7 +109,10 @@ void WeightHistoryService::addRecord(double weight,
     model.ingrId = ingrId;
     model.aiDetected = aiDetected;
     model.unitPrice = unitPrice;
-    model.amount = unitPrice * weight;  // 金额 = 单价(元/kg) × 重量(kg)，unitPrice 已由调用方转为元/kg
+    // 金额基于舍入后两位小数的 weight 和 price 计算，避免传感器原始精度影响
+    double wRounded = qRound(weight * 100.0) / 100.0;
+    double pRounded = qRound(unitPrice * 100.0) / 100.0;
+    model.amount = qRound(wRounded * pRounded * 100.0) / 100.0;
 
     // 1. 写入数据库
     int newId = m_repo->insert(model);
@@ -232,10 +235,10 @@ QByteArray WeightHistoryService::buildUploadJson(const WeightRecord &record)
     json["ingrId"] = ok ? QJsonValue(qlonglong(ingrIdVal)) : 0;
     json["custId"] = m_authService ? m_authService->custId() : 0;
     json["devId"] = m_authService ? m_authService->productId() : QString();
-    // val 单位改为 kg，保留小数点后两位（四舍五入）
-    json["val"]    = QString::number(record.weight, 'f', 2).toDouble();
-    json["price"]  = QString::number(record.unitPrice, 'f', 2).toDouble();
-    json["amount"] = QString::number(record.amount, 'f', 2).toDouble();
+    // 保留两位小数，用 qRound 避免浮点精度导致舍入不可控（如 0.6396→0.65）
+    json["val"]    = qRound(record.weight * 100.0)   / 100.0;
+    json["price"]  = qRound(record.unitPrice * 100.0)  / 100.0;
+    json["amount"] = qRound(record.amount * 100.0)     / 100.0;
     json["aiDet"]  = record.aiDetected;
     //json["img"]    = record.mainImagePath;
     json["userId"] = m_authService ? QJsonValue(qlonglong(m_authService->userId())) : -1;
