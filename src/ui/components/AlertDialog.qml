@@ -95,7 +95,7 @@ Dialog {
         type = t || "info"
         alertTitle = tlt || ""
         detail = dtl || ""
-        showDetail = !!dtl  // 有详情时默认展开
+        showDetail = false  // 默认收起详情，避免技术错误直接外露，用户按需展开
         dangerMode = false
         root.open()
     }

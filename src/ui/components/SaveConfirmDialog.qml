@@ -53,7 +53,7 @@ Dialog {
     // Dialog 基础配置
     modal: true
     width: 680
-    height: 630
+    height: 690
     anchors.centerIn: parent
     padding: 0
     background: Rectangle {
@@ -316,12 +316,12 @@ Dialog {
             } // ColumnLayout
         } // 内容区 Item
 
-        // ========== 重复称重警告 ==========
+        // ========== 重复称重警告（套用 SaveSuccessDialog 风格）==========
         Item {
             Layout.fillWidth: true
             Layout.leftMargin: 32
             Layout.rightMargin: 32
-            Layout.preferredHeight: root.hasDuplicate ? 60 : 0
+            Layout.preferredHeight: root.hasDuplicate ? 120 : 0
             visible: root.hasDuplicate
             clip: true
 
@@ -329,36 +329,71 @@ Dialog {
 
             Rectangle {
                 anchors.fill: parent
-                radius: 8
-                color: "#FEF3C7"
+                radius: 12
+                color: "#FFF7ED"
                 border.color: "#F59E0B"
-                border.width: 1
+                border.width: 2
 
                 Row {
                     anchors.centerIn: parent
-                    spacing: 8
+                    spacing: 20
 
-                    Text {
-                        text: "\u26A0\uFE0F"  // ⚠️
-                        font.pixelSize: 20
+                    // 橙色圆圈 + Canvas 白色"重复"图标（两个重叠圆点，与 SaveSuccessDialog 风格一致）
+                    Rectangle {
+                        id: dupIcon
+                        width: 56
+                        height: 56
+                        radius: 28
+                        color: "#F59E0B"
                         anchors.verticalCenter: parent.verticalCenter
+
+                        Canvas {
+                            anchors.fill: parent
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.clearRect(0, 0, width, height)
+                                var r = width * 0.18
+                                var cy = height / 2
+                                // 后面的圆（描边）
+                                ctx.beginPath()
+                                ctx.arc(width * 0.64, cy, r, 0, Math.PI * 2)
+                                ctx.strokeStyle = "#FFFFFF"
+                                ctx.lineWidth = 3
+                                ctx.stroke()
+                                // 前面的圆（实心）
+                                ctx.beginPath()
+                                ctx.arc(width * 0.36, cy, r, 0, Math.PI * 2)
+                                ctx.fillStyle = "#FFFFFF"
+                                ctx.fill()
+                            }
+                        }
+
+                        // 弹性入场动画（与 SaveSuccessDialog 一致）
+                        scale: 0
+                        NumberAnimation on scale {
+                            from: 0; to: 1.0; duration: 400
+                            easing.type: Easing.OutBack
+                            running: root.hasDuplicate
+                        }
                     }
+
                     Column {
-                        spacing: 2
+                        spacing: 6
                         anchors.verticalCenter: parent.verticalCenter
+
                         Text {
                             text: "检测到重复称重"
-                            font.pixelSize: 15
+                            font.pixelSize: 24
                             font.bold: true
                             font.family: Theme.fontFamilyUi
                             color: "#B45309"
                         }
                         Text {
                             text: root.duplicateRecord ?
-                                  (root.duplicateRecord["categoryName"] + " " +
-                                   Number(root.duplicateRecord["weight"]).toFixed(2) + " kg (" +
+                                  (root.duplicateRecord["categoryName"] + "  " +
+                                   Number(root.duplicateRecord["weight"]).toFixed(2) + " kg  (" +
                                    (root.duplicateRecord["recordTime"] || "").substring(5, 16) + ")") : ""
-                            font.pixelSize: 13
+                            font.pixelSize: 20
                             font.family: Theme.fontFamilyUi
                             color: "#D97706"
                         }
@@ -374,26 +409,17 @@ Dialog {
             Layout.rightMargin: 32
             Layout.preferredHeight: 40
 
-            Row {
-                spacing: 8
+            Text {
                 anchors.centerIn: parent
-
-                Text {
-                    text: "\u2139\uFE0F"  // ℹ️ info icon
-                    font.pixelSize: 18
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-                Text {
-                    text: root.hasDuplicate ?
-                          "已存在相同食材且重量相近的记录，确认要继续保存吗？" :
-                          "单价为每斤的价格，输入单价后金额将自动计算；不输入单价也可直接确认保存。"
-                    font.pixelSize: 13
-                    font.family: Theme.fontFamilyUi
-                    color: "#64748B"
-                    width: 400
-                    wrapMode: Text.Wrap
-                    anchors.verticalCenter: parent.verticalCenter
-                }
+                text: root.hasDuplicate ?
+                      "已存在相同食材且重量相近的记录，确认要继续保存吗？" :
+                      "单价为每斤的价格，输入单价后金额将自动计算；不输入单价也可直接确认保存。"
+                font.pixelSize: 18
+                font.family: Theme.fontFamilyUi
+                color: "#64748B"
+                width: 560
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
             }
         }
 

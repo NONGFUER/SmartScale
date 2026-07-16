@@ -1009,6 +1009,12 @@ Item {
                                         window.toast("请先识别或选择食材", "warning", 2500)
                                         return
                                     }
+                                    // 称重稳定性校验：硬件 status word Bit0，未稳定时禁止保存
+                                    if (!WeightManager.isStable) {
+                                        console.warn("[WSP] 称重未稳定，拦截保存, netWeight=", currentWeight)
+                                        window.toast("称重未稳定，请稍候", "warning", 2500)
+                                        return
+                                    }
                                     // ingrId 校验：雪花 ID 必须有效，否则上传会落库孤儿记录
                                     if (!root.currentIngrId || root.currentIngrId === "") {
                                         console.warn("[WSP] ingrId 为空，拦截保存, prediction=", root.currentPrediction)
@@ -1021,10 +1027,13 @@ Item {
                                     root.pendingSaveLabel = chineseLabel
                                     root.pendingSaveIngrId = root.currentIngrId
                                     root.pendingSaveAiDetected = root.currentAiDetected
-                                    // 检测重复称重
+                                    // 检测重复称重：有重复弹窗提醒，无重复直接保存
                                     var dupInfo = WeightHistoryService.checkDuplicate(chineseLabel, currentWeight)
-                                    // 弹出价格确认弹窗（含重复提醒，拍照在 saveConfirmed 回调中触发）
-                                    saveConfirmDialog.openDialog(chineseLabel, currentWeight, dupInfo)
+                                    if (dupInfo && dupInfo["duplicate"] === true) {
+                                        duplicateWeightDialog.openDialog(dupInfo)
+                                    } else {
+                                        root._executeSave()
+                                    }
                                 }
                             }
                         }
@@ -1033,6 +1042,17 @@ Item {
                 }
             }
         }
+
+    // ==========================================
+    //  执行保存（无重复直接调用 / 重复弹窗确认后调用）
+    // ==========================================
+    function _executeSave() {
+        console.log(">> 执行保存，重量:", root.pendingSaveWeight, "食材:", root.pendingSaveLabel)
+        root.pendingUnitPrice = 0
+        root.pendingManualSave = true
+        saveLoadingOverlay.open()
+        CameraController.captureVegetable(root.pendingSaveWeight, root.currentPrediction)
+    }
 
     // ===== 白屏闪光动画效果 =====
     Rectangle {
@@ -1150,7 +1170,7 @@ Item {
         function onCloudSyncFailed(localId, errorMsg) {
             console.warn("[Alert] 上传失败 id=", localId, "err=", errorMsg)
             saveLoadingOverlay.close()
-            window.alert("保存失败：" + errorMsg, "error", "云端同步失败", errorMsg)
+            window.alert("云端服务暂时无法访问，请稍后重试", "error", "云端同步失败", errorMsg)
             clearIngredientCard()
         }
         function onUserRecordCreated(success, msg) {
@@ -1294,23 +1314,17 @@ Item {
     }
 
     // ==========================================
-    //  保存确认弹窗（含价格输入）
+    //  重复称重提醒弹窗（取消=拦截保存，确认=继续保存）
     // ==========================================
-    SaveConfirmDialog {
-        id: saveConfirmDialog
+    DuplicateWeightDialog {
+        id: duplicateWeightDialog
 
-        onSaveConfirmed: function(unitPrice, amount) {
-            console.log(">> 用户确认保存，单价:", unitPrice, "金额:", amount)
-            // 缓存单价，等拍照完成后传入 addRecord
-            root.pendingUnitPrice = unitPrice
-            root.pendingManualSave = true
-            // 显示全屏 Loading 遮罩，阻断交互（拍照 + 上传期间）
-            saveLoadingOverlay.open()
-            // 触发拍照（水印绘制 + 图片落盘）
-            CameraController.captureVegetable(root.pendingSaveWeight, root.currentPrediction)
+        onConfirmed: {
+            console.log(">> 用户确认重复保存，继续执行")
+            root._executeSave()
         }
         onCancelled: {
-            console.log(">> 用户取消保存")
+            console.log(">> 用户取消保存（重复称重）")
         }
     }
 

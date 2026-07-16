@@ -534,11 +534,30 @@ ApplicationWindow {
      * @param type     "error"|"warning"|"success"|"info"（默认 "info"）
      * @param title    标题（可选）
      * @param detail   详细信息（可选，支持展开/收起）
+     *
+     * 智能脱敏：若 message 含底层技术错误特征（reply->errorString / HTTP / SSL 等）
+     * 且调用方未单独传 detail，则自动将原始信息移入 detail（默认收起），
+     * message 改用基于 title 的友好提示；业务友好提示（如"未登录"、"名称已存在"）原样保留。
      */
     function alert(message, type, title, detail) {
         // 脱敏：隐藏网络错误中的接口地址（避免暴露域名/端口/路径给用户）
-        var sanitized = message.replace(/https?:\/\/[^\s]+/g, "<接口地址>")
+        var sanitized = message ? message.replace(/https?:\/\/[^\s]+/g, "<接口地址>") : ""
         if (detail) detail = detail.replace(/https?:\/\/[^\s]+/g, "<接口地址>")
+
+        // 技术错误特征检测：命中则将原始信息移入 detail，message 改用友好提示
+        var techPatterns = ["Error transferring", "server replied", "QNetworkReply",
+                            "Host ", "Connection ", "timeout", "HTTP ", "SSL",
+                            "网络请求失败", "JSON 解析失败", "数据解析失败"]
+        if (!detail && sanitized) {
+            for (var i = 0; i < techPatterns.length; i++) {
+                if (sanitized.indexOf(techPatterns[i]) >= 0) {
+                    detail = sanitized
+                    sanitized = title ? title + "，请稍后重试" : "操作失败，请稍后重试"
+                    break
+                }
+            }
+        }
+
         globalAlert.show(sanitized, type, title, detail)
     }
 

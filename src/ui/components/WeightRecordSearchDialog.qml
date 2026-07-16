@@ -191,16 +191,17 @@ Dialog {
 
             Item { Layout.fillWidth: true }
 
-            // 关闭按钮
+            // 关闭按钮 — 使用 close_blue.png 图片图标
             Rectangle {
-                width: 42; height: 42; radius: 21
-                color: closeMouse.containsMouse ? "#FEE2E2" : "transparent"
+                width: 46; height: 46; radius: 23
+                color: closeMouse.containsMouse ? "#F1F5F9" : "transparent"
 
-                Text {
+                Image {
                     anchors.centerIn: parent
-                    text: "\u2715"
-                    font.pixelSize: 24
-                    color: closeMouse.containsMouse ? "#EF4444" : "#94A3B8"
+                    width: parent.width * 0.6
+                    height: parent.height * 0.6
+                    fillMode: Image.PreserveAspectFit
+                    source: "qrc:/resources/img/close_blue.png"
                 }
                 MouseArea {
                     id: closeMouse

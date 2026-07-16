@@ -83,6 +83,7 @@ qt_add_qml_module(appSmartScale
         src/ui/components/CalendarPopup.qml             # 日期选择日历弹窗
         src/ui/components/SaveLoadingOverlay.qml        # 保存中全屏遮罩 Loading
         src/ui/components/SaveSuccessDialog.qml         # 保存成功全屏遮罩弹窗
+        src/ui/components/DuplicateWeightDialog.qml     # 重复称重提醒弹窗
 
     # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
@@ -151,6 +152,7 @@ qt_add_resources(appSmartScale "app_assets"
         resources/img/Wifi4.png
         resources/img/Setting.png
         resources/img/close.png
+        resources/img/close_blue.png
         resources/img/back.png
 )
 

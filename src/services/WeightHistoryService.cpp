@@ -788,27 +788,26 @@ QVariantMap WeightHistoryService::checkDuplicate(const QString &categoryName, do
     result["weight"] = 0.0;
     result["recordTime"] = QString();
 
-    if (categoryName.isEmpty() || weight <= 0) {
+    if (categoryName.isEmpty() || weight <= 0 || m_historyEntries.isEmpty()) {
         return result;
     }
 
-    // 遍历内存中的历史记录，查找相同食材 + 重量相近的记录
-    for (const auto &entry : std::as_const(m_historyEntries)) {
-        QVariantMap map = entry.toMap();
-        QString existingCategory = map.value("categoryName").toString();
-        double existingWeight = map.value("weight", 0.0).toDouble();
+    // 只与最近一条记录（索引 0，最新保存的）比较，不跨记录全局查找
+    QVariantMap lastEntry = m_historyEntries.first().toMap();
+    if (lastEntry.value("categoryName").toString() != categoryName) {
+        return result;  // 前一条是不同食材，不判重
+    }
 
-        // 食材名称相同 且 重量在容差范围内
-        if (existingCategory == categoryName && qAbs(existingWeight - weight) <= tolerance) {
-            result["duplicate"] = true;
-            result["categoryName"] = existingCategory;
-            result["weight"] = existingWeight;
-            result["recordTime"] = map.value("recordTime").toString();
-            qDebug() << "[WHS] 检测到重复称重:" << categoryName
-                     << "重量:" << weight << "vs" << existingWeight
-                     << "时间:" << result["recordTime"].toString();
-            break;  // 只返回最近一条匹配记录
-        }
+    // 前一条是同食材，判定重量是否在容差范围内
+    double existingWeight = lastEntry.value("weight", 0.0).toDouble();
+    if (qAbs(existingWeight - weight) <= tolerance) {
+        result["duplicate"] = true;
+        result["categoryName"] = categoryName;
+        result["weight"] = existingWeight;
+        result["recordTime"] = lastEntry.value("recordTime").toString();
+        qDebug() << "[WHS] 检测到重复称重:" << categoryName
+                 << "重量:" << weight << "vs" << existingWeight
+                 << "时间:" << result["recordTime"].toString();
     }
 
     return result;

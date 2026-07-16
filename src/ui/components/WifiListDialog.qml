@@ -25,7 +25,12 @@ Popup {
     Overlay.modal: Rectangle { color: "#80000000" }
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
-    
+    background: Rectangle {
+        radius: 16
+        color: "#FFFFFF"
+        border.color: "#E2E8F0"
+        border.width: 1
+    }
 
     width: 600
     height: Math.min(760, contentArea.implicitHeight + topBar.height + btnBar.height + 28)
@@ -41,36 +46,6 @@ Popup {
     }
 
     // ========================================================================
-    // 主体背景
-    // ========================================================================
-    Rectangle {
-        anchors.fill: parent
-        radius: 16
-        color: "#FFFFFF"
-        border.color: "#E2E8F0"
-        border.width: 1
-
-        Rectangle {
-            width: 6
-            height: parent.height - btnBar.height
-            radius: 16
-            color: "transparent"
-            anchors.left: parent.left
-            anchors.top: parent.top
-        }
-
-        // 底部按钮区左侧装饰条（不延伸到按钮栏）
-        Rectangle {
-            width: 6
-            height: btnBar.height
-            radius: 16
-            color: "transparent"
-            anchors.left: parent.left
-            anchors.bottom: parent.bottom
-        }
-    }
-
-    // ========================================================================
     // 内容区
     // ========================================================================
     ColumnLayout {
@@ -83,10 +58,7 @@ Popup {
             id: topBar
             Layout.fillWidth: true
             height: 72
-            radius: 16
-            color: "#FFFFFF"
-
-            layer.enabled: false
+            color: "transparent"
 
             RowLayout {
                 anchors.centerIn: parent
@@ -142,7 +114,7 @@ Popup {
 
                     Text {
                         id: statusText
-                        font.pixelSize: 17
+                        font.pixelSize: 24
                         color: Theme.colorTextSecondary
                         text: {
                             var s = NetworkManager.wifiStatus
@@ -163,7 +135,7 @@ Popup {
                 // 扫描按钮
                 Rectangle {
                     id: scanBtn
-                    width: 96; height: 42; radius: 8
+                    width: 120; height: 56; radius: 8
                     color: scanBtnMouse.containsMouse ? "#EBF5FF" : "#F0F7FF"
                     border.color: "#3B82F6"
                     border.width: 1.5
@@ -184,7 +156,7 @@ Popup {
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
                             text: NetworkManager.isScanning ? "扫描中..." : "扫描"
-                            font.pixelSize: 15
+                            font.pixelSize: 24
                             font.bold: true
                             color: "#3B82F6"
                         }
@@ -231,7 +203,7 @@ Popup {
                         anchors.centerIn: parent
                         visible: listView.count === 0 && !NetworkManager.isScanning
                         text: "暂无可用网络\n点击「扫描」搜索附近网络"
-                        font.pixelSize: 17
+                        font.pixelSize: 24
                         color: Theme.colorTextTertiary
                         horizontalAlignment: Text.AlignHCenter
                         lineHeight: 1.4
@@ -241,14 +213,14 @@ Popup {
                         anchors.centerIn: parent
                         visible: listView.count === 0 && NetworkManager.isScanning
                         text: "正在扫描..."
-                        font.pixelSize: 17
+                        font.pixelSize: 24
                         color: Theme.colorTextTertiary
                     }
 
                     delegate: Rectangle {
                         id: netDelegate
                         width: listView.width - 16
-                        height: 66
+                        height: 76
                         radius: 8
 
                         property bool isCurrentNetwork: NetworkManager.wifiStatus === NetworkManager.Connected &&
@@ -289,7 +261,7 @@ Popup {
                             // SSID 名称
                             Text {
                                 text: modelData.ssid || ""
-                                font.pixelSize: 18
+                                font.pixelSize: 24
                                 font.bold: netDelegate.isCurrentNetwork
                                 color: netDelegate.isCurrentNetwork ? "#166534" : Theme.colorTextPrimary
                                 elide: Text.ElideRight
@@ -301,7 +273,7 @@ Popup {
                             Text {
                                 visible: netDelegate.isCurrentNetwork
                                 text: "已连接"
-                                font.pixelSize: 14
+                                font.pixelSize: 24
                                 font.bold: true
                                 color: "#FFFFFF"
                                 Rectangle {
@@ -317,7 +289,7 @@ Popup {
                             Text {
                                 visible: !netDelegate.isCurrentNetwork && (modelData.freq || 0) > 4900
                                 text: "5G"
-                                font.pixelSize: 14
+                                font.pixelSize: 24
                                 font.bold: true
                                 color: "#EF4444"
                             }
@@ -358,7 +330,7 @@ Popup {
                             Text {
                                 visible: !netDelegate.isCurrentNetwork
                                 text: (modelData.signal || 0) + "%"
-                                font.pixelSize: 15
+                                font.pixelSize: 24
                                 color: Theme.colorTextTertiary
                                 font.family: Theme.fontFamilyMono
                             }
@@ -383,7 +355,7 @@ Popup {
             Text {
                 Layout.fillWidth: true
                 text: "点击网络名称以连接"
-                font.pixelSize: 15
+                font.pixelSize: 24
                 color: Theme.colorTextTertiary
                 horizontalAlignment: Text.AlignHCenter
                 visible: listView.count > 0
@@ -396,6 +368,16 @@ Popup {
             Layout.fillWidth: true
             height: 76
             color: "#F8FAFC"
+            radius: 16
+
+            // 顶部直角遮罩（仅保留底部两角圆，与弹窗主体圆角一致）
+            Rectangle {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                height: parent.radius
+                color: parent.color
+            }
 
             RowLayout {
                 anchors.centerIn: parent
@@ -405,8 +387,8 @@ Popup {
                 Button {
                     id: disconnectBtn
                     text: "断开连接"
-                    implicitWidth: 130
-                    implicitHeight: 46
+                    implicitWidth: 150
+                    implicitHeight: 56
                     // 始终占位，断开后置灰禁用而非隐藏，避免布局跳动
                     enabled: NetworkManager.wifiStatus === NetworkManager.Connected
                     opacity: enabled ? 1.0 : 0.4
@@ -422,7 +404,7 @@ Popup {
 
                     contentItem: Text {
                         text: disconnectBtn.text
-                        font.pixelSize: 16
+                        font.pixelSize: 24
                         font.bold: true
                         color: disconnectBtn.enabled ? "#EF4444" : "#94A3B8"
                         horizontalAlignment: Text.AlignHCenter
@@ -440,8 +422,8 @@ Popup {
                 Button {
                     id: closeBtn
                     text: "关闭"
-                    implicitWidth: 140
-                    implicitHeight: 46
+                    implicitWidth: 160
+                    implicitHeight: 56
 
                     background: Rectangle {
                         radius: 8
@@ -450,7 +432,7 @@ Popup {
 
                     contentItem: Text {
                         text: closeBtn.text
-                        font.pixelSize: 17
+                        font.pixelSize: 24
                         font.bold: true
                         color: "#FFFFFF"
                         horizontalAlignment: Text.AlignHCenter
