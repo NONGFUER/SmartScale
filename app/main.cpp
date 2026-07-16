@@ -34,6 +34,7 @@
 #include "services/CategoryService.h"
 #include "services/UserIngredientService.h"   // USER 域食材服务
 #include "services/SystemInfoService.h"       // [测试] 系统调试信息服务
+#include "services/AppSettingsService.h"      // 应用设置（价格输入开关等）
 #include "services/NetworkManagerService.h"   // 网络管理服务 (WiFi + 4G)
 #include "services/MqttClientService.h"           // MQTT 客户端服务
 #include "services/CellularModemService.h"        // 蜂窝模组 CCID(ICCID) 获取 (AT 指令)
@@ -196,6 +197,9 @@ int main(int argc, char *argv[])
 
     // [测试] 系统调试信息服务 — 记录重启次数、开机/关机时间
     SystemInfoService *systemInfoService = new SystemInfoService(&app);
+
+    // 应用设置服务 — 用户可配置开关（价格输入等），QSettings 持久化
+    AppSettingsService *appSettings = new AppSettingsService(&app);
 
     // 网络管理服务 — Wi-Fi 扫描/连接/断开 + 4G 开启/关闭
     NetworkManagerService *networkManagerService = new NetworkManagerService(&app);
@@ -368,6 +372,7 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "UserIngredientService", userIngredientService);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "VoiceSpeaker", voiceSpeaker);
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "SystemInfo", systemInfoService);  // [测试] 系统信息
+    qmlRegisterSingletonInstance("App.Backend", 1, 0, "AppSettings", appSettings);      // 应用设置（价格输入开关等）
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "NetworkManager", networkManagerService);  // 网络管理 (WiFi + 4G)
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "MqttClient", mqttClientService);          // MQTT 设备上报 (shxgs)
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "CellularModem", cellularModemService);     // 蜂窝模组 CCID(ICCID)

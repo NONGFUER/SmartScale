@@ -25,7 +25,9 @@ Item {
     property bool aiRecognizing: false       // 是否正在执行 AI 识别（控制"识别"按钮 loading 状态）
     property bool currentAiDetected: false   // 当前品类是否由 AI 识别接口得出 (上传 aiDet 字段用)
     property bool pendingSaveAiDetected: false // 手动保存待写入的 aiDetected
-    property double pendingUnitPrice: 0         // 手动保存待写入的单价（元/斤，上传时 ×2 转 元/kg）
+    property double pendingUnitPrice: 0         // 手动保存待写入的单价（元/kg，与 addRecord/DB/上传约定一致）
+    property real currentUnitPrice: 0           // 食材卡片当前输入的单价（元/kg），保存后清空
+    readonly property real currentAmount: currentUnitPrice * WeightManager.netWeight   // 金额（元）= 单价×净重
     property var aiCandidates: CameraController.aiCandidateList  // AI 识别候选列表
 
     // ==========================================
@@ -60,6 +62,7 @@ Item {
         root.currentAiDetected = false
         root.pendingSaveIngrId = ""
         root.pendingSaveAiDetected = false
+        root.currentUnitPrice = 0   // 清空食材卡片单价（金额随绑定自动归零）
         root.currentDetailRecord = null
     }
 
@@ -645,51 +648,178 @@ Item {
                                     border.color: "#195DD9"
                                     border.width: 10
 
-                                    // 左上角标签
-                                    Text {
-                                        id: categoryLabel
-                                        text: "食材"
-                                        font.pixelSize: 28
-                                        font.family: "PingFang SC"
-                                        font.bold: true
-                                        color: "#FFFFFF"
-                                        anchors.left: parent.left
-                                        anchors.top: parent.top
-                                        anchors.leftMargin: 24
-                                        anchors.topMargin: 20
-                                        z: 1  // 确保在文字上方
-                                    }
-
-                                    // 点击选择品类
+                                    // 点卡片任意空白处都能打开品类选择弹窗（与下方"选择食材"按钮功能一致）
                                     MouseArea {
+                                        id: categoryCardMA
                                         anchors.fill: parent
                                         hoverEnabled: true
+                                        z: -1   // 置于 RowLayout 内容之下，避免拦截 RowLayout 内部交互
                                         onClicked: {
-                                            //console.log("打开品类选择...")
-                                            //root.categorySelectMode = true
+                                            CategoryService.fetchIngrCategories()
+                                            root.categorySelectMode = true
+                                            correctionDialog.recommendCandidates = root.aiCandidates
                                             //correctionDialog.open()
                                         }
                                     }
 
                                     RowLayout {
                                         anchors.fill: parent
-                                        anchors.margins: 16
-                                        spacing: 10
+                                        anchors.margins: 0
+                                        spacing: 0
 
-                                        Text {
-                                            id: ingredientNameText
-                                            Layout.fillWidth: true
-                                            horizontalAlignment: Text.AlignHCenter
-                                            text: {
-                                                var pred = root.currentPrediction;
-                                                if (!PState.isValid(pred))
-                                                    return PState.label(pred);
-                                                var translated = Translator.translate(pred);
-                                                return (translated === pred) ? "--" : translated;
+                                        // ===== 左侧：食材标签 + 食材名（价格开启时固定 180，价格关闭时撑满整卡）=====
+                                        Item {
+                                            Layout.preferredWidth: AppSettings.priceInputEnabled ? 180 : 0
+                                            Layout.fillWidth: !AppSettings.priceInputEnabled
+                                            Layout.fillHeight: true
+
+                                            // 左上角"食材"标签
+                                            Text {
+                                                text: "食材"
+                                                font.pixelSize: 28
+                                                font.family: "PingFang SC"
+                                                font.bold: true
+                                                color: "#FFFFFF"
+                                                anchors.left: parent.left
+                                                anchors.top: parent.top
+                                                anchors.leftMargin: 24
+                                                anchors.topMargin: 20
                                             }
-                                            font.pixelSize: 68
-                                            font.bold: true
-                                            color: "#FFFFFF"
+
+                                            // 食材名（垂直居中）
+                                            Text {
+                                                id: ingredientNameText
+                                                anchors.fill: parent
+                                                anchors.leftMargin: 24
+                                                anchors.rightMargin: 24
+                                                anchors.topMargin: 64
+                                                anchors.bottomMargin: 20
+                                                horizontalAlignment: Text.AlignHCenter
+                                                verticalAlignment: Text.AlignVCenter
+                                                text: {
+                                                    var pred = root.currentPrediction;
+                                                    if (!PState.isValid(pred))
+                                                        return PState.label(pred);
+                                                    var translated = Translator.translate(pred);
+                                                    return (translated === pred) ? "--" : translated;
+                                                }
+                                                font.pixelSize: AppSettings.priceInputEnabled ? 48 : 68
+                                                font.bold: true
+                                                color: "#FFFFFF"
+                                                elide: Text.ElideRight
+                                            }
+                                        }
+
+                                        // ===== 竖直分隔线（仅价格输入开启时显示）=====
+                                        Rectangle {
+                                            Layout.preferredWidth: 1
+                                            Layout.fillHeight: true
+                                            Layout.topMargin: 24
+                                            Layout.bottomMargin: 24
+                                            color: "#FFFFFF20"
+                                            visible: AppSettings.priceInputEnabled
+                                        }
+
+                                        // ===== 右侧：单价 + 金额 两段式（与左侧固定 180 对称）=====
+                                        ColumnLayout {
+                                            Layout.preferredWidth: 180
+                                            Layout.fillWidth: true
+                                            Layout.maximumWidth: 220
+                                            Layout.fillHeight: true
+                                            Layout.leftMargin: 14
+                                            Layout.rightMargin: 14
+                                            Layout.topMargin: 20
+                                            Layout.bottomMargin: 20
+                                            spacing: 6
+                                            visible: AppSettings.priceInputEnabled
+
+                                            // ---- 单价标签 ----
+                                            Text {
+                                                text: "单价（元/kg）"
+                                                font.pixelSize: 18
+                                                font.family: "PingFang SC"
+                                                color: "#FFFFFFB0"
+                                            }
+
+                                            // ---- 单价输入框（点击弹出9宫格键盘）----
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 64
+                                                radius: 12
+                                                color: priceMA.pressed ? "#FFFFFF30" : "transparent"
+                                                border.color: "#FFFFFF60"
+                                                border.width: 1
+                                                Behavior on color { ColorAnimation { duration: 120 } }
+
+                                                RowLayout {
+                                                    anchors.fill: parent
+                                                    anchors.leftMargin: 16
+                                                    anchors.rightMargin: 16
+                                                    spacing: 8
+
+                                                    Text {
+                                                        Layout.alignment: Qt.AlignVCenter
+                                                        text: root.currentUnitPrice > 0
+                                                              ? root.currentUnitPrice.toFixed(2)
+                                                              : "—"
+                                                        font.pixelSize: 36
+                                                        font.bold: true
+                                                        font.family: "PingFang SC"
+                                                        color: "#FFFFFF"
+                                                    }
+                                                    Item { Layout.fillWidth: true }
+                                                    Text {
+                                                        Layout.alignment: Qt.AlignVCenter
+                                                        text: "元/kg"
+                                                        font.pixelSize: 18
+                                                        font.family: "PingFang SC"
+                                                        color: "#FFFFFFB0"
+                                                    }
+                                                }
+
+                                                MouseArea {
+                                                    id: priceMA
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    onClicked: numberPad.openPad(root.currentUnitPrice)
+                                                }
+                                            }
+
+                                            // ---- 水平分隔线 ----
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.preferredHeight: 1
+                                                Layout.topMargin: 4
+                                                Layout.bottomMargin: 4
+                                                color: "#FFFFFF20"
+                                            }
+
+                                            // ---- 金额标签 ----
+                                            Text {
+                                                text: "金额（元）"
+                                                font.pixelSize: 18
+                                                font.family: "PingFang SC"
+                                                color: "#FFFFFFB0"
+                                            }
+
+                                            // ---- 金额大显示区（深色半透明背景）----
+                                            Rectangle {
+                                                Layout.fillWidth: true
+                                                Layout.fillHeight: true
+                                                radius: 12
+                                                color: "#00000033"           // 深色半透明背景（与设计稿一致）
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: root.currentAmount > 0
+                                                          ? root.currentAmount.toFixed(2)
+                                                          : "—"
+                                                    font.pixelSize: 42
+                                                    font.bold: true
+                                                    font.family: "PingFang SC"
+                                                    color: "#FFFFFF"
+                                                }
+                                            }
                                         }
                                     }
                                 } // categoryCard
@@ -1048,7 +1178,7 @@ Item {
     // ==========================================
     function _executeSave() {
         console.log(">> 执行保存，重量:", root.pendingSaveWeight, "食材:", root.pendingSaveLabel)
-        root.pendingUnitPrice = 0
+        root.pendingUnitPrice = root.currentUnitPrice   // 读取食材卡片输入的单价（元/kg）
         root.pendingManualSave = true
         saveLoadingOverlay.open()
         CameraController.captureVegetable(root.pendingSaveWeight, root.currentPrediction)
@@ -1088,7 +1218,7 @@ Item {
                     console.log(">> 图片保存完成，立即执行记录:", label, w.toFixed(2) + "kg", "单价:", up)
                     // 清空当前选中，让 historyChanged 触发时自动选中刚写入的最新记录
                     root.currentDetailRecord = null
-                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId, root.pendingSaveAiDetected, up * 2)   // 元/斤 → 元/kg
+                    WeightHistoryService.addRecord(w, label, BackendAuth.currentUser, filePath, "", root.pendingSaveIngrId, root.pendingSaveAiDetected, up)   // 元/kg（与 addRecord/DB/上传约定一致）
                     clearIngredientCard()
                 } else {
                     // 自动模式：照片已保存，独立触发 AI 识别（不阻塞保存管线）
@@ -1340,6 +1470,17 @@ Item {
     // ==========================================
     SaveSuccessDialog {
         id: saveSuccessDialog
+    }
+
+    // ==========================================
+    //  底部9宫格数字键盘（单价输入用）
+    // ==========================================
+    NumberPadPopup {
+        id: numberPad
+        onConfirmed: function(value) {
+            root.currentUnitPrice = value
+            console.log("[WSP] 单价输入完成:", value, "金额:", root.currentAmount.toFixed(2))
+        }
     }
 
 }

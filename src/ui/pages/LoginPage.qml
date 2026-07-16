@@ -32,17 +32,32 @@ Item {
         stackView.push("WorkstationPage.qml")
     }
 
+    // 登录错误脱敏（与 LoginDialog/Main.qml window.alert() 同规则）：URL 替换 + 技术错误特征命中则统一友好提示
+    function sanitizeLoginError(msg) {
+        if (!msg) return ""
+        var s = String(msg).replace(/https?:\/\/[^\s]+/g, "<接口地址>")
+        var techPatterns = ["Error transferring", "server replied", "QNetworkReply",
+                            "Host ", "Connection ", "timeout", "HTTP ", "SSL",
+                            "网络请求失败", "JSON 解析失败", "数据解析失败"]
+        for (var i = 0; i < techPatterns.length; i++) {
+            if (s.indexOf(techPatterns[i]) >= 0) {
+                return "网络连接失败，请稍后重试"
+            }
+        }
+        return s
+    }
+
     // ==========================================
     // 1. 监听 C++ 的信号（保持不变）
     // ==========================================
-    Connections { 
-        target: BackendAuth 
+    Connections {
+        target: BackendAuth
         function onLoginSuccess() {
             autoSkipTimer.stop()
             stackView.push("WorkstationPage.qml")
         }
         function onLoginFailed(errorMsg) {
-            errorText.text = errorMsg
+            errorText.text = sanitizeLoginError(errorMsg)
             errorAnim.start()  // 添加错误提示动画
             errorText.visible = true
         }

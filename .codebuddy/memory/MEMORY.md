@@ -59,12 +59,17 @@
 - **跨目录引用**：pages/ 下文件引用 components/ 组件必须 `import "../components"`（Main.qml 用 `import "components"`），否则类型解析失败白屏。WorkstationPage 因文件路径加载脱离模块上下文，靠同目录可见性才可用同级 Dialog。
 - **Singleton**：
   - 纯 QML（如 Theme.qml）：`pragma Singleton` + CMake `set_source_files_properties(... QT_QML_SINGLETON_TYPE TRUE)`（须在 `qt_add_qml_module` 前）+ 加入 QML_FILES。验证看 `build/<URI>/qmldir` 是否以 `singleton` 开头。
-  - C++（SystemInfo/WeightManager）：`qmlRegisterSingletonInstance("App.Backend",1,0,"XXX",ptr)`。
+  - C++（SystemInfo/WeightManager/AppSettings）：`qmlRegisterSingletonInstance("App.Backend",1,0,"XXX",ptr)`。
+- **应用设置 AppSettingsService**（`src/services/AppSettingsService.h/.cpp`）：C++ 单例 QML 名 `AppSettings`。`Q_PROPERTY bool priceInputEnabled`（默认 false）+ QSettings INI 持久化（UserScope "SmartScale"/"AppSettings"，~/.config/SmartScale/AppSettings.conf）。新增用户可配置开关走此服务。项目启用 `QT_NO_KEYWORDS`，信号用 `Q_SIGNALS:`、发射用 `Q_EMIT`（非 signals/emit）。
+- **价格输入单位约定（2026-07-16 统一为元/kg）**：整个链路单位统一为**元/kg**——QML 端 `currentUnitPrice`/`pendingUnitPrice`、DB 字段 `WeightRecord.unitPrice`、上传 json["price"]、表格展示。**不要**再做元/斤 ↔ 元/kg 的 ×2 换算，公式直接 `amount = unitPrice * netWeight(kg)`。`WeightHistoryService.addRecord(..., unitPrice)` 接收元/kg，内部 `qRound(price*100)/100` 保留 2 位小数后存 DB+上传。NumberPadPopup 单位显示"元/kg"，食材卡片右侧"单价（元/kg）"。`SaveConfirmDialog.qml`（已废弃）注释仍是"元/斤"，忽略。
   - 两套模块并存：UI 主题用 `SmartScale`，业务服务用 `App.Backend`。
 - **主题常量**：`src/ui/Theme.qml` 集中字体/字号/颜色，新增一律走 Theme 引用，禁止硬编码。
 - **图片圆角（Qt6 关键坑）**：`Rectangle.clip:true` 只裁矩形包围盒，**不跟随 `radius`**，所以 `Rectangle{radius;clip:true;Image{anchors.fill:parent}}` 的图片四角仍是直角。正确做法用 `MultiEffect` mask：源 `Image{visible:false}` + 遮罩 `Rectangle{id:mask;radius;color:"#FFFFFF";visible:false;layer.enabled:true}` + 显示项 `MultiEffect{source:img;maskEnabled:true;maskSource:mask;anchors.fill:img}`（需 `import QtQuick.Effects`）。mask 用 alpha 通道，须 `layer.enabled:true` 才渲染成纹理。若配合 hover 缩放，把 `scale` 放外层容器（整瓦缩放），勿放被 clip 的 Image 上（会切出直角）。
 - **MultiEffect 阴影标准参数**：`shadowColor:"#002A75"`, `shadowOpacity:0.1`, `shadowBlur:1.0`, `shadowHorizontalOffset:0`, `shadowVerticalOffset:0`。
 - **错误提示脱敏（强制）**：`window.alert()`（Main.qml）内置智能脱敏——URL 全部替换为 `<接口地址>`；若 message 含技术错误特征（`Error transferring`/`server replied`/`QNetworkReply`/`HTTP `/`SSL`/`网络请求失败`/`JSON 解析失败`/`数据解析失败` 等）且未单独传 detail，则自动将原始信息移入 detail（默认收起），message 改用 `title + "，请稍后重试"`。业务友好提示（"未登录"/"名称已存在"等）原样保留。AlertDialog.show() 的 `showDetail` 已改为默认 `false`（有 detail 也不自动展开）。调用方无需逐个处理，统一由 window.alert 兜底。
+  - **C++ 层责任**（2026-07-16 强化）：emit 给 QML 的错误消息**不能含技术细节**（URL/HTTP/SSL/Error transferring 等）——`AuthService.cpp` 网络错误分支原 `Q_EMIT loginFailed(QStringLiteral("网络连接失败：%1").arg(reply->errorString()))` 已改为 `Q_EMIT loginFailed("网络连接失败，请检查网络后重试")`（技术细节仍走 `qWarning` 日志保留可观测性）。
+  - **LoginDialog/LoginPage 内联错误兜底**（2026-07-16）：因设计选择保留表单内联错误文本（不弹窗，2026-07-09 决定），新增 `sanitizeLoginError(msg)` 函数（与 `window.alert()` 同规则）做 QML 端兜底——URL 替换 + 技术特征命中统一改为"网络连接失败，请稍后重试"，防 C++ 端未来回归时技术错误直接外露。
+  - 业务友好错误（"用户不存在"/"密码错误"/"账号已被禁用"）不含技术特征，sanitize 函数原样返回。
 - **全局字体（方案一已实施）**：主字体族统一为 `PingFang SC`。`main.cpp` 经 `QFontDatabase::addApplicationFontFromData` 注册内嵌 `resources/fonts/PingFangSC-Regular.ttf`（打包进 Qt 资源 `:/resources/fonts/...`），并 `app.setFont(QFont("PingFang SC"))` 兜底全局未显式设 family 的 QML 文本；`Theme.qml` 的 `fontFamilyUi`/`fontFamilyTitle` 已改为 `PingFang SC`。
   - 边界：`setFont` 只覆盖未写 `font.family` 的 QML 文本；已硬编码 `font.family`（如 `Monospace`、旧 `Microsoft YaHei`）需方案二/三清理才生效。
   - 仅用 Regular 一个字重；若需 Light/Medium/Semibold 做层级，往 `resources/fonts/` 加对应文件 + CMake `FILES` + `main.cpp` 多读几个文件即可，零成本。

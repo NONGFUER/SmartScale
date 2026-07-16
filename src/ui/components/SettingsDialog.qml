@@ -150,6 +150,41 @@ Dialog {
             }
         }
 
+        Item { Layout.preferredHeight: 12 }
+
+        // ========================================
+        // 功能设置 — 价格输入开关
+        // ========================================
+        Rectangle {
+            Layout.fillWidth: true
+            height: 56
+            radius: 12
+            color: "#F5F7FA"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 20
+                anchors.rightMargin: 20
+                spacing: 0
+
+                Text {
+                    text: "价格输入"
+                    font.family: Theme.fontFamilyUi
+                    font.pixelSize: 20
+                    color: Theme.colorTextSecondary
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                Item { Layout.fillWidth: true }
+
+                Switch {
+                    checked: AppSettings.priceInputEnabled
+                    onCheckedChanged: AppSettings.priceInputEnabled = checked
+                    Layout.alignment: Qt.AlignVCenter
+                }
+            }
+        }
+
         Item { Layout.preferredHeight: 28 }
 
         // ====== 底部关闭按钮 ======

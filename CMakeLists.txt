@@ -84,6 +84,7 @@ qt_add_qml_module(appSmartScale
         src/ui/components/SaveLoadingOverlay.qml        # 保存中全屏遮罩 Loading
         src/ui/components/SaveSuccessDialog.qml         # 保存成功全屏遮罩弹窗
         src/ui/components/DuplicateWeightDialog.qml     # 重复称重提醒弹窗
+        src/ui/components/NumberPadPopup.qml            # 底部9宫格数字键盘（单价输入用）
 
     # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
@@ -107,6 +108,7 @@ qt_add_qml_module(appSmartScale
         SOURCES src/services/CategoryService.h src/services/CategoryService.cpp
         SOURCES src/services/UserIngredientService.h src/services/UserIngredientService.cpp
         SOURCES src/services/SystemInfoService.h src/services/SystemInfoService.cpp       # [测试] 系统信息服务
+        SOURCES src/services/AppSettingsService.h src/services/AppSettingsService.cpp     # 应用设置服务（价格输入开关等）
         SOURCES src/services/NetworkManagerService.h src/services/NetworkManagerService.cpp  # 网络管理服务 (WiFi + 4G)
         SOURCES src/services/MqttClientService.h src/services/MqttClientService.cpp           # MQTT 客户端服务
         SOURCES src/services/CellularModemService.h src/services/CellularModemService.cpp     # 蜂窝模组 CCID(ICCID) 获取 (AT 指令)

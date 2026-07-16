@@ -382,8 +382,10 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
                      << "/" << kMaxRefreshFailures;
         } else {
             // 在线登录网络请求失败：直接报错，不再降级到离线
+            // 注意：reply->errorString()（含 URL/SSL/HTTP 等技术细节）已通过上面 qWarning 记入日志，
+            // 此处只向 QML 推送友好提示，避免用户在登录弹窗看到"Error transferring <URL> - server replied: ..."。
             qWarning() << "[Auth] 在线登录网络请求失败，直接返回错误";
-            Q_EMIT loginFailed(QStringLiteral("网络连接失败：%1").arg(reply->errorString()));
+            Q_EMIT loginFailed(QStringLiteral("网络连接失败，请检查网络后重试"));
         }
         return;
     }

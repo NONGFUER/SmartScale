@@ -74,11 +74,30 @@ Dialog {
         }
         function onLoginFailed(errorMsg) {  // 登录失败时显示错误提示
             console.log("!!! onLogin Fired, msg=", errorMsg)
-            errorText.text = errorMsg
+            // 脱敏兜底：与 window.alert() 保持一致，避免技术错误（URL/HTTP/SSL 等）直接外露给用户
+            errorText.text = sanitizeLoginError(errorMsg)
             errorAnim.start()
-            errorText.opacity = 1 
-           
+            errorText.opacity = 1
+
         }
+    }
+
+    // 登录错误脱敏（与 Main.qml window.alert() 同规则）：
+    // - URL 替换为 <接口地址>
+    // - 含技术错误特征（Error transferring / server replied / QNetworkReply / HTTP / SSL / 网络请求失败 等）
+    //   替换为统一友好提示，避免在登录弹窗内联错误文本显示"Error transferring <URL> - server replied: Bad Gateway"等。
+    function sanitizeLoginError(msg) {
+        if (!msg) return ""
+        var s = String(msg).replace(/https?:\/\/[^\s]+/g, "<接口地址>")
+        var techPatterns = ["Error transferring", "server replied", "QNetworkReply",
+                            "Host ", "Connection ", "timeout", "HTTP ", "SSL",
+                            "网络请求失败", "JSON 解析失败", "数据解析失败"]
+        for (var i = 0; i < techPatterns.length; i++) {
+            if (s.indexOf(techPatterns[i]) >= 0) {
+                return "网络连接失败，请稍后重试"
+            }
+        }
+        return s
     }
 
     contentItem: ColumnLayout {
