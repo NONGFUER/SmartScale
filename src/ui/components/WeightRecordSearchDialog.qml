@@ -78,8 +78,8 @@ Dialog {
 
     // ---- 搜索条件 ----
     property string filterCategory: ""      // 食材类别筛选
-    property string filterDate: ""           // 日期筛选 (yyyy-MM-dd)
-    property string filterOperator: ""       // 人员筛选
+    property string dateStart: ""            // 起始日期 (yyyy-MM-dd)，空=不限
+    property string dateEnd: ""               // 结束日期 (yyyy-MM-dd)，空=不限
 
     // ---- 分页状态 ----
     property int currentPage: 1
@@ -116,17 +116,12 @@ Dialog {
                     continue
             }
 
-            // 日期过滤
-            if (root.filterDate && root.filterDate !== "") {
-                var rt = map.recordTime || ""
-                if (rt.indexOf(root.filterDate) < 0)
+            // 日期范围过滤（取 recordTime 前 10 位 YYYY-MM-DD 比较）
+            if (root.dateStart !== "" || root.dateEnd !== "") {
+                var rt = (map.recordTime || "").substring(0, 10)
+                if (root.dateStart !== "" && rt < root.dateStart)
                     continue
-            }
-
-            // 人员过滤
-            if (root.filterOperator && root.filterOperator !== "") {
-                var op = map.operatorName || ""
-                if (op.indexOf(root.filterOperator) < 0)
+                if (root.dateEnd !== "" && rt > root.dateEnd)
                     continue
             }
 
@@ -147,17 +142,6 @@ Dialog {
             if (cat) cats[cat] = true
         }
         return Object.keys(cats).sort()
-    }
-
-    // 获取所有不重复的操作员列表
-    function getOperatorList() {
-        var all = WeightHistoryService.historyEntries || []
-        var ops = {}
-        for (var i = 0; i < all.length; i++) {
-            var op = (all[i].operatorName || "").trim()
-            if (op) ops[op] = true
-        }
-        return Object.keys(ops).sort()
     }
 
     ColumnLayout {
@@ -215,164 +199,177 @@ Dialog {
                 Text {
                     anchors.centerIn: parent
                     text: "\u2715"
-                    font.pixelSize: 20
+                    font.pixelSize: 24
                     color: closeMouse.containsMouse ? "#EF4444" : "#94A3B8"
                 }
                 MouseArea {
                     id: closeMouse
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
                     onClicked: root.close()
                 }
             }
         }
 
         // ==========================================
-        // 搜索条件行
+        // 搜索条件行：类别 + 起止日期（日历） + 清除 + 搜索按钮
         // ==========================================
         RowLayout {
             Layout.fillWidth: true
             Layout.leftMargin: 32
             Layout.rightMargin: 32
             Layout.bottomMargin: 20
-            spacing: 20
+            spacing: 16
 
-            // 类别选择
-            ColumnLayout {
-                spacing: 6
-                Text {
-                    text: "类别:"
-                    font.family: Theme.fontFamilyUi
-                    font.pixelSize: 15
-                    color: Theme.colorTextSecondary
-                }
-                Rectangle {
-                    width: 180; height: 44
-                    radius: 8
-                    color: "#FFFFFF"
-                    border.color: catCombo.activeFocus ? Theme.colorAccent : Theme.colorInputBorder
-                    border.width: 1
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 12
-                        spacing: 0
-
-                        Text {
-                            text: root.filterCategory === "" ? "全部" : root.filterCategory
-                            font.pixelSize: 15
-                            color: root.filterCategory === "" ? Theme.colorTextTertiary : Theme.colorTextPrimary
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        Text { text: "\u25BC"; font.pixelSize: 13; color: Theme.colorTextTertiary }
-                    }
-
-                    MouseArea {
-                        id: catCombo
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: categoryPopup.open()
-                    }
-                }
-            }
-
-            // 时间选择
-            ColumnLayout {
-                spacing: 6
-                Text {
-                    text: "时间:"
-                    font.family: Theme.fontFamilyUi
-                    font.pixelSize: 15
-                    color: Theme.colorTextSecondary
-                }
-                Rectangle {
-                    width: 190; height: 44
-                    radius: 8
-                    color: "#FFFFFF"
-                    border.color: dateCombo.activeFocus ? Theme.colorAccent : Theme.colorInputBorder
-                    border.width: 1
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 12
-                        spacing: 0
-
-                        Text {
-                            text: root.filterDate === "" ? "全部" : root.filterDate
-                            font.pixelSize: 15
-                            color: root.filterDate === "" ? Theme.colorTextTertiary : Theme.colorTextPrimary
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        Text { text: "\u25BC"; font.pixelSize: 13; color: Theme.colorTextTertiary }
-                    }
-
-                    MouseArea {
-                        id: dateCombo
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: datePopup.open()
-                    }
-                }
-            }
-
-            // 人员选择
-            ColumnLayout {
-                spacing: 6
-                Text {
-                    text: "人员:"
-                    font.family: Theme.fontFamilyUi
-                    font.pixelSize: 15
-                    color: Theme.colorTextSecondary
-                }
-                Rectangle {
-                    width: 160; height: 44
-                    radius: 8
-                    color: "#FFFFFF"
-                    border.color: opCombo.activeFocus ? Theme.colorAccent : Theme.colorInputBorder
-                    border.width: 1
-
-                    RowLayout {
-                        anchors.fill: parent
-                        anchors.leftMargin: 12
-                        anchors.rightMargin: 12
-                        spacing: 0
-
-                        Text {
-                            text: root.filterOperator === "" ? "全部" : root.filterOperator
-                            font.pixelSize: 15
-                            color: root.filterOperator === "" ? Theme.colorTextTertiary : Theme.colorTextPrimary
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
-                            verticalAlignment: Text.AlignVCenter
-                        }
-                        Text { text: "\u25BC"; font.pixelSize: 13; color: Theme.colorTextTertiary }
-                    }
-
-                    MouseArea {
-                        id: opCombo
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: operatorPopup.open()
-                    }
-                }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            // 搜索按钮
+            // ---- 类别选择 ----
             Rectangle {
-                Layout.preferredWidth: 120
-                Layout.preferredHeight: 44
+                width: 240; height: 56
+                radius: 10
+                color: "#FFFFFF"
+                border.color: catCombo.containsMouse ? Theme.colorAccent : Theme.colorInputBorder
+                border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14
+                    anchors.rightMargin: 14
+                    spacing: 0
+
+                    Text {
+                        text: root.filterCategory === "" ? "类别: 全部" : "类别: " + root.filterCategory
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: 24
+                        color: root.filterCategory === "" ? Theme.colorTextTertiary : Theme.colorTextPrimary
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
+                        verticalAlignment: Text.AlignVCenter
+                    }
+                    Text { text: "\u25BC"; font.pixelSize: 24; color: Theme.colorTextTertiary }
+                }
+
+                MouseArea {
+                    id: catCombo
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: categoryPopup.open()
+                }
+            }
+
+            // ---- 开始日期 ----
+            Rectangle {
+                Layout.preferredWidth: 200
+                Layout.preferredHeight: 56
+                radius: 10
+                color: "#FFFFFF"
+                border.color: startDateBtnMA.containsMouse ? Theme.colorAccent : Theme.colorInputBorder
+                border.width: 1
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 8
+                    Text {
+                        text: "\u{1F4C5}"
+                        font.pixelSize: 24
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Text {
+                        text: root.dateStart.length > 0 ? root.dateStart : "开始日期"
+                        font.pixelSize: 24
+                        font.family: root.dateStart.length > 0 ? Theme.fontFamilyMono : Theme.fontFamilyUi
+                        color: root.dateStart.length > 0 ? Theme.colorTextPrimary : Theme.colorTextTertiary
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+
+                MouseArea {
+                    id: startDateBtnMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: {
+                        startCal.initialDate = root.dateStart.length > 0 ? root._parseDate(root.dateStart) : new Date()
+                        startCal.open()
+                    }
+                }
+            }
+
+            Text {
+                text: "至"
+                font.pixelSize: 24
+                font.family: Theme.fontFamilyUi
+                color: Theme.colorTextSecondary
+                Layout.alignment: Qt.AlignVCenter
+            }
+
+            // ---- 结束日期 ----
+            Rectangle {
+                Layout.preferredWidth: 200
+                Layout.preferredHeight: 56
+                radius: 10
+                color: "#FFFFFF"
+                border.color: endDateBtnMA.containsMouse ? Theme.colorAccent : Theme.colorInputBorder
+                border.width: 1
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 8
+                    Text {
+                        text: "\u{1F4C5}"
+                        font.pixelSize: 24
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Text {
+                        text: root.dateEnd.length > 0 ? root.dateEnd : "结束日期"
+                        font.pixelSize: 24
+                        font.family: root.dateEnd.length > 0 ? Theme.fontFamilyMono : Theme.fontFamilyUi
+                        color: root.dateEnd.length > 0 ? Theme.colorTextPrimary : Theme.colorTextTertiary
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+
+                MouseArea {
+                    id: endDateBtnMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: {
+                        endCal.initialDate = root.dateEnd.length > 0 ? root._parseDate(root.dateEnd) : new Date()
+                        endCal.open()
+                    }
+                }
+            }
+
+            // ---- 清除日期筛选 ----
+            Rectangle {
+                Layout.preferredWidth: 96
+                Layout.preferredHeight: 56
+                radius: 10
+                color: clearDateBtnMA.containsMouse ? "#FEE2E2" : "#FFFFFF"
+                border.color: "#E2E8F0"
+                border.width: 1
+                visible: root.dateStart.length > 0 || root.dateEnd.length > 0
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "清除"
+                    font.pixelSize: 24
+                    font.family: Theme.fontFamilyUi
+                    color: clearDateBtnMA.containsMouse ? "#EF4444" : Theme.colorTextSecondary
+                }
+
+                MouseArea {
+                    id: clearDateBtnMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: {
+                        root.dateStart = ""
+                        root.dateEnd = ""
+                    }
+                }
+            }
+
+            // ---- 搜索按钮（紧跟筛选条件，无 spacer）----
+            Rectangle {
+                Layout.preferredWidth: 160
+                Layout.preferredHeight: 56
                 radius: 10
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
@@ -385,7 +382,7 @@ Dialog {
                     spacing: 8
 
                     Item {
-                        width: 22; height: 22
+                        width: 28; height: 28
                         anchors.verticalCenter: parent.verticalCenter
                         Canvas {
                             anchors.fill: parent
@@ -396,11 +393,11 @@ Dialog {
                                 ctx.lineWidth = 2.5
                                 ctx.lineCap = "round"
                                 ctx.beginPath()
-                                ctx.arc(9, 9, 6.5, 0, Math.PI * 2)
+                                ctx.arc(12, 12, 7.5, 0, Math.PI * 2)
                                 ctx.stroke()
                                 ctx.beginPath()
-                                ctx.moveTo(14, 14)
-                                ctx.lineTo(20, 20)
+                                ctx.moveTo(17, 17)
+                                ctx.lineTo(24, 24)
                                 ctx.stroke()
                             }
                             Component.onCompleted: requestPaint()
@@ -408,7 +405,7 @@ Dialog {
                     }
                     Text {
                         text: "搜索"
-                        font.pixelSize: 16
+                        font.pixelSize: 24
                         font.bold: true
                         color: "#FFFFFF"
                         anchors.verticalCenter: parent.verticalCenter
@@ -418,7 +415,6 @@ Dialog {
                 MouseArea {
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
                     onClicked: root.doFilter()
                 }
             }
@@ -452,7 +448,8 @@ Dialog {
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: "暂无符合条件的称重记录"
-                    font.pixelSize: 17
+                    font.pixelSize: 24
+                    font.family: Theme.fontFamilyUi
                     color: Theme.colorTextTertiary
                 }
             }
@@ -462,7 +459,7 @@ Dialog {
                 anchors.fill: parent
                 anchors.margins: 20
                 cellWidth: (width - 40) / 3   // 3列
-                cellHeight: 280               // 卡片高度增大
+                cellHeight: 320               // 卡片高度（容纳 24px 字体 + 大按钮）
                 clip: true
 
                 model: root.pageRecords
@@ -489,7 +486,8 @@ Dialog {
 
             Text {
                 text: "共 " + root.filteredRecords.length + " 条"
-                font.pixelSize: 14
+                font.pixelSize: 24
+                font.family: Theme.fontFamilyUi
                 color: Theme.colorTextSecondary
             }
 
@@ -497,7 +495,7 @@ Dialog {
 
             // 上一页
             Rectangle {
-                width: 40; height: 40; radius: 8
+                width: 48; height: 48; radius: 8
                 color: root.currentPage > 1
                        ? (prevPgHover.hovered ? "#F1F5F9" : "#FFFFFF")
                        : "#F1F5F9"
@@ -508,7 +506,7 @@ Dialog {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "\u2039"; font.pixelSize: 20; font.bold: true
+                    text: "\u2039"; font.pixelSize: 24; font.bold: true
                     color: enabled ? Theme.colorTextPrimary : Theme.colorTextTertiary
                 }
                 HoverHandler { id: prevPgHover }
@@ -537,8 +535,8 @@ Dialog {
                 }
 
                 Item {
-                    width: pageNumTxt.text === "..." ? 32 : 40
-                    height: 40
+                    width: pageNumTxt.text === "..." ? 40 : 48
+                    height: 48
 
                     Rectangle {
                         anchors.fill: parent
@@ -555,7 +553,8 @@ Dialog {
                             id: pageNumTxt
                             anchors.centerIn: parent
                             text: String(modelData)
-                            font.pixelSize: 15
+                            font.pixelSize: 24
+                            font.family: Theme.fontFamilyUi
                             font.bold: modelData === root.currentPage
                             color: modelData === root.currentPage
                                    ? "#FFFFFF" : Theme.colorTextPrimary
@@ -565,7 +564,8 @@ Dialog {
                     Text {
                         anchors.centerIn: parent
                         text: String(modelData)
-                        font.pixelSize: 15
+                        font.pixelSize: 24
+                        font.family: Theme.fontFamilyUi
                         color: Theme.colorTextTertiary
                         visible: modelData === "..."
                     }
@@ -580,7 +580,7 @@ Dialog {
 
             // 下一页
             Rectangle {
-                width: 40; height: 40; radius: 8
+                width: 48; height: 48; radius: 8
                 color: root.currentPage < root.totalPages
                        ? (nextPgHover.hovered ? "#F1F5F9" : "#FFFFFF")
                        : "#F1F5F9"
@@ -591,7 +591,7 @@ Dialog {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "\u203A"; font.pixelSize: 20; font.bold: true
+                    text: "\u203A"; font.pixelSize: 24; font.bold: true
                     color: enabled ? Theme.colorTextPrimary : Theme.colorTextTertiary
                 }
                 HoverHandler { id: nextPgHover }
@@ -609,44 +609,46 @@ Dialog {
     Popup {
         id: categoryPopup
         x: catCombo.parent.mapToItem(root.contentItem, 0, 0).x
-        y: catCombo.parent.mapToItem(root.contentItem, 0, 0).y + 48
-        width: 180
+        y: catCombo.parent.mapToItem(root.contentItem, 0, 0).y + 60
+        width: 240
         padding: 6
         modal: false
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         background: Rectangle {
-            radius: 8
+            radius: 10
             color: "#FFFFFF"
             border.color: "#E2E8F0"
             border.width: 1
             layer.enabled: true
             layer.effect: MultiEffect {
                 shadowEnabled: true
-                shadowColor: "#000000"
-                shadowBlur: 12
-                shadowOpacity: 0.15
-                shadowVerticalOffset: 4
+                shadowColor: "#002A75"
+                shadowOpacity: 0.1
+                shadowBlur: 1.0
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
             }
         }
 
         contentItem: ListView {
-            implicitHeight: Math.min(contentHeight, 280)
+            implicitHeight: Math.min(contentHeight, 360)
             model: ["全部"].concat(root.getCategoryList())
             clip: true
 
             delegate: Rectangle {
                 width: categoryPopup.width - 12
-                height: 42
-                radius: 4
+                height: 56
+                radius: 6
                 color: catItemMouse.containsMouse ? "#F0F6FF" : "transparent"
 
                 Text {
                     anchors.left: parent.left
-                    anchors.leftMargin: 12
+                    anchors.leftMargin: 14
                     anchors.verticalCenter: parent.verticalCenter
                     text: modelData
-                    font.pixelSize: 15
+                    font.pixelSize: 24
+                    font.family: Theme.fontFamilyUi
                     color: root.filterCategory === modelData
                            || (modelData === "全部" && root.filterCategory === "")
                            ? Theme.colorAccent : Theme.colorTextPrimary
@@ -666,154 +668,54 @@ Dialog {
     }
 
     // ================================================================
-    // 下拉弹出框 — 日期选择
+    // 日期选择日历弹窗（起止日期各一个，复用 CalendarPopup 组件）
     // ================================================================
-    Popup {
-        id: datePopup
-        x: dateCombo.parent.mapToItem(root.contentItem, 0, 0).x
-        y: dateCombo.parent.mapToItem(root.contentItem, 0, 0).y + 48
-        width: 220
-        padding: 6
-        modal: false
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-
-        background: Rectangle {
-            radius: 8
-            color: "#FFFFFF"
-            border.color: "#E2E8F0"
-            border.width: 1
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowColor: "#000000"
-                shadowBlur: 12
-                shadowOpacity: 0.15
-                shadowVerticalOffset: 4
-            }
+    CalendarPopup {
+        id: startCal
+        parent: Overlay.overlay
+        onDateSelected: function(d) {
+            root.dateStart = root._fmtDate(d)
         }
-
-        contentItem: ListView {
-            implicitHeight: Math.min(contentHeight, 300)
-            model: root._buildDateModel()
-            clip: true
-
-            delegate: Rectangle {
-                width: datePopup.width - 12
-                height: 42
-                radius: 4
-                color: dateItemMouse.containsHover ? "#F0F6FF" : "transparent"
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: modelData.label
-                    font.pixelSize: 15
-                    color: root.filterDate === modelData.value
-                           || (modelData.value === "" && root.filterDate === "")
-                           ? Theme.colorAccent : Theme.colorTextPrimary
-                }
-
-                HoverHandler { id: dateItemMouse }
-                TapHandler {
-                    onTapped: {
-                        root.filterDate = modelData.value
-                        datePopup.close()
-                    }
-                }
-            }
+        onCleared: {
+            root.dateStart = ""
         }
     }
 
-    // 构建日期模型：今天、昨天、近7天、自定义日期选项
-    function _buildDateModel() {
-        var today = new Date()
-        var fmt = function(d) {
-            return d.getFullYear() + "-"
-                   + String(d.getMonth() + 1).padStart(2, '0') + "-"
-                   + String(d.getDate()).padStart(2, '0')
+    CalendarPopup {
+        id: endCal
+        parent: Overlay.overlay
+        onDateSelected: function(d) {
+            root.dateEnd = root._fmtDate(d)
         }
-        var yesterday = new Date(today)
-        yesterday.setDate(yesterday.getDate() - 1)
-
-        return [
-            { label: "全部", value: "" },
-            { label: "今天 (" + fmt(today) + ")", value: fmt(today) },
-            { label: "昨天 (" + fmt(yesterday) + ")", value: fmt(yesterday) },
-            { label: "近7天", value: "_recent7" },
-            { label: "近30天", value: "_recent30" }
-        ]
+        onCleared: {
+            root.dateEnd = ""
+        }
     }
 
-    // ================================================================
-    // 下拉弹出框 — 人员选择
-    // ================================================================
-    Popup {
-        id: operatorPopup
-        x: opCombo.parent.mapToItem(root.contentItem, 0, 0).x
-        y: opCombo.parent.mapToItem(root.contentItem, 0, 0).y + 48
-        width: 160
-        padding: 6
-        modal: false
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    // Date → "YYYY-MM-DD"
+    function _fmtDate(d) {
+        var pad = function(n) { return n < 10 ? '0' + n : String(n) }
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+    }
 
-        background: Rectangle {
-            radius: 8
-            color: "#FFFFFF"
-            border.color: "#E2E8F0"
-            border.width: 1
-            layer.enabled: true
-            layer.effect: MultiEffect {
-                shadowEnabled: true
-                shadowColor: "#000000"
-                shadowBlur: 12
-                shadowOpacity: 0.15
-                shadowVerticalOffset: 4
-            }
-        }
-
-        contentItem: ListView {
-            implicitHeight: Math.min(contentHeight, 240)
-            model: ["全部"].concat(root.getOperatorList())
-            clip: true
-
-            delegate: Rectangle {
-                width: operatorPopup.width - 12
-                height: 42
-                radius: 4
-                color: opItemMouse.containsMouse ? "#F0F6FF" : "transparent"
-
-                Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: modelData
-                    font.pixelSize: 15
-                    color: root.filterOperator === modelData
-                           || (modelData === "全部" && root.filterOperator === "")
-                           ? Theme.colorAccent : Theme.colorTextPrimary
-                }
-
-                MouseArea {
-                    id: opItemMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: {
-                        root.filterOperator = modelData === "全部" ? "" : modelData
-                        operatorPopup.close()
-                    }
-                }
-            }
-        }
+    // "YYYY-MM-DD" → Date（失败返回当前日期）
+    function _parseDate(s) {
+        try {
+            var d = new Date(s + "T00:00:00")
+            if (!isNaN(d.getTime())) return d
+        } catch (e) {}
+        return new Date()
     }
 
     // 打开时初始化数据并执行默认过滤
     onOpened: {
         filterCategory = ""
-        filterDate = ""
-        filterOperator = ""
+        dateStart = ""
+        dateEnd = ""
         currentPage = 1
         doFilter()
+        // 把焦点从输入框移走，防止虚拟键盘自动弹出压缩弹窗
+        Qt.callLater(function() { backMouse.forceActiveFocus() })
     }
 
     // ==========================================
@@ -842,10 +744,10 @@ Dialog {
             anchors.margins: 10
             spacing: 8
 
-            // 图片区域（高度增大）
+            // 图片区域
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 155
+                Layout.preferredHeight: 150
                 radius: 10
                 color: "#F1F5F9"
                 clip: true
@@ -890,16 +792,17 @@ Dialog {
                     anchors.top: parent.top
                     anchors.left: parent.left
                     anchors.margins: 8
-                    width: recordLabelTxt.implicitWidth + 14
-                    height: 26
-                    radius: 5
+                    width: recordLabelTxt.implicitWidth + 18
+                    height: 36
+                    radius: 6
                     color: Qt.rgba(0, 0, 0, 0.55)
 
                     Text {
                         id: recordLabelTxt
                         anchors.centerIn: parent
                         text: "记录图像"
-                        font.pixelSize: 13
+                        font.pixelSize: 24
+                        font.family: Theme.fontFamilyUi
                         color: "#FFFFFF"
                     }
                 }
@@ -919,20 +822,21 @@ Dialog {
                         Layout.fillWidth: true
                         text: _formatDateTime(cardRoot.record.recordTime)
                               + (cardRoot.record.operatorName ? "  人员: " + cardRoot.record.operatorName : "")
-                        font.pixelSize: 13
+                        font.pixelSize: 24
                         font.family: Theme.fontFamilyMono
                         color: Theme.colorTextTertiary
                         elide: Text.ElideRight
                     }
 
-                    // 食材名称 + 重量（核心信息加粗放大）
+                    // 食材名称 + 重量（核心信息加粗）
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 10
 
                         Text {
                             text: cardRoot.record.categoryName || "未知食材"
-                            font.pixelSize: 17
+                            font.pixelSize: 24
+                            font.family: Theme.fontFamilyUi
                             font.bold: true
                             color: Theme.colorTextPrimary
                             elide: Text.ElideRight
@@ -941,7 +845,8 @@ Dialog {
 
                         Text {
                             text: (cardRoot.record.weight || 0).toFixed(1) + " kg"
-                            font.pixelSize: 17
+                            font.pixelSize: 24
+                            font.family: Theme.fontFamilyUi
                             font.bold: true
                             color: "#2563EB"
                         }
@@ -952,12 +857,12 @@ Dialog {
                     // 按钮行：撤回 + 查看
                     RowLayout {
                         Layout.alignment: Qt.AlignRight
-                        spacing: 8
+                        spacing: 10
 
                         // 撤回按钮（红色边框，危险操作）
                         Rectangle {
-                            Layout.preferredWidth: 56
-                            Layout.preferredHeight: 32
+                            Layout.preferredWidth: 96
+                            Layout.preferredHeight: 50
                             radius: 8
                             color: revokeHover.hovered ? "#FEF2F2" : "#F8FAFC"
                             border.color: revokeHover.hovered ? "#FCA5A5" : "#FECACA"
@@ -966,7 +871,8 @@ Dialog {
                             Text {
                                 anchors.centerIn: parent
                                 text: "撤回"
-                                font.pixelSize: 14
+                                font.pixelSize: 24
+                                font.family: Theme.fontFamilyUi
                                 font.bold: true
                                 color: "#DC2626"
                             }
@@ -979,8 +885,8 @@ Dialog {
 
                         // 查看按钮
                         Rectangle {
-                            Layout.preferredWidth: 72
-                            Layout.preferredHeight: 32
+                            Layout.preferredWidth: 120
+                            Layout.preferredHeight: 50
                             radius: 8
                             color: viewBtnHover.hovered ? "#EFF6FF" : "#F8FAFC"
                             border.color: "#BFDBFE"
@@ -989,7 +895,8 @@ Dialog {
                             Text {
                                 anchors.centerIn: parent
                                 text: "查看"
-                                font.pixelSize: 15
+                                font.pixelSize: 24
+                                font.family: Theme.fontFamilyUi
                                 color: "#3B82F6"
                             }
 
