@@ -81,6 +81,8 @@ qt_add_qml_module(appSmartScale
         src/ui/components/SaveConfirmDialog.qml         # 保存确认弹窗（含价格输入）
         src/ui/components/WeightRecordTableDialog.qml   # 称重记录表格弹窗（云端分页）
         src/ui/components/CalendarPopup.qml             # 日期选择日历弹窗
+        src/ui/components/SaveLoadingOverlay.qml        # 保存中全屏遮罩 Loading
+        src/ui/components/SaveSuccessDialog.qml         # 保存成功全屏遮罩弹窗
 
     # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp

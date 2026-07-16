@@ -129,37 +129,37 @@ Item {
                                     anchors.margins: 16
                                     spacing: 10
 
-                                // 标题行：历史记录 + 更多>
+                                // 标题行：历史记录 + 表格 + 更多>
                                 RowLayout {
                                     Layout.fillWidth: true
 
                                     Row {
-                                        spacing: 6
+                                        spacing: 16
                                         Text {
                                             text: "历史记录"
                                             font.pixelSize: 28
                                             font.bold: true
                                             color: "#1E293B"
                                         }
+
+                                        Text {
+                                            text: "表格"
+                                            font.pixelSize: 24
+                                            color: "#6366F1"
+                                            MouseArea {
+                                                anchors.fill: parent
+                                                hoverEnabled: true
+                                                // [入口] 点击打开称重记录表格弹窗
+                                                onClicked: tableDialog.open()
+                                            }
+                                        }
                                     }
 
                                     Item { Layout.fillWidth: true }
 
                                     Text {
-                                        text: "表格"
-                                        font.pixelSize: 18
-                                        color: "#6366F1"
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            // [入口] 点击打开称重记录表格弹窗
-                                            onClicked: tableDialog.open()
-                                        }
-                                    }
-
-                                    Text {
                                         text: "更多 >"
-                                        font.pixelSize: 18
+                                        font.pixelSize: 24
                                         color: "#3B82F6"
                                         MouseArea {
                                             anchors.fill: parent
@@ -1142,12 +1142,14 @@ Item {
         target: WeightHistoryService
         function onCloudSyncSuccess(localId) {
             console.log("[Toast] 上传成功 id=", localId)
-            window.toast("保存成功", "success")
+            saveLoadingOverlay.close()
+            saveSuccessDialog.openDialog()
             VoiceSpeaker.speak("已保存")
             clearIngredientCard()
         }
         function onCloudSyncFailed(localId, errorMsg) {
             console.warn("[Alert] 上传失败 id=", localId, "err=", errorMsg)
+            saveLoadingOverlay.close()
             window.alert("保存失败：" + errorMsg, "error", "云端同步失败", errorMsg)
             clearIngredientCard()
         }
@@ -1302,12 +1304,28 @@ Item {
             // 缓存单价，等拍照完成后传入 addRecord
             root.pendingUnitPrice = unitPrice
             root.pendingManualSave = true
+            // 显示全屏 Loading 遮罩，阻断交互（拍照 + 上传期间）
+            saveLoadingOverlay.open()
             // 触发拍照（水印绘制 + 图片落盘）
             CameraController.captureVegetable(root.pendingSaveWeight, root.currentPrediction)
         }
         onCancelled: {
             console.log(">> 用户取消保存")
         }
+    }
+
+    // ==========================================
+    //  保存中全屏遮罩 Loading
+    // ==========================================
+    SaveLoadingOverlay {
+        id: saveLoadingOverlay
+    }
+
+    // ==========================================
+    //  保存成功全屏遮罩弹窗
+    // ==========================================
+    SaveSuccessDialog {
+        id: saveSuccessDialog
     }
 
 }
