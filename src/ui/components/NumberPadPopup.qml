@@ -40,12 +40,12 @@ Popup {
     modal: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
     padding: 0
-    width: parent ? parent.width * 0.4 : 0   // 覆盖 40% 屏宽
-    height: parent ? parent.height * 0.6 : 0 // 60% 屏高，露顶部 40% 给食材卡片
-    x: parent ? parent.width - width : 0     // 贴右（Popup 无 anchors，用坐标）
-    y: parent ? parent.height - height : 0   // 贴底，顶部留出食材卡片可见区
+    width: parent ? parent.width * 0.35 : 0   // 覆盖 40% 屏宽
+    height: parent ? parent.height * 0.58 : 0 // 60% 屏高，露顶部 40% 给食材卡片
+    x: parent ? parent.width - width-35 : 0     // 贴右（Popup 无 anchors，用坐标）
+    y: parent ? parent.height - height-40 : 0   // 贴底，顶部留出食材卡片可见区
 
-    Overlay.modal: Rectangle { color: "#80000000" }
+    Overlay.modal: Rectangle { color: "#00000000" }
 
     background: Rectangle {
         radius: 24
@@ -65,11 +65,11 @@ Popup {
     }
 
     enter: Transition {
-        NumberAnimation { property: "x"; from: root.parent ? root.parent.width : 0; to: root.parent ? root.parent.width - root.width : 0; duration: 220; easing.type: Easing.OutCubic }
+        NumberAnimation { property: "x"; from: root.parent ? root.parent.width : 0; to: root.parent ? root.parent.width - root.width - 45 : 0; duration: 220; easing.type: Easing.OutCubic }
         NumberAnimation { property: "opacity"; from: 0.0; to: 1.0; duration: 200 }
     }
     exit: Transition {
-        NumberAnimation { property: "x"; from: root.parent ? root.parent.width - root.width : 0; to: root.parent ? root.parent.width : 0; duration: 180; easing.type: Easing.InCubic }
+        NumberAnimation { property: "x"; from: root.parent ? root.parent.width - root.width - 45 : 0; to: root.parent ? root.parent.width : 0; duration: 180; easing.type: Easing.InCubic }
         NumberAnimation { property: "opacity"; from: 1.0; to: 0.0; duration: 160 }
     }
 
@@ -83,7 +83,7 @@ Popup {
         anchors.margins: 24
         spacing: 16
 
-        // ---------- 显示栏：当前输入值 + 单位 ----------
+        // ---------- 显示栏：当前输入值 + 单位 + 清空 ----------
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 72
@@ -106,13 +106,44 @@ Popup {
                 color: "#1E293B"
             }
 
-            Text {
+            Row {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                text: "元/kg"
-                font.pixelSize: 24
-                font.family: Theme.fontFamilyUi
-                color: "#94A3B8"
+                spacing: 10
+
+                Text {
+                    text: "元/kg"
+                    font.pixelSize: 24
+                    font.family: Theme.fontFamilyUi
+                    color: "#94A3B8"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                // 清空按钮：一键复位为 "0"
+                Rectangle {
+                    width: 88; height: 44; radius: 22
+                    color: clearMA.containsMouse ? "#FEF2F2" : "#F1F5F9"
+                    border.color: clearMA.containsMouse ? "#EF4444" : "#E2E8F0"
+                    border.width: 1
+
+                    Behavior on color { ColorAnimation { duration: 100 } }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "清空"
+                        font.pixelSize: 24
+                        font.bold: true
+                        font.family: Theme.fontFamilyUi
+                        color: clearMA.containsMouse ? "#EF4444" : "#64748B"
+                    }
+
+                    MouseArea {
+                        id: clearMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.displayText = "0"
+                    }
+                }
             }
         }
 
@@ -242,34 +273,68 @@ Popup {
             }
         }
 
-        // ---------- 确定按钮 ----------
-        Rectangle {
+        // ---------- 确定 + 关闭 并排 ----------
+        RowLayout {
             Layout.fillWidth: true
-            Layout.preferredHeight: 72
-            radius: 16
-            color: confirmMA.containsMouse ? "#4649E5" : "#4361EE"
+            spacing: 12
 
-            Behavior on color { ColorAnimation { duration: 120 } }
+            // 关闭按钮（左侧）
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 64
+                radius: 16
+                color: closeMA.containsMouse ? "#E0E7FF" : "transparent"
+                border.color: closeMA.containsMouse ? "#4361EE" : "#4361EE"
+                border.width: 2
 
-            Text {
-                anchors.centerIn: parent
-                text: "确定"
-                font.pixelSize: 30
-                font.bold: true
-                font.family: Theme.fontFamilyUi
-                color: "#FFFFFF"
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "关闭"
+                    font.pixelSize: 30
+                    font.bold: true
+                    font.family: Theme.fontFamilyUi
+                    color: "#4361EE"
+                }
+
+                MouseArea {
+                    id: closeMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.close()
+                }
             }
 
-            MouseArea {
-                id: confirmMA
-                anchors.fill: parent
-                hoverEnabled: true
-                onClicked: {
-                    var v = parseFloat(root.displayText)
-                    if (isNaN(v)) v = 0
-                    v = Math.round(v * 100) / 100   // 最多 2 位小数
-                    root.confirmed(v)
-                    root.close()
+            // 确定按钮（右侧）
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 64
+                radius: 16
+                color: confirmMA.containsMouse ? "#4649E5" : "#4361EE"
+
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "确定"
+                    font.pixelSize: 30
+                    font.bold: true
+                    font.family: Theme.fontFamilyUi
+                    color: "#FFFFFF"
+                }
+
+                MouseArea {
+                    id: confirmMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: {
+                        var v = parseFloat(root.displayText)
+                        if (isNaN(v)) v = 0
+                        v = Math.round(v * 100) / 100   // 最多 2 位小数
+                        root.confirmed(v)
+                        root.close()
+                    }
                 }
             }
         }

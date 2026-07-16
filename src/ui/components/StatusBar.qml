@@ -14,8 +14,10 @@ Rectangle {
     signal debugRequested()
     // 点击网络图标发出的信号 — 根据状态打开 WiFi 或 4G 弹窗
     signal networkRequested()
-    // 点击用户头像/名字区域发出的信号 — 弹出退出登录确认
+    // 点击用户头像/名字区域发出的信号 — 已登录时弹出退出登录确认
     signal userAreaClicked()
+    // 点击用户头像/名字区域发出的信号 — 未登录时打开登录弹窗
+    signal loginRequested()
 
     RowLayout {
         id: mainRow
@@ -29,7 +31,7 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
             Layout.preferredHeight: root.height
             Layout.preferredWidth: userRow.implicitWidth
-            visible: BackendAuth.avatarUrl || BackendAuth.currentUser
+            visible: true  // 始终显示：未登录时作为登录入口
 
             RowLayout {
                 id: userRow
@@ -64,7 +66,7 @@ Rectangle {
 
                 // 用户名
                 Text {
-                    text: BackendAuth.currentUser || "未登录"
+                    text: BackendAuth.currentUser || "点击登录"
                     font.pixelSize: 34
                     font.bold: true
                     color: "#FFFFFF"
@@ -73,11 +75,17 @@ Rectangle {
                 }
             }
 
-            // 点击用户区域触发退出登录确认（覆盖整个用户区）
+            // 点击用户区域：已登录 → 退出登录确认；未登录 → 打开登录弹窗
             MouseArea {
                 anchors.fill: parent
                 hoverEnabled: true
-                onClicked: root.userAreaClicked()
+                onClicked: {
+                    if (BackendAuth.currentUser) {
+                        root.userAreaClicked()
+                    } else {
+                        root.loginRequested()
+                    }
+                }
             }
         }
 

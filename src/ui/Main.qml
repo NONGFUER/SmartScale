@@ -219,6 +219,10 @@ ApplicationWindow {
                 console.log("[Main] 用户区域点击，弹出退出登录确认")
                 logoutConfirmDialog.open()
             }
+            function onLoginRequested() {
+                console.log("[Main] 用户区域点击（未登录），打开登录弹窗")
+                loginDialog.open()
+            }
         }
 
         StackView {

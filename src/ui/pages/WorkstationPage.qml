@@ -18,6 +18,7 @@ Item {
     property var currentDetailRecord: null
     property bool categorySelectMode: false  // 是否为手动品类选择模式
     property bool pendingManualSave: false    // 手动保存等待拍照完成
+    property bool savingInProgress: false     // 保存流程进行中（防抖：阻止保存按钮狂按重复触发拍照）
     property double pendingSaveWeight: 0
     property string pendingSaveLabel: ""
     property string currentIngrId: ""        // 当前选中食材的 ingrId (上传用)
@@ -669,7 +670,7 @@ Item {
 
                                         // ===== 左侧：食材标签 + 食材名（价格开启时固定 180，价格关闭时撑满整卡）=====
                                         Item {
-                                            Layout.preferredWidth: AppSettings.priceInputEnabled ? 180 : 0
+                                            Layout.preferredWidth: AppSettings.priceInputEnabled ? 350 : 0
                                             Layout.fillWidth: !AppSettings.priceInputEnabled
                                             Layout.fillHeight: true
 
@@ -703,7 +704,7 @@ Item {
                                                     var translated = Translator.translate(pred);
                                                     return (translated === pred) ? "--" : translated;
                                                 }
-                                                font.pixelSize: AppSettings.priceInputEnabled ? 48 : 68
+                                                font.pixelSize: AppSettings.priceInputEnabled ? 30 : 68
                                                 font.bold: true
                                                 color: "#FFFFFF"
                                                 elide: Text.ElideRight
@@ -716,13 +717,13 @@ Item {
                                             Layout.fillHeight: true
                                             Layout.topMargin: 24
                                             Layout.bottomMargin: 24
-                                            color: "#FFFFFF20"
+                                            color: "#FFFFFF"
                                             visible: AppSettings.priceInputEnabled
                                         }
 
                                         // ===== 右侧：单价 + 金额 两段式（与左侧固定 180 对称）=====
                                         ColumnLayout {
-                                            Layout.preferredWidth: 180
+                                            Layout.preferredWidth: 240
                                             Layout.fillWidth: true
                                             Layout.maximumWidth: 220
                                             Layout.fillHeight: true
@@ -737,8 +738,9 @@ Item {
                                             Text {
                                                 text: "单价（元/kg）"
                                                 font.pixelSize: 18
+                                                font.bold:true
                                                 font.family: "PingFang SC"
-                                                color: "#FFFFFFB0"
+                                                color: "#FFFFFF"
                                             }
 
                                             // ---- 单价输入框（点击弹出9宫格键盘）----
@@ -746,9 +748,9 @@ Item {
                                                 Layout.fillWidth: true
                                                 Layout.preferredHeight: 64
                                                 radius: 12
-                                                color: priceMA.pressed ? "#FFFFFF30" : "transparent"
-                                                border.color: "#FFFFFF60"
-                                                border.width: 1
+                                                color: priceMA.pressed ? "#FFFFF" : "transparent"
+                                                border.color: "#FFFFFF"
+                                                border.width: 2
                                                 Behavior on color { ColorAnimation { duration: 120 } }
 
                                                 RowLayout {
@@ -767,14 +769,7 @@ Item {
                                                         font.family: "PingFang SC"
                                                         color: "#FFFFFF"
                                                     }
-                                                    Item { Layout.fillWidth: true }
-                                                    Text {
-                                                        Layout.alignment: Qt.AlignVCenter
-                                                        text: "元/kg"
-                                                        font.pixelSize: 18
-                                                        font.family: "PingFang SC"
-                                                        color: "#FFFFFFB0"
-                                                    }
+                                                    
                                                 }
 
                                                 MouseArea {
@@ -791,7 +786,7 @@ Item {
                                                 Layout.preferredHeight: 1
                                                 Layout.topMargin: 4
                                                 Layout.bottomMargin: 4
-                                                color: "#FFFFFF20"
+                                                color: "#FFFFFF"
                                             }
 
                                             // ---- 金额标签 ----
@@ -799,9 +794,9 @@ Item {
                                                 text: "金额（元）"
                                                 font.pixelSize: 18
                                                 font.family: "PingFang SC"
-                                                color: "#FFFFFFB0"
+                                                color: "#FFFFFF"
                                             }
-
+                                           
                                             // ---- 金额大显示区（深色半透明背景）----
                                             Rectangle {
                                                 Layout.fillWidth: true
@@ -906,6 +901,12 @@ Item {
                                         id: recognizeMA
                                         anchors.fill: parent
                                         onClicked: {
+                                            // 防抖：识别进行中忽略重复点击，避免狂按触发多次拍照
+                                            // 导致工作线程写 cp0.jpg 与主线程读 cp0.jpg 竞争崩溃
+                                            if (root.aiRecognizing) {
+                                                console.log("[WSP] AI 识别进行中，忽略重复点击")
+                                                return
+                                            }
                                             console.log("[WSP] 点击识别按钮，手动触发 AI 识别")
                                             if (!BackendAuth.currentUser) {
                                                 console.warn("[WSP] 未登录，拦截识别操作，弹出登录窗口")
@@ -1120,6 +1121,12 @@ Item {
                             MouseArea {
                                 anchors.fill: parent
                                 onClicked: {
+                                    // 防抖：保存流程进行中忽略重复点击，避免狂按触发多次拍照
+                                    // 导致 CaptureTask 堆积产出大量 WLC200A 水印照片
+                                    if (root.savingInProgress) {
+                                        console.log("[WSP] 保存流程进行中，忽略重复点击")
+                                        return
+                                    }
                                     // 保存需要登录：未登录则弹登录窗口，中止本次保存
                                     if (!BackendAuth.currentUser) {
                                         console.warn("[WSP] 未登录，拦截保存操作，弹出登录窗口")
@@ -1157,6 +1164,8 @@ Item {
                                     root.pendingSaveLabel = chineseLabel
                                     root.pendingSaveIngrId = root.currentIngrId
                                     root.pendingSaveAiDetected = root.currentAiDetected
+                                    // 校验全部通过，锁定保存流程（覆盖重复弹窗等待 + 拍照 + 上传全周期）
+                                    root.savingInProgress = true
                                     // 检测重复称重：有重复弹窗提醒，无重复直接保存
                                     var dupInfo = WeightHistoryService.checkDuplicate(chineseLabel, currentWeight)
                                     if (dupInfo && dupInfo["duplicate"] === true) {
@@ -1182,6 +1191,8 @@ Item {
         root.pendingManualSave = true
         saveLoadingOverlay.open()
         CameraController.captureVegetable(root.pendingSaveWeight, root.currentPrediction)
+        // 启动保存超时兜底：覆盖拍照+上传全程，防止相机异常/网络无响应导致永久卡死
+        saveTimeout.restart()
     }
 
     // ===== 白屏闪光动画效果 =====
@@ -1212,6 +1223,7 @@ Item {
                 // 手动保存：图片已落盘，立即写记录 + 上传（不等 AI）
                 if (root.pendingManualSave) {
                     root.pendingManualSave = false
+                    saveTimeout.stop()   // 拍照已完成，进入上传阶段（由 onCloudSyncFailed 兜底）
                     let w = root.pendingSaveWeight
                     let label = root.pendingSaveLabel
                     let up = root.pendingUnitPrice
@@ -1292,14 +1304,18 @@ Item {
         target: WeightHistoryService
         function onCloudSyncSuccess(localId) {
             console.log("[Toast] 上传成功 id=", localId)
+            root.savingInProgress = false
             saveLoadingOverlay.close()
+            saveTimeout.stop()
             saveSuccessDialog.openDialog()
             VoiceSpeaker.speak("已保存")
             clearIngredientCard()
         }
         function onCloudSyncFailed(localId, errorMsg) {
             console.warn("[Alert] 上传失败 id=", localId, "err=", errorMsg)
+            root.savingInProgress = false
             saveLoadingOverlay.close()
+            saveTimeout.stop()
             window.alert("云端服务暂时无法访问，请稍后重试", "error", "云端同步失败", errorMsg)
             clearIngredientCard()
         }
@@ -1308,6 +1324,9 @@ Item {
                 window.toast("记录已创建", "info")
             } else {
                 console.warn("[Alert] 创建记录失败:", msg)
+                root.savingInProgress = false
+                saveLoadingOverlay.close()
+                saveTimeout.stop()
                 window.alert("创建记录失败：" + msg, "error", "保存失败")
             }
         }
@@ -1345,6 +1364,25 @@ Item {
                 root.aiRecognizing = false
                 CameraController.aiOnlyMode = false
                 window.alert("AI 识别超时（15秒无响应）", "warning", "识别超时")
+            }
+        }
+    }
+
+    // 保存超时兜底：10秒内未完成拍照则自动重置状态，
+    // 防止相机异常（重启中 captureVegetable 直接 return 不发 photoSaved）
+    // 导致 savingInProgress + saveLoadingOverlay 永久卡死。
+    // 仅覆盖拍照阶段（onPhotoSaved 收到即停止）；上传阶段由 onCloudSyncFailed 兜底。
+    Timer {
+        id: saveTimeout
+        interval: 10000
+        repeat: false
+        onTriggered: {
+            if (root.savingInProgress) {
+                console.warn("[WSP] 保存超时（10s），自动重置状态")
+                root.savingInProgress = false
+                root.pendingManualSave = false
+                saveLoadingOverlay.close()
+                window.alert("保存超时（10秒无响应），请重试", "warning", "保存超时")
             }
         }
     }
@@ -1455,6 +1493,7 @@ Item {
         }
         onCancelled: {
             console.log(">> 用户取消保存（重复称重）")
+            root.savingInProgress = false
         }
     }
 
