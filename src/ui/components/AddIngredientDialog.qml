@@ -30,12 +30,24 @@ Dialog {
     property string selectedTopCateName: ""        // 当前选中一级品类的 cateNm
 
     x: (parent.width - width) / 2
-    y: (parent.height - height) / 2
+    y: Math.min((parent.height - height) / 2, parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
     width: Math.min(parent.width * 0.85, 680)
     height: Math.min(parent.height * 0.75, 480)
-    modal: true
-    Overlay.modal: Rectangle { color: "#80000000" }
+    modal: false
     closePolicy: Popup.NoAutoClose
+
+    // 外部遮罩（reparent 到 window.contentItem，z:40 低于键盘 z:99，避让虚拟键盘）
+    Rectangle {
+        parent: window.contentItem
+        anchors.fill: parent
+        color: "#80000000"
+        z: 40
+        visible: dialogRoot.visible
+        MouseArea {
+            anchors.fill: parent
+            onClicked: {}  // NoAutoClose：点击外部不关闭，仅拦截防点穿
+        }
+    }
     title: ""
 
     background: Rectangle {

@@ -920,7 +920,7 @@ Item {
                                             }
                                             root.aiRecognizing = true
                                             aiRecognizeTimeout.restart()
-                                            window.toast("AI 识别中...", "info", 1500)
+                                            aiLoadingOverlay.open()
                                             CameraController.aiOnlyMode = true
                                             CameraController.captureVegetable(WeightManager.netWeight, root.currentPrediction)
                                         }
@@ -1282,6 +1282,7 @@ Item {
             if (root.aiRecognizing) {
                 root.aiRecognizing = false
                 aiRecognizeTimeout.stop()
+                aiLoadingOverlay.close()
                 // 恢复非 AI-only 模式（下次保存时需要画水印）
                 CameraController.aiOnlyMode = false
 
@@ -1336,9 +1337,8 @@ Item {
     Connections {
         target: WeightManager
         function onTareDone(ok) {
-            if (ok) {
-                window.toast(root.lastScaleOp === "zero" ? "归零成功" : "去皮成功", "success", 1500)
-            } else {
+            // 成功不弹 toast（静默），仅失败时提醒
+            if (!ok) {
                 window.toast(root.lastScaleOp === "zero" ? "归零失败" : "去皮失败：请检查秤通信", "error", 3000)
             }
         }
@@ -1362,6 +1362,7 @@ Item {
             if (root.aiRecognizing) {
                 console.warn("[WSP] AI 识别超时（15s），自动重置状态")
                 root.aiRecognizing = false
+                aiLoadingOverlay.close()
                 CameraController.aiOnlyMode = false
                 window.alert("AI 识别超时（15秒无响应）", "warning", "识别超时")
             }
@@ -1502,6 +1503,12 @@ Item {
     // ==========================================
     SaveLoadingOverlay {
         id: saveLoadingOverlay
+    }
+
+    // AI 识别中全屏遮罩 Loading（复用 SaveLoadingOverlay，文案"识别中..."）
+    SaveLoadingOverlay {
+        id: aiLoadingOverlay
+        loadingText: "识别中..."
     }
 
     // ==========================================

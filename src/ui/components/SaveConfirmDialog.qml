@@ -50,11 +50,12 @@ Dialog {
         Qt.callLater(function() { cancelMA.forceActiveFocus() })
     }
 
-    // Dialog 基础配置
-    modal: true
+    // Dialog 基础配置（非模态 + 外部遮罩避让虚拟键盘）
+    modal: false
+    x: (parent.width - width) / 2
+    y: Math.min((parent.height - height) / 2, parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
     width: 680
     height: 690
-    anchors.centerIn: parent
     padding: 0
     background: Rectangle {
         radius: 16
@@ -74,8 +75,17 @@ Dialog {
         }
     }
 
-    Overlay.modal: Rectangle {
+    // 外部遮罩（reparent 到 window.contentItem，z:40 低于键盘 z:99，避让虚拟键盘）
+    Rectangle {
+        parent: window.contentItem
+        anchors.fill: parent
         color: "#80000000"
+        z: 40
+        visible: root.visible
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.close()  // 点击外部关闭
+        }
     }
 
     enter: Transition {

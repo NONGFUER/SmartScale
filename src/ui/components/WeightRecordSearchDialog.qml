@@ -27,12 +27,24 @@ Dialog {
     id: root
 
     x: (parent.width - width) / 2
-    y: (parent.height - height) / 2
+    y: Math.min((parent.height - height) / 2, parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
     width: Math.min(parent.width * 0.92, 1300)
     height: Math.min(parent.height * 0.88, 900)
-    modal: true
-    Overlay.modal: Rectangle { color: "#80000000" }
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    modal: false
+    closePolicy: Popup.CloseOnEscape
+
+    // 外部遮罩（reparent 到 window.contentItem，z:40 低于键盘 z:99，避让虚拟键盘）
+    Rectangle {
+        parent: window.contentItem
+        anchors.fill: parent
+        color: "#80000000"
+        z: 40
+        visible: root.visible
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.close()  // 原 CloseOnPressOutside 语义：点击外部关闭
+        }
+    }
     title: ""
     padding: 0
 

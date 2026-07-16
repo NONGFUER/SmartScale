@@ -12,6 +12,9 @@ import QtQuick.Effects
 Popup {
     id: root
 
+    // 可参数化文案（默认"保存中..."，AI 识别复用时传"识别中..."）
+    property string loadingText: "保存中..."
+
     modal: true
     closePolicy: Popup.NoAutoClose
     padding: 0
@@ -78,7 +81,7 @@ Popup {
         }
 
         Text {
-            text: "保存中..."
+            text: root.loadingText
             font.pixelSize: 28
             font.bold: true
             font.family: Theme.fontFamilyUi
