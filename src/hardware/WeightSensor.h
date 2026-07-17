@@ -27,6 +27,7 @@ class WeightSensor : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(double netWeight READ netWeight NOTIFY weightChanged)
+    Q_PROPERTY(double displayWeight READ displayWeight NOTIFY displayWeightChanged)
     Q_PROPERTY(bool isStable READ isStable NOTIFY stableChanged)
     Q_PROPERTY(QString sn READ sn NOTIFY snChanged)
 
@@ -35,6 +36,7 @@ public:
     ~WeightSensor();
 
     double netWeight() const;
+    double displayWeight() const;
     bool isStable() const;
     QString sn() const;
 
@@ -51,6 +53,7 @@ public:
 
 Q_SIGNALS:
     void weightChanged();
+    void displayWeightChanged();  // 显示重量变化（带迟滞，跳变才发）
     void stableChanged();
     void stableTriggered(); // 重量从"不稳定"刚变为"稳定的瞬间触发"
     /** 去皮完成通知 (true=成功, false=失败) */
@@ -99,6 +102,17 @@ private:
 
     // ==================== 设备序列号 ====================
     QString m_sn;       // 设备序列号 (启动时读取一次缓存)
+
+    // ==================== 迟滞显示重量 (Hysteresis) ====================
+    // 用于 QML 显示/计算/保存的统一重量。带迟滞区间防止临界点来回跳变：
+    //   - 上跳阈值 = m_displayWeight + HYSTERESIS_THRESHOLD
+    //   - 下跳阈值 = m_displayWeight - HYSTERESIS_THRESHOLD
+    //   - 死区 (m_displayWeight - T, m_displayWeight + T) 内保持当前显示
+    // 公式：HYSTERESIS_THRESHOLD = 0.005 (半档) + 0.002 (迟滞量) = 0.007
+    // 注意：硬件真实值在 X.005 临界点漂移会导致常规四舍五入在 X.00/X.01 来回跳
+    //       加迟滞后，需越过死区才跳变，UI 稳定。
+    double m_displayWeight = 0.0;
+    static constexpr double HYSTERESIS_THRESHOLD = 0.007;
 
     // ==================== 缓冲池 (生产者-消费者) ====================
     WeightSample   m_buffer;                    // 最新数据缓存（覆盖写）

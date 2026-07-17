@@ -84,6 +84,10 @@ double WeightSensor::netWeight() const
     }
     return m_netWeight;
 }
+double WeightSensor::displayWeight() const
+{
+    return m_displayWeight;
+}
 bool WeightSensor::isStable()  const { return m_isStable; }
 QString WeightSensor::sn()     const { return m_sn; }
 
@@ -254,6 +258,31 @@ void WeightSensor::consumeBuffer()
     // 变化量 > 0.001kg 才刷新 UI
     if (std::abs(newNetWeight - m_netWeight) > 0.001) {
         m_netWeight = newNetWeight;
+
+        // ---- 迟滞算法（Hysteresis）更新显示重量 ----
+        // 用 netWeight() getter 取值（已含负20g→0 钳位），与 QML 看到一致
+        const double raw   = netWeight();
+        const double round_ = std::round(raw * 100.0) / 100.0;  // 常规四舍五入到 2 位小数
+        double newDisplay = m_displayWeight;                    // 默认保持
+
+        if (round_ > m_displayWeight) {
+            // 增加方向：需 raw 越过 (当前显示 + 0.007) 才跳到上一档
+            if (raw > m_displayWeight + HYSTERESIS_THRESHOLD) {
+                newDisplay = round_;
+            }
+        } else if (round_ < m_displayWeight) {
+            // 减少方向：需 raw 越过 (当前显示 - 0.007) 才跳到下一档
+            if (raw < m_displayWeight - HYSTERESIS_THRESHOLD) {
+                newDisplay = round_;
+            }
+        }
+        // round_ == m_displayWeight：保持在死区内，不更新
+
+        if (std::abs(newDisplay - m_displayWeight) > 0.0001) {
+            m_displayWeight = newDisplay;
+            Q_EMIT displayWeightChanged();
+        }
+
         Q_EMIT weightChanged();
     }
 }

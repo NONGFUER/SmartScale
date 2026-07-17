@@ -28,7 +28,7 @@ Item {
     property bool pendingSaveAiDetected: false // 手动保存待写入的 aiDetected
     property double pendingUnitPrice: 0         // 手动保存待写入的单价（元/kg，与 addRecord/DB/上传约定一致）
     property real currentUnitPrice: 0           // 食材卡片当前输入的单价（元/kg），保存后清空
-    readonly property real currentAmount: currentUnitPrice * (Math.round(WeightManager.netWeight * 100) / 100)   // 金额（元）= 单价×四舍五入2位净重（与显示重量一致）
+    readonly property real currentAmount: currentUnitPrice * WeightManager.displayWeight   // 金额（元）= 单价×显示重量（displayWeight 已是2位小数且带迟滞）
     property var aiCandidates: CameraController.aiCandidateList  // AI 识别候选列表
 
     // ==========================================
@@ -922,7 +922,7 @@ Item {
                                             aiRecognizeTimeout.restart()
                                             aiLoadingOverlay.open()
                                             CameraController.aiOnlyMode = true
-                                            CameraController.captureVegetable(WeightManager.netWeight, root.currentPrediction)
+                                            CameraController.captureVegetable(WeightManager.displayWeight, root.currentPrediction)
                                         }
                                     }
                                 }
@@ -1001,7 +1001,7 @@ Item {
                                     Row {
                                         anchors.centerIn: parent
                                         Text {
-                                            text: WeightManager.netWeight.toFixed(2)
+                                            text: WeightManager.displayWeight.toFixed(2)
                                             font.pixelSize: 100
                                             font.bold: true
                                             color: "#FFFFFF"
@@ -1134,7 +1134,7 @@ Item {
                                         window.showLogin()
                                         return
                                     }
-                                    let currentWeight = WeightManager.netWeight
+                                    let currentWeight = WeightManager.displayWeight
                                     if (currentWeight <= 0.01) {
                                         console.warn("重量不足，无法提交记录")
                                         window.toast("重量不足，无法保存", "warning", 2000)
