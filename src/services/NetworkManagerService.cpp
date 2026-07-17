@@ -3,6 +3,7 @@
 #include <QRegularExpression>
 #include <QDebug>
 #include <QtConcurrent/QtConcurrent>
+#include <QFile>
 
 // ============================================================
 // 常量定义
@@ -677,11 +678,34 @@ void NetworkManagerService::refreshWifiStatus()
         newStatus = WifiStatus::Disabled;
     }
 
+    // 解析 WiFi 信号强度（/proc/net/wireless，避免额外启动 QProcess）
+    // 修复：原未解析 signal，m_wifiSignal 恒为 0，WiFi 图标显示 Wifi0.png（与断网图标同图）
+    int signal = 0;
+    if (newStatus == WifiStatus::Connected) {
+        QFile wirelessFile(QStringLiteral("/proc/net/wireless"));
+        if (wirelessFile.open(QIODevice::ReadOnly)) {
+            const auto lines = QString::fromUtf8(wirelessFile.readAll()).split('\n');
+            for (const auto &line : lines) {
+                if (line.contains(wifiDevice + ":")) {
+                    // 格式: wlan0: 0000   70.  -30.  -256 ...
+                    auto parts = line.simplified().split(' ');
+                    if (parts.size() >= 3) {
+                        bool ok = false;
+                        double link = parts[2].toDouble(&ok);
+                        if (ok) signal = qBound(0, static_cast<int>(link), 100);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     qDebug() << "[NetworkManager] refreshWifiStatus 结果:"
              << "state=" << stateStr << "(" << static_cast<int>(newStatus) << ")"
              << "connName=" << connName
              << "realSsid=" << ssid
-             << "ip=" << ipAddress;
+             << "ip=" << ipAddress
+             << "signal=" << signal;
 
     // 防回退保护：用户主动断开后 5 秒内，忽略 nmcli 缓存的 connected 状态
     if (newStatus == WifiStatus::Connected
@@ -699,7 +723,7 @@ void NetworkManagerService::refreshWifiStatus()
 
     // 原子性更新：将所有属性变更一次性投递到主线程，
     // 避免多次 wifiStatusChanged 导致 QML 绑定反复重算
-    runOnMainThread([this, newStatus, ssid, ipAddress]() {
+    runOnMainThread([this, newStatus, ssid, ipAddress, signal]() {
         bool changed = false;
 
         if (m_wifiSsid != ssid) {
@@ -712,6 +736,10 @@ void NetworkManagerService::refreshWifiStatus()
         }
         if (m_wifiStatus != newStatus) {
             m_wifiStatus = newStatus;
+            changed = true;
+        }
+        if (m_wifiSignal != signal) {
+            m_wifiSignal = signal;
             changed = true;
         }
 
