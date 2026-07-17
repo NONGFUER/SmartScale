@@ -98,8 +98,8 @@ private:
     QProcess *m_subProcess;
 
     QByteArray m_subBuffer;
-    int m_mainWidth = 1920;
-    int m_mainHeight = 1080;
+    int m_mainWidth = 1280;
+    int m_mainHeight = 720;
     int m_subWidth = 1280;
     int m_subHeight = 720;
     int m_subFrameSize = 0;

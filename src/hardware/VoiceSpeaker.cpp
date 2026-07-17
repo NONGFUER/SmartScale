@@ -186,6 +186,33 @@ void VoiceSpeaker::speak(const QString &text)
     qDebug() << "[VoiceSpeaker] Speech started successfully";
 }
 
+void VoiceSpeaker::warmup()
+{
+    if (!m_isReady) {
+        qDebug() << "[VoiceSpeaker] warmup skipped, system not ready";
+        return;
+    }
+    qDebug() << "[VoiceSpeaker] warmup: 预加载 piper 模型到内存缓存（不出声）";
+    QProcess *w = new QProcess(this);
+    // 输出到 /dev/null 不出声，仅触发 piper 加载模型 + onnxruntime .so 到 OS page cache
+    QString cmd = QString(
+        "echo '。' | '%1' --model '%2' --config '%3' --output_raw > /dev/null 2>&1"
+    ).arg(m_piperPath, m_modelPath, m_configPath);
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert("LD_LIBRARY_PATH", "/home/sjwu/piper:" + env.value("LD_LIBRARY_PATH"));
+    w->setProcessEnvironment(env);
+    w->start("/bin/bash", QStringList() << "-c" << cmd);
+    // 预热进程异步，完成后自清理
+    connect(w, &QProcess::finished, this, [w]() {
+        qDebug() << "[VoiceSpeaker] warmup 完成，模型已缓存";
+        w->deleteLater();
+    });
+    connect(w, &QProcess::errorOccurred, this, [w](QProcess::ProcessError) {
+        qWarning() << "[VoiceSpeaker] warmup 进程错误";
+        w->deleteLater();
+    });
+}
+
 void VoiceSpeaker::stop()
 {
     if (m_process && m_process->state() != QProcess::NotRunning) {

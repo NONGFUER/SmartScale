@@ -834,7 +834,7 @@ Dialog {
                     Text {
                         Layout.fillWidth: true
                         text: _formatDateTime(cardRoot.record.recordTime)
-                              + (cardRoot.record.operatorName ? "  人员: " + cardRoot.record.operatorName : "")
+                              //+ (cardRoot.record.operatorName ? "  人员: " + cardRoot.record.operatorName : "")
                         font.pixelSize: 24
                         font.family: Theme.fontFamilyMono
                         color: Theme.colorTextTertiary
@@ -857,7 +857,7 @@ Dialog {
                         }
 
                         Text {
-                            text: (cardRoot.record.weight || 0).toFixed(1) + " kg"
+                            text: (cardRoot.record.weight || 0).toFixed(2) + " kg"
                             font.pixelSize: 24
                             font.family: Theme.fontFamilyUi
                             font.bold: true

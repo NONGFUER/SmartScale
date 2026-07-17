@@ -173,6 +173,7 @@ void CameraController::captureVegetable(double currentWeight, const QString &wat
         m_watermarkLabel = watermarkLabel;
     }
     m_captureRequestedSub.store(true);
+    qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ②captureVegetable 设副摄抓拍标志";
 }
 
 // -----------------------------------------------------
@@ -208,7 +209,7 @@ void CameraController::handleMainCameraCapture()
 // -----------------------------------------------------
 void CameraController::onSubCaptureReady()
 {
-    qDebug() << "[CameraController] 串行抓拍: 第2步-副摄像头已完成，触发主摄像头...";
+    qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ④onSubCaptureReady 触发主摄截图";
     m_captureRequestedMain.store(true);
     QMetaObject::invokeMethod(this, "handleMainCameraCapture", Qt::QueuedConnection);
 }
@@ -271,6 +272,7 @@ void CameraController::pushFrameToQML(int cameraIndex, const uint8_t *data, int 
 // -----------------------------------------------------
 void CameraController::processAndSaveImage(int cameraIndex, QByteArray frameData, int width, int height, int stride)
 {
+    qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ③副摄任务开始(YUV→RGB+保存)";
     const uint8_t *data = reinterpret_cast<const uint8_t*>(frameData.constData());
 
     QImage watermarkedImg(width, height, QImage::Format_RGB32);
@@ -308,6 +310,7 @@ void CameraController::processAndSaveImage(int cameraIndex, QByteArray frameData
 // -----------------------------------------------------
 void CameraController::processAndSaveImage(int cameraIndex, QImage image)
 {
+    qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ④b主摄任务开始(水印+保存)";
     if (image.isNull()) {
         qWarning() << "[CameraController] QCamera截图: 收到空图像";
         return;
@@ -338,10 +341,7 @@ void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
         cropRect = QRect(cropX, cropY, side, side);
     }
 
-    // 3 分发：主摄存 yt0.jpg，副摄存 yt1.jpg + 缓存员工照片 + 串联通知
-    QString debugPrefix = (cameraIndex == 0) ? "yt0" : "yt1";
-    watermarkedImg.save(QString("/home/sjwu/Pictures/%1.jpg").arg(debugPrefix), "JPG", 90);
-
+    // 3 裁剪供 AI 识别（yt0/yt1 调试图已移除以节省 JPG 编码耗时）
     QImage pureImageForAI = watermarkedImg.copy(cropRect);
     pureImageForAI.save("/home/sjwu/Pictures/cp0.jpg", "JPG", 90);
 
@@ -353,6 +353,7 @@ void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
             qDebug() << "[CameraController] 副摄像头图像已缓存，尺寸:" << pureImageForAI.size();
         }
         // === 串联：通知主摄像头可以开始 ===
+        qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ③b副摄处理完成→触发主摄";
         QMetaObject::invokeMethod(this, "onSubCaptureReady", Qt::QueuedConnection);
     }
 
@@ -405,8 +406,7 @@ void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
         painter.end();
 
         if (watermarkedImg.save(savePath, "JPG", 90)) {
-            qDebug() << "[CameraController] 主摄画面保存完毕:" << savePath
-                     << "食材:" << label;
+            qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ⑤主摄处理完成→emit photoSaved" << savePath;
             // 跨线程发射信号
             QMetaObject::invokeMethod(this, [this, savePath]() {
                 Q_EMIT photoSaved(0, savePath);

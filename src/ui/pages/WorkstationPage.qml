@@ -28,7 +28,7 @@ Item {
     property bool pendingSaveAiDetected: false // 手动保存待写入的 aiDetected
     property double pendingUnitPrice: 0         // 手动保存待写入的单价（元/kg，与 addRecord/DB/上传约定一致）
     property real currentUnitPrice: 0           // 食材卡片当前输入的单价（元/kg），保存后清空
-    readonly property real currentAmount: currentUnitPrice * WeightManager.netWeight   // 金额（元）= 单价×净重
+    readonly property real currentAmount: currentUnitPrice * (Math.round(WeightManager.netWeight * 100) / 100)   // 金额（元）= 单价×四舍五入2位净重（与显示重量一致）
     property var aiCandidates: CameraController.aiCandidateList  // AI 识别候选列表
 
     // ==========================================
@@ -704,7 +704,7 @@ Item {
                                                     var translated = Translator.translate(pred);
                                                     return (translated === pred) ? "--" : translated;
                                                 }
-                                                font.pixelSize: AppSettings.priceInputEnabled ? 30 : 68
+                                                font.pixelSize: AppSettings.priceInputEnabled ? 40 : 68
                                                 font.bold: true
                                                 color: "#FFFFFF"
                                                 elide: Text.ElideRight
@@ -1186,6 +1186,7 @@ Item {
     //  执行保存（无重复直接调用 / 重复弹窗确认后调用）
     // ==========================================
     function _executeSave() {
+        console.log("[SAVE-TIMER]", Qt.formatDateTime(new Date(), "HH:mm:ss.zzz"), "| ①_executeSave 开始")
         console.log(">> 执行保存，重量:", root.pendingSaveWeight, "食材:", root.pendingSaveLabel)
         root.pendingUnitPrice = root.currentUnitPrice   // 读取食材卡片输入的单价（元/kg）
         root.pendingManualSave = true
@@ -1224,6 +1225,7 @@ Item {
                 if (root.pendingManualSave) {
                     root.pendingManualSave = false
                     saveTimeout.stop()   // 拍照已完成，进入上传阶段（由 onCloudSyncFailed 兜底）
+                    console.log("[SAVE-TIMER]", Qt.formatDateTime(new Date(), "HH:mm:ss.zzz"), "| ⑤b QML收到photoSaved")
                     let w = root.pendingSaveWeight
                     let label = root.pendingSaveLabel
                     let up = root.pendingUnitPrice
@@ -1304,21 +1306,20 @@ Item {
     Connections {
         target: WeightHistoryService
         function onCloudSyncSuccess(localId) {
+            console.log("[SAVE-TIMER]", Qt.formatDateTime(new Date(), "HH:mm:ss.zzz"), "| ⑩ QML收到cloudSyncSuccess 关overlay")
             console.log("[Toast] 上传成功 id=", localId)
             root.savingInProgress = false
             saveLoadingOverlay.close()
             saveTimeout.stop()
             saveSuccessDialog.openDialog()
-            VoiceSpeaker.speak("已保存")
             clearIngredientCard()
         }
         function onCloudSyncFailed(localId, errorMsg) {
             console.warn("[Alert] 上传失败 id=", localId, "err=", errorMsg)
             root.savingInProgress = false
-            saveLoadingOverlay.close()
             saveTimeout.stop()
-            window.alert("云端服务暂时无法访问，请稍后重试", "error", "云端同步失败", errorMsg)
-            clearIngredientCard()
+            // 方案A：overlay 已在 cloudSyncSuccess(DB写入) 关闭；上传失败用 toast 非阻塞提示
+            window.toast("记录已保存，云端同步失败将自动重试", "warning", 3000)
         }
         function onUserRecordCreated(success, msg) {
             if (success) {

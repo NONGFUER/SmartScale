@@ -508,7 +508,7 @@ Dialog {
                                 // 食材名称
                                 TableCell { w: root.colIngr; t: modelData.ingrNm || "—"; bold: true }
                                 // 重量
-                                TableCell { w: root.colWeight; t: modelData.val || "0"; useAccent: true; accent: "#2563EB"; bold: true }
+                                TableCell { w: root.colWeight; t: Number(modelData.val || 0).toFixed(2); useAccent: true; accent: "#2563EB"; bold: true }
                                 // 单价（保留两位小数）
                                 TableCell { w: root.colPrice; t: _fmtPrice(modelData.price) }
                                 // 金额
@@ -539,9 +539,9 @@ Dialog {
                                         Text {
                                             anchors.horizontalCenter: parent.horizontalCenter
                                             text: _fmtTime(modelData.crdAt).time
-                                            font.pixelSize: 20
+                                            font.pixelSize: 24
                                             font.family: Theme.fontFamilyMono
-                                            color: Theme.colorTextTertiary
+                                            color: Theme.colorTextPrimary
                                             visible: text.length > 0
                                         }
                                     }

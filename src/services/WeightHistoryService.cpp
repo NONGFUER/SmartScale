@@ -133,12 +133,18 @@ void WeightHistoryService::addRecord(double weight,
     m_todayWeight += weight;
 
     qDebug() << "[WHS] 记录已添加:" << categoryName << weight << "kg id=" << newId;
+    qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ⑥addRecord DB写入完成 id=" << newId;
 
-    // 4. 上传云端
-    uploadSingleRecord(model);
+    // 4. 上传云端（后台异步，不阻塞 cloudSyncSuccess）
+    uploadSingleRecord(model, true);
 
     Q_EMIT historyChanged();
     Q_EMIT statsChanged();
+
+    // 方案A（乐观完成）：DB写入完成即通知 QML 保存成功，上传后台异步进行
+    // 上传成功→onCloudReply 静默更新 synced；失败→onCloudSyncFailed toast 提示
+    qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ⑨a emit cloudSyncSuccess(乐观完成) id=" << newId;
+    Q_EMIT cloudSyncSuccess(newId);
 }
 
 void WeightHistoryService::removeRecord(int index)
@@ -248,7 +254,7 @@ QByteArray WeightHistoryService::buildUploadJson(const WeightRecord &record)
     return QJsonDocument(json).toJson(QJsonDocument::Compact);
 }
 
-void WeightHistoryService::uploadSingleRecord(const WeightRecord &record)
+void WeightHistoryService::uploadSingleRecord(const WeightRecord &record, bool fromAddRecord)
 {
     if (!m_networkMgr || !m_authService) {
         qWarning() << "[WHS] 网络或认证未初始化";
@@ -281,24 +287,11 @@ void WeightHistoryService::uploadSingleRecord(const WeightRecord &record)
 
     QByteArray payload = buildUploadJson(record);
 
-    // === 诊断打印：排查 403 Forbidden ===
-    qDebug() << "[WHS-DIAG] ========== 上传诊断开始 id=" << record.id << "==========";
-    qDebug() << "[WHS-DIAG] URL   :" << request.url().toString();
-    qDebug() << "[WHS-DIAG] Token长度:" << token.length()
-             << " 前10字符:" << (token.length() > 10 ? token.left(10) : token)
-             << " 后6字符:" << (token.length() > 6 ? token.right(6) : token);
-    qDebug() << "[WHS-DIAG] Auth头:" << request.rawHeader("Authorization");
-    qDebug() << "[WHS-DIAG] ContentType:" << request.rawHeader("Content-Type");
-    qDebug() << "[WHS-DIAG] Payload:" << payload;
-    qDebug() << "[WHS-DIAG] Token是否即将过期:" << m_authService->isTokenExpiringSoon();
-    qDebug() << "[WHS-DIAG] ==========================================";
-    // === 诊断结束 ===
-
-    qDebug() << "[WHS] 请求体 id=" << record.id << "payload:" << payload;
-
     // 将 localId 存入 reply 的 property，以便回调中识别
+    qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ⑦uploadSingleRecord POST发起 id=" << record.id;
     QNetworkReply *reply = m_networkMgr->post(request, payload);
     reply->setProperty("localId", record.id);
+    reply->setProperty("_fromAddRecord", fromAddRecord);
 
     qDebug() << "[WHS] 正在上传记录 id=" << record.id
              << "weight=" << record.weight << "food=" << record.categoryName;
@@ -536,6 +529,7 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
     }
 
     int localId = reply->property("localId").toInt();
+    qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ⑧onCloudReply 收到响应 id=" << localId;
 
     if (reply->error() != QNetworkReply::NoError) {
         QByteArray errData = reply->readAll();
@@ -559,17 +553,7 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
             return;
         }
 
-        // === 诊断打印：其他错误详情 ===
-        qCritical() << "[WHS-DIAG-ERR] ========== 上传失败诊断 id=" << localId << "==========";
-        qCritical() << "[WHS-DIAG-ERR] HTTP状态码:" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-        qCritical() << "[WHS-DIAG-ERR] 错误枚举:" << reply->error() << errMsg;
-        qCritical() << "[WHS-DIAG-ERR] 响应Body:" << errData;
-        // 打印所有响应头
-        for (const auto &h : reply->rawHeaderList()) {
-            qCritical() << "[WHS-DIAG-ERR] RespHeader:" << h << "=" << reply->rawHeader(h);
-        }
-        qCritical() << "[WHS-DIAG-ERR] ==========================================";
-        // === 诊断结束 ===
+        qWarning() << "[WHS] 上传失败 id=" << localId << "HTTP=" << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() << "err=" << errMsg << "body=" << errData;
 
         Q_EMIT cloudSyncFailed(localId, errMsg);
         reply->deleteLater();
@@ -673,7 +657,14 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
     }
 
     m_syncDone++;
-    Q_EMIT cloudSyncSuccess(localId);
+    // 方案A：addRecord 触发的上传不重复 emit cloudSyncSuccess（addRecord 已在 DB写入后 emit）
+    bool fromAddRecord = reply->property("_fromAddRecord").toBool();
+    if (!fromAddRecord) {
+        qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ⑨emit cloudSyncSuccess(同步完成) id=" << localId;
+        Q_EMIT cloudSyncSuccess(localId);
+    } else {
+        qInfo() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ⑨b 后台上传成功(静默) id=" << localId;
+    }
     Q_EMIT cloudSyncProgress(m_syncDone, m_syncTotal);
 
     reply->deleteLater();
@@ -867,18 +858,7 @@ void WeightHistoryService::updateRecordImage(qint64 custId, const QString &recor
     QNetworkReply *reply = m_networkMgr->post(request, multiPart);
     multiPart->setParent(reply);
 
-    qDebug() << "[WHS-IMG-DIAG] ========== 图片上传诊断开始 ==========";
-    qDebug() << "[WHS-IMG-DIAG] URL     :" << request.url().toString();
-    qDebug() << "[WHS-IMG-DIAG] CustId  :" << custId;
-    qDebug() << "[WHS-IMG-DIAG] RecoId  :" << recordId;
-    qDebug() << "[WHS-IMG-DIAG] Token长度:" << token.length()
-             << " 前10字符:" << (token.length() > 10 ? token.left(10) : token)
-             << " 后6字符:" << (token.length() > 6 ? token.right(6) : token);
-    qDebug() << "[WHS-IMG-DIAG] Auth头  :" << request.rawHeader("Authorization");
-    qDebug() << "[WHS-IMG-DIAG] 文件路径:" << imagePath;
-    qDebug() << "[WHS-IMG-DIAG] 文件大小:" << file->size() << "bytes";
-    qDebug() << "[WHS-IMG-DIAG] Token即将过期:" << m_authService->isTokenExpiringSoon();
-    qDebug() << "[WHS-IMG-DIAG] ======================================";
+    qDebug() << "[WHS] 图片上传:" << imagePath << file->size() << "bytes recoId=" << recordId;
 
     connect(reply, &QNetworkReply::finished, this, [reply, recordId, custId]() {
         int httpCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();

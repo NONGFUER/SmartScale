@@ -119,7 +119,7 @@ private:
     void refreshFromDb();
     void recalcStats();
     QByteArray buildUploadJson(const WeightRecord &record);
-    void uploadSingleRecord(const WeightRecord &record);
+    void uploadSingleRecord(const WeightRecord &record, bool fromAddRecord = false);
     void updateRecordImage(qint64 custId, const QString &recordId, const QString &imagePath);
 
     WeightRecordRepo *m_repo;

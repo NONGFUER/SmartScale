@@ -118,37 +118,37 @@ Dialog {
         // 软件版本 — 独立圆角背景卡片
         // ========================================
 
-        Rectangle {
-            Layout.fillWidth: true
-            height: 56
-            radius: 12
-            color: "#F5F7FA"
+        // Rectangle {
+        //     Layout.fillWidth: true
+        //     height: 56
+        //     radius: 12
+        //     color: "#F5F7FA"
 
-            RowLayout {
-                anchors.fill: parent
-                anchors.leftMargin: 20
-                anchors.rightMargin: 20
-                spacing: 0
+        //     RowLayout {
+        //         anchors.fill: parent
+        //         anchors.leftMargin: 20
+        //         anchors.rightMargin: 20
+        //         spacing: 0
 
-                Text {
-                    text: "软件版本:"
-                    font.family: Theme.fontFamilyUi
-                    font.pixelSize: 20
-                    color: Theme.colorTextSecondary
-                    Layout.alignment: Qt.AlignVCenter
-                }
+        //         Text {
+        //             text: "软件版本:"
+        //             font.family: Theme.fontFamilyUi
+        //             font.pixelSize: 20
+        //             color: Theme.colorTextSecondary
+        //             Layout.alignment: Qt.AlignVCenter
+        //         }
 
-                Item { Layout.fillWidth: true }
+        //         Item { Layout.fillWidth: true }
 
-                Text {
-                    text: SystemInfo.appVersion
-                    font.family: Theme.fontFamilyUi
-                    font.pixelSize: 20
-                    color: Theme.colorTextPrimary
-                    Layout.alignment: Qt.AlignVCenter
-                }
-            }
-        }
+        //         Text {
+        //             text: SystemInfo.appVersion
+        //             font.family: Theme.fontFamilyUi
+        //             font.pixelSize: 20
+        //             color: Theme.colorTextPrimary
+        //             Layout.alignment: Qt.AlignVCenter
+        //         }
+        //     }
+        // }
 
         Item { Layout.preferredHeight: 12 }
 
@@ -178,9 +178,35 @@ Dialog {
                 Item { Layout.fillWidth: true }
 
                 Switch {
+                    id: priceSwitch
                     checked: AppSettings.priceInputEnabled
                     onCheckedChanged: AppSettings.priceInputEnabled = checked
                     Layout.alignment: Qt.AlignVCenter
+
+                    // 蓝色圆角 toggle（iOS 风格）：开启#4361EE蓝 / 关闭#CBD5E1灰 + 白色圆形滑块
+                    indicator: Rectangle {
+                        implicitWidth: 56
+                        implicitHeight: 32
+                        x: priceSwitch.leftPadding
+                        y: parent.height / 2 - height / 2
+                        radius: 16
+                        color: priceSwitch.checked ? "#4361EE" : "#CBD5E1"
+                        border.color: priceSwitch.checked ? "#4361EE" : "#CBD5E1"
+                        border.width: 1
+
+                        Behavior on color { ColorAnimation { duration: 150 } }
+
+                        Rectangle {
+                            x: priceSwitch.checked ? parent.width - width - 4 : 4
+                            y: 4
+                            width: parent.height - 8
+                            height: parent.height - 8
+                            radius: width / 2
+                            color: "#FFFFFF"
+
+                            Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
+                        }
+                    }
                 }
             }
         }

@@ -35,7 +35,7 @@ Popup {
     z: 50
 
     width: 560
-    height: 440
+    height: 500
 
     // 外部遮罩（reparent 到 window.contentItem，z:40 低于键盘 z:99，不挡虚拟键盘）
     Rectangle {
@@ -263,6 +263,7 @@ Popup {
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 90
+            Layout.bottomMargin: 24
 
             RowLayout {
                 anchors.centerIn: parent
