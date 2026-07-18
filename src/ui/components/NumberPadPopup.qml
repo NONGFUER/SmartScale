@@ -43,7 +43,7 @@ Popup {
     width: parent ? parent.width * 0.35 : 0   // 覆盖 40% 屏宽
     height: parent ? parent.height * 0.58 : 0 // 60% 屏高，露顶部 40% 给食材卡片
     x: parent ? parent.width - width-35 : 0     // 贴右（Popup 无 anchors，用坐标）
-    y: parent ? parent.height - height-40 : 0   // 贴底，顶部留出食材卡片可见区
+    y: parent ? parent.height - height-80 : 0   // 贴底，顶部留出食材卡片可见区
 
     Overlay.modal: Rectangle { color: "#00000000" }
 
@@ -83,29 +83,75 @@ Popup {
         anchors.margins: 24
         spacing: 16
 
-        // ---------- 显示栏：当前输入值 + 单位 + 清空 ----------
+        // ---------- 显示栏：左(返回+单价) | 中(数值) | 右(元/kg+清空) ----------
         Item {
             Layout.fillWidth: true
-            Layout.preferredHeight: 72
+            Layout.preferredHeight: 64
 
-            Text {
+            // 左侧：返回按钮 + 单价
+            Row {
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
-                text: "单价"
-                font.pixelSize: 22
-                font.family: Theme.fontFamilyUi
-                color: "#64748B"
+                spacing: 10
+
+                // 返回按钮：back2.png + "返回"
+                Rectangle {
+                    width: 120; height: 40; radius: 20
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: backMouse.containsMouse ? "#F1F5F9" : "transparent"
+
+                    Row {
+                        anchors.centerIn: parent
+                        spacing: 6
+
+                        Image {
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 24; height: 24
+                            fillMode: Image.PreserveAspectFit
+                            source: "qrc:/resources/img/back2.png"
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "返回"
+                            font.pixelSize: 24
+                            font.bold: true
+                            font.family: Theme.fontFamilyUi
+                            color: "#4649E5"
+                        }
+                    }
+
+                    MouseArea {
+                        id: backMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        onClicked: root.close()
+                    }
+                }
+
+                // 返回按钮与单价之间的间距
+                Item { width: 40; height: 1 }
+
+                Text {
+                    text: "单价"
+                    font.pixelSize: 30
+                    font.bold: true
+                    font.family: Theme.fontFamilyUi
+                    color: "#64748B"
+                    anchors.verticalCenter: parent.verticalCenter
+                }
             }
 
+            // 中：当前输入值（数值，居中）
             Text {
                 anchors.centerIn: parent
                 text: root.displayText
-                font.pixelSize: 40
+                font.pixelSize: 44
                 font.bold: true
                 font.family: Theme.fontFamilyUi
                 color: "#1E293B"
             }
 
+            // 右侧：元/kg + 清空
             Row {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
@@ -113,7 +159,8 @@ Popup {
 
                 Text {
                     text: "元/kg"
-                    font.pixelSize: 24
+                    font.pixelSize: 30
+                    font.bold: true
                     font.family: Theme.fontFamilyUi
                     color: "#94A3B8"
                     anchors.verticalCenter: parent.verticalCenter
@@ -121,7 +168,8 @@ Popup {
 
                 // 清空按钮：一键复位为 "0"
                 Rectangle {
-                    width: 88; height: 44; radius: 22
+                    width: 104; height: 40; radius: 20
+                    anchors.verticalCenter: parent.verticalCenter
                     color: clearMA.containsMouse ? "#FEF2F2" : "#F1F5F9"
                     border.color: clearMA.containsMouse ? "#EF4444" : "#E2E8F0"
                     border.width: 1
@@ -131,7 +179,7 @@ Popup {
                     Text {
                         anchors.centerIn: parent
                         text: "清空"
-                        font.pixelSize: 24
+                        font.pixelSize: 30
                         font.bold: true
                         font.family: Theme.fontFamilyUi
                         color: clearMA.containsMouse ? "#EF4444" : "#64748B"
@@ -278,7 +326,7 @@ Popup {
             Layout.fillWidth: true
             spacing: 12
 
-            // 关闭按钮（左侧）
+            // 退出按钮（左侧）
             Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 64
@@ -346,11 +394,10 @@ Popup {
         var dotIdx = s.indexOf(".")
         if (dotIdx >= 0 && s.length - dotIdx - 1 >= 2)
             return                          // 小数部分已满 2 位
-        if (s === "0") {
-            root.displayText = String(d)    // 去前导零
-            return
-        }
-        root.displayText = s + d
+        var ns = (s === "0") ? String(d) : (s + d)   // 去前导零
+        if (parseFloat(ns) > 9999.99)
+            return                          // 上限 9999.99，超出不追加
+        root.displayText = ns
     }
 
     function _appendDot() {

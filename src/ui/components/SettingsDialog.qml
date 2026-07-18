@@ -25,7 +25,7 @@ Dialog {
     x: (parent.width - width) / 2
     y: (parent.height - height) / 2
     width: Math.min(parent.width * 0.85, 680)
-    height: Math.min(parent.height * 0.85, 640)
+    height: Math.min(parent.height * 0.92, 760)
     modal: true
     Overlay.modal: Rectangle { color: "#80000000" }
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -57,10 +57,10 @@ Dialog {
             Layout.bottomMargin: 24
             spacing: 0
 
-            // 返回按钮 — 使用 back2.png + "返回"文字
+            // 返回按钮 — 使用 back2.png + "返回"文字（圆角胶囊 + 浅底边框）
             Rectangle {
-                width: 120; height: 40; radius: 20
-                color: backMouse.containsMouse ? "#F1F5F9" : "transparent"
+                width: 116; height: 44; radius: 22
+               
 
                 Row {
                     anchors.centerIn: parent
@@ -68,17 +68,17 @@ Dialog {
 
                     Image {
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 24; height: 24
+                        width: 22; height: 22
                         fillMode: Image.PreserveAspectFit
                         source: "qrc:/resources/img/back2.png"
                     }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "返回"
-                        font.pixelSize: 22
+                        font.pixelSize: 24
                         font.bold: true
                         font.family: Theme.fontFamilyUi
-                        color: "#1E293B"
+                        color: "#4649E5"
                     }
                 }
 
@@ -224,13 +224,46 @@ Dialog {
             }
         }
 
+        Item { Layout.preferredHeight: 24 }
+
+        // ========================================
+        // 公司信息
+        // ========================================
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 96
+            radius: 12
+            color: "#F5F7FA"
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                spacing: 8
+
+                Text {
+                    text: "上海小管事机器人有限公司"
+                    font.family: Theme.fontFamilyUi
+                    font.pixelSize: 20
+                    font.bold: true
+                    color: Theme.colorTextPrimary
+                    Layout.alignment: Qt.AlignHCenter
+                }
+                Text {
+                    text: "© 2026 版权所有"
+                    font.family: Theme.fontFamilyUi
+                    font.pixelSize: 16
+                    color: Theme.colorTextSecondary
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
+        }
+
         Item { Layout.preferredHeight: 28 }
 
         // ====== 底部关闭按钮 ======
         Button {
             id: closeBtn
             Layout.alignment: Qt.AlignHCenter
-            text: "关闭"
+            text: "退出"
             implicitWidth: 140
             implicitHeight: 46
 
@@ -241,7 +274,7 @@ Dialog {
 
             contentItem: Text {
                 text: closeBtn.text
-                font.pixelSize: 17
+                font.pixelSize: 24
                 font.bold: true
                 color: "#FFFFFF"
                 horizontalAlignment: Text.AlignHCenter

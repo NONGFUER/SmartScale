@@ -187,10 +187,10 @@ Dialog {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "返回"
-                        font.pixelSize: 22
+                        font.pixelSize: 24
                         font.bold: true
                         font.family: Theme.fontFamilyUi
-                        color: "#1E293B"
+                        color: "#4649E5"
                     }
                 }
 

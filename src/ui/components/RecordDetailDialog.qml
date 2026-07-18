@@ -112,18 +112,21 @@ Dialog {
 
             // 关闭按钮 — 使用图片图标
             Rectangle {
-                width: 44; height: 44; radius: 22
+                width: 58; height: 58; radius: 29
                 color: closeMA.containsMouse ? "#26EF4444" : "transparent"
 
                 Image {
                     anchors.centerIn: parent
                     source: "qrc:/resources/img/close.png"
-                    width: 28; height: 28
+                    width: parent.width * 0.6
+                    height: parent.height * 0.6
                     fillMode: Image.PreserveAspectFit
                 }
                 MouseArea {
                     id: closeMA
-                    anchors.fill: parent
+                    anchors.centerIn: parent
+                    width: parent.width + 32
+                    height: parent.height + 32
                     hoverEnabled: true
                     onClicked: dialogRoot.close()
                 }

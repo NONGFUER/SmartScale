@@ -164,10 +164,10 @@ Dialog {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: "返回"
-                        font.pixelSize: 22
+                        font.pixelSize: 24
                         font.bold: true
                         font.family: Theme.fontFamilyUi
-                        color: "#1E293B"
+                        color: "#4649E5"
                     }
                 }
 
@@ -192,7 +192,7 @@ Dialog {
             Item { Layout.fillWidth: true }
 
             Rectangle {
-                width: 46; height: 46; radius: 23
+                width: 60; height: 60; radius: 30
                 color: closeMouse.containsMouse ? "#F1F5F9" : "transparent"
 
                 Image {
@@ -204,7 +204,9 @@ Dialog {
                 }
                 MouseArea {
                     id: closeMouse
-                    anchors.fill: parent
+                    anchors.centerIn: parent
+                    width: parent.width + 32
+                    height: parent.height + 32
                     hoverEnabled: true
                     onClicked: root.close()
                 }

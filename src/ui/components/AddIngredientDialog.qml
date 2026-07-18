@@ -79,7 +79,7 @@ Dialog {
 
             // 关闭按钮 — 使用 close_blue.png 图片图标
             Rectangle {
-                width: 46; height: 46; radius: 23
+                width: 60; height: 60; radius: 30
                 color: closeMouse.containsMouse ? "#F1F5F9" : "transparent"
 
                 Image {
@@ -91,9 +91,10 @@ Dialog {
                 }
                 MouseArea {
                     id: closeMouse
-                    anchors.fill: parent
+                    anchors.centerIn: parent
+                    width: parent.width + 32
+                    height: parent.height + 32
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
                     onClicked: dialogRoot.close()
                 }
             }
