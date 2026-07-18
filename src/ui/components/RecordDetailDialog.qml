@@ -97,6 +97,41 @@ Dialog {
             spacing: 0
 
 
+            // 返回按钮 — back_w.png + "返回"文字（白色）
+            Rectangle {
+                width: 116; height: 44; radius: 22
+                color: backMouse.containsMouse ? "#26FFFFFF" : "transparent"
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 6
+
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 22; height: 22
+                        fillMode: Image.PreserveAspectFit
+                        source: "qrc:/resources/img/back_w.png"
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "返回"
+                        font.pixelSize: 24
+                        font.bold: true
+                        font.family: Theme.fontFamilyUi
+                        color: "#FFFFFF"
+                    }
+                }
+
+                MouseArea {
+                    id: backMouse
+                    anchors.centerIn: parent
+                    width: parent.width + 32
+                    height: parent.height + 32
+                    hoverEnabled: true
+                    onClicked: dialogRoot.close()
+                }
+            }
+
             Item { Layout.fillWidth: true }
 
             // 居中标题

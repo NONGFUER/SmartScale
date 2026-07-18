@@ -26,5 +26,6 @@
         <file>resources/img/close_blue.png</file>
         <file>resources/img/back.png</file>
         <file>resources/img/back2.png</file>
+        <file>resources/img/back_w.png</file>
     </qresource>
 </RCC>
