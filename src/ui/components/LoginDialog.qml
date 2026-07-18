@@ -608,29 +608,32 @@ Dialog {
             }
         }
 
-        // 错误提示（绝对定位，不占 ColumnLayout 空间，避免挤压上方内容）
-        Text {
-            id: errorText
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.top: loginStack.bottom
-            anchors.topMargin: 4
-            horizontalAlignment: Text.AlignHCenter
-            font.family: "Microsoft YaHei"
-            font.pixelSize: 24
-            color: "#EF4444"
+        // 错误提示（用 Item 容器包裹，避免在 ColumnLayout 中直接用 anchors）
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: errorText.visible ? errorText.implicitHeight : 0
 
-            visible: opacity > 0
-            opacity: 0
+            Text {
+                id: errorText
+                anchors.left: parent.left
+                anchors.right: parent.right
+                horizontalAlignment: Text.AlignHCenter
+                font.family: "Microsoft YaHei"
+                font.pixelSize: 24
+                color: "#EF4444"
 
-            Behavior on opacity { NumberAnimation { duration: 200 } }
+                visible: opacity > 0
+                opacity: 0
 
-            SequentialAnimation on color {
-                id: errorAnim
-                running: false
-                loops: 2
-                ColorAnimation { from: "#EF4444"; to: "#F87171"; duration: 200 }
-                ColorAnimation { from: "#F87171"; to: "#EF4444"; duration: 200 }
+                Behavior on opacity { NumberAnimation { duration: 200 } }
+
+                SequentialAnimation on color {
+                    id: errorAnim
+                    running: false
+                    loops: 2
+                    ColorAnimation { from: "#EF4444"; to: "#F87171"; duration: 200 }
+                    ColorAnimation { from: "#F87171"; to: "#EF4444"; duration: 200 }
+                }
             }
         }
 
