@@ -1,0 +1,30 @@
+<RCC>
+    <qresource prefix="/">
+        <file>resources/img/workstation_bg.png</file>
+        <file>resources/img/pageUp.png</file>
+        <file>resources/img/pageDown.png</file>
+        <file>resources/img/ai.png</file>
+        <file>resources/img/ingr.png</file>
+        <file>resources/img/logo.png</file>
+        <file>resources/icon/eye-fill.png</file>
+        <file>resources/icon/eye-close-fill.png</file>
+        <file>resources/fonts/PingFangSC-Regular.ttf</file>
+        <file>resources/fonts/din-bold-2.ttf</file>
+        <file>resources/fonts/AlimamaShuHeiTi-Bold.ttf</file>
+        <file>resources/img/Signal0.png</file>
+        <file>resources/img/Signal1.png</file>
+        <file>resources/img/Signal2.png</file>
+        <file>resources/img/Signal3.png</file>
+        <file>resources/img/Signal4.png</file>
+        <file>resources/img/Wifi0.png</file>
+        <file>resources/img/Wifi1.png</file>
+        <file>resources/img/Wifi2.png</file>
+        <file>resources/img/Wifi3.png</file>
+        <file>resources/img/Wifi4.png</file>
+        <file>resources/img/Setting.png</file>
+        <file>resources/img/close.png</file>
+        <file>resources/img/close_blue.png</file>
+        <file>resources/img/back.png</file>
+        <file>resources/img/back2.png</file>
+    </qresource>
+</RCC>

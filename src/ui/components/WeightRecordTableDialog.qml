@@ -148,16 +148,29 @@ Dialog {
             spacing: 0
 
             Rectangle {
-                width: 46; height: 46; radius: 23
+                width: 120; height: 40; radius: 20
                 color: backMouse.containsMouse ? "#F1F5F9" : "transparent"
 
-                Image {
+                Row {
                     anchors.centerIn: parent
-                    width: parent.width * 0.6
-                    height: parent.height * 0.6
-                    fillMode: Image.PreserveAspectFit
-                    source: "qrc:/resources/img/back.png"
+                    spacing: 6
+
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 24; height: 24
+                        fillMode: Image.PreserveAspectFit
+                        source: "qrc:/resources/img/back2.png"
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "返回"
+                        font.pixelSize: 22
+                        font.bold: true
+                        font.family: Theme.fontFamilyUi
+                        color: "#1E293B"
+                    }
                 }
+
                 MouseArea {
                     id: backMouse
                     anchors.fill: parent

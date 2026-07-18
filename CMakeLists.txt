@@ -128,35 +128,11 @@ qt_add_qml_module(appSmartScale
 
 )
 
-qt_add_resources(appSmartScale "app_assets"
-    PREFIX "/"
-    FILES
-        resources/img/workstation_bg.png
-        resources/img/pageUp.png
-        resources/img/pageDown.png
-        resources/img/ai.png
-        resources/img/ingr.png
-        resources/img/logo.png
-        resources/icon/eye-fill.png
-        resources/icon/eye-close-fill.png
-        resources/fonts/PingFangSC-Regular.ttf
-        resources/fonts/din-bold-2.ttf
-        resources/fonts/AlimamaShuHeiTi-Bold.ttf
-        resources/img/Signal0.png
-        resources/img/Signal1.png
-        resources/img/Signal2.png
-        resources/img/Signal3.png
-        resources/img/Signal4.png
-        resources/img/Wifi0.png
-        resources/img/Wifi1.png
-        resources/img/Wifi2.png
-        resources/img/Wifi3.png
-        resources/img/Wifi4.png
-        resources/img/Setting.png
-        resources/img/close.png
-        resources/img/close_blue.png
-        resources/img/back.png
-)
+# 大资源用 qt_add_big_resources 拆分编译（避免单个 qrc_app_assets.cpp 过大导致 cc1plus OOM）
+# 注意：qt_add_big_resources 是旧式 API，只接受 .qrc 文件，不支持 PREFIX/FILES 关键字
+# （与 qt_add_resources 签名不同：第一参数是输出变量，非 target）
+qt_add_big_resources(RCC_SOURCES app.qrc)
+target_sources(appSmartScale PRIVATE ${RCC_SOURCES})
 
 set(ONNXRUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/onnxruntime-linux-aarch64-1.24.4")
 

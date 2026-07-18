@@ -62,3 +62,8 @@
 - 环境变量（main.cpp）：`QT_IM_MODULE=qtvirtualkeyboard`+`QT_VIRTUALKEYBOARD_STYLE=retro`（**retro=浅色明亮风格**，default=深色暗黑）。`Main.qml` 的 `keyboardContainer` 背景须与键盘一致：retro 用 `#E8E8E8`。勿设 `QT_VIRTUALKEYBOARD_LAYOUTS`/`QT_VIRTUALKEYBOARD_LANGUAGE_FILTER`（非标准）。
 - 样式可选值（Qt6 内置仅2个）：`default`（深灰硬编码背景）、`retro`（浅色金黄装饰复古风）。如需纯白现代风须自定义 `KeyboardStyle.qml`（60+ 属性，放 qrc `/qt-project.org/imports/QtQuick/VirtualKeyboard/Styles/<name>/`，集成风险高）。
 - API（Qt 6.8.2）：`locale`(rw)/`activeLocales`(rw)/`availableLocales`(ro)/`visibleFunctionKeys`(rw，None=0/Hide=1/Language=2/All=3)。**不存在** `languageFilterFunc`。验证引擎 `nm -D libqtvkbpinyinplugin.so | grep -i pinyin`。
+
+## 资源编译（rcc OOM 防护）
+- `CMakeLists.txt` 用 `qt_add_big_resources`（**非** `qt_add_resources`）：rcc 把图片内联成多个小 .cpp 分片编译，避免单个 `qrc_app_assets.cpp` 巨大导致 `cc1plus 已杀死`（OOM）。大图主因 `workstation_bg.png`(1MB)。
+- **关键坑**：`qt_add_big_resources` 是**旧式 API，签名与 `qt_add_resources` 不同**——第一参数是输出变量（非 target），**不支持 `PREFIX`/`FILES` 关键字**（只接受 `.qrc` 文件）。正确用法：手写 `app.qrc`（项目根，file 路径 `resources/...` 保持 `qrc:/resources/...` 不变）→ `qt_add_big_resources(RCC_SOURCES app.qrc)` → `target_sources(appSmartScale PRIVATE ${RCC_SOURCES})`。误用 `PREFIX "/" FILES ...` 会报 `configure_file input / is a directory`。
+- **新增图片资源**：编辑 `app.qrc` 加 `<file>` 行（仅放文件不够，`qrc:/` 不可用）。未在原 `qt_add_resources` 列表、且无 `qrc:/` 引用的文件（如 `lock.png`/`shuiyin.png`/`history*.png`/`camera.png`/`opr.png`）**不要**加进 qrc。改资源后须清理 build 重新 `cmake ..` 再 `make -j1`。大图(>100K)尽量压缩。
