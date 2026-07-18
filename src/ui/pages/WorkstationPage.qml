@@ -1348,6 +1348,8 @@ Item {
             root.savingInProgress = false
             saveLoadingOverlay.close()
             saveTimeout.stop()
+            // 本地保存完成：语音播报"已保存" + 弹窗提示"已保存，将上传至服务器"（3秒倒计时自动消失）
+            VoiceSpeaker.speak("已保存")
             saveSuccessDialog.openDialog()
             clearIngredientCard()
         }
