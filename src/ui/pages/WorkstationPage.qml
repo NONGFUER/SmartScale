@@ -24,6 +24,9 @@ Item {
     property string currentIngrId: ""        // 当前选中食材的 ingrId (上传用)
     property string pendingSaveIngrId: ""    // 手动保存待写入的 ingrId
     property bool aiRecognizing: false       // 是否正在执行 AI 识别（控制"识别"按钮 loading 状态）
+    property bool aiRecognizeLocked: false      // 智能识别按钮频繁操作锁定中（防恶意狂按）
+    property int aiRecognizeLockCountdown: 0    // 锁定剩余秒数（按钮文字倒计时显示用）
+    property var aiRecognizeClickTimes: []      // 最近点击时间戳数组（频繁操作检测用）
     property bool currentAiDetected: false   // 当前品类是否由 AI 识别接口得出 (上传 aiDet 字段用)
     property bool pendingSaveAiDetected: false // 手动保存待写入的 aiDetected
     property double pendingUnitPrice: 0         // 手动保存待写入的单价（元/kg，与 addRecord/DB/上传约定一致）
@@ -843,6 +846,15 @@ Item {
                                         asynchronous: true
                                     }
 
+                                    // 锁定时灰色覆盖层（盖背景图片，文字浮于其上保持可见）
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: recognizeBtn.radius
+                                        color: "#9CA3AF"
+                                        opacity: 0.7
+                                        visible: root.aiRecognizeLocked
+                                    }
+
                                     Row {
                                         anchors.verticalCenter: parent.verticalCenter
                                         anchors.left: parent.left
@@ -880,7 +892,9 @@ Item {
                                         }
 
                                         Text {
-                                            text: root.aiRecognizing ? "识别中..." : "智能识别"
+                                            text: root.aiRecognizeLocked
+                                                  ? "锁定中 %1s".arg(root.aiRecognizeLockCountdown)
+                                                  : (root.aiRecognizing ? "识别中..." : "智能识别")
                                             font.pixelSize: 30
                                             font.bold: true
                                             font.family: "PingFang SC"
@@ -901,6 +915,29 @@ Item {
                                         id: recognizeMA
                                         anchors.fill: parent
                                         onClicked: {
+                                            // 频繁操作锁定中：静默拦截（按钮已灰色 + 全局遮罩已提醒，不再弹 toast）
+                                            if (root.aiRecognizeLocked) {
+                                                return
+                                            }
+                                            // 频繁操作检测：保留 3 秒窗口内的点击时间戳
+                                            var now = Date.now()
+                                            var recent = []
+                                            for (var i = 0; i < root.aiRecognizeClickTimes.length; i++) {
+                                                if (now - root.aiRecognizeClickTimes[i] < 3000)
+                                                    recent.push(root.aiRecognizeClickTimes[i])
+                                            }
+                                            recent.push(now)
+                                            root.aiRecognizeClickTimes = recent
+                                            // 3 秒内点击达 3 次 → 判定恶意频繁操作，锁定 20 秒
+                                            if (recent.length >= 3) {
+                                                root.aiRecognizeClickTimes = []
+                                                root.aiRecognizeLocked = true
+                                                root.aiRecognizeLockCountdown = 20
+                                                aiRecognizeLockTimer.restart()
+                                                aiRecognizeLockOverlay.open()
+                                                console.warn("[WSP] 智能识别按钮频繁操作，锁定 20 秒")
+                                                return
+                                            }
                                             // 防抖：识别进行中忽略重复点击，避免狂按触发多次拍照
                                             // 导致工作线程写 cp0.jpg 与主线程读 cp0.jpg 竞争崩溃
                                             if (root.aiRecognizing) {
@@ -1370,6 +1407,25 @@ Item {
         }
     }
 
+    // 频繁操作锁定倒计时：每秒递减，到 0 自动解锁
+    Timer {
+        id: aiRecognizeLockTimer
+        interval: 1000
+        repeat: true
+        onTriggered: {
+            if (root.aiRecognizeLockCountdown > 1) {
+                root.aiRecognizeLockCountdown--
+            } else {
+                root.aiRecognizeLockCountdown = 0
+                root.aiRecognizeLocked = false
+                root.aiRecognizeClickTimes = []
+                aiRecognizeLockTimer.stop()
+                aiRecognizeLockOverlay.close()
+                console.log("[WSP] 智能识别按钮锁定已解除")
+            }
+        }
+    }
+
     // 保存超时兜底：10秒内未完成拍照则自动重置状态，
     // 防止相机异常（重启中 captureVegetable 直接 return 不发 photoSaved）
     // 导致 savingInProgress + saveLoadingOverlay 永久卡死。
@@ -1510,6 +1566,73 @@ Item {
     SaveLoadingOverlay {
         id: aiLoadingOverlay
         loadingText: "识别中..."
+    }
+
+    // 智能识别频繁操作锁定提醒遮罩（触发锁定时弹出，3 秒自动消失）
+    Popup {
+        id: aiRecognizeLockOverlay
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        padding: 0
+        anchors.centerIn: parent
+        width: 560
+        height: 280
+
+        Overlay.modal: Rectangle { color: "#80000000" }
+
+        background: Rectangle {
+            radius: 24
+            color: "#FFFFFF"
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: "#002A75"
+                shadowOpacity: 0.1
+                shadowBlur: 1.0
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+            }
+        }
+
+        enter: Transition {
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200 }
+            NumberAnimation { property: "scale"; from: 0.9; to: 1.0; duration: 200; easing.type: Easing.OutCubic }
+        }
+        exit: Transition {
+            NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 150 }
+        }
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 20
+
+            Text {
+                text: "⚠ 请勿频繁操作"
+                font.pixelSize: 36
+                font.bold: true
+                font.family: Theme.fontFamilyUi
+                color: "#DC2626"
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            Text {
+                text: "已锁定 20 秒，请稍后再试"
+                font.pixelSize: 26
+                font.family: Theme.fontFamilyUi
+                color: "#6B7280"
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+        }
+
+        // 3 秒后自动关闭（遮罩仅作提醒，锁定状态持续到 aiRecognizeLockTimer 解锁）
+        Timer {
+            id: lockOverlayAutoClose
+            interval: 3000
+            repeat: false
+            onTriggered: aiRecognizeLockOverlay.close()
+        }
+
+        onOpened: lockOverlayAutoClose.restart()
     }
 
     // ==========================================

@@ -291,7 +291,7 @@ Popup {
 
                 Text {
                     anchors.centerIn: parent
-                    text: "关闭"
+                    text: "退出"
                     font.pixelSize: 30
                     font.bold: true
                     font.family: Theme.fontFamilyUi
