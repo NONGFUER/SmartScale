@@ -379,8 +379,12 @@ ApplicationWindow {
     WifiPasswordDialog {
         id: wifiPasswordDialog
         x: (parent.width - width) / 2
-        y: Math.min((parent.height - height) / 2,
-                    parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+        // 键盘避让：用 keyboardContainer.height（scale 后实际视觉高度）
+        // 而非 inputPanel.height（未缩放原始高度，偏大导致弹窗上移过多、顶部超出屏幕）
+        // Math.max(20,...) 兜底防弹窗顶部贴顶/被裁
+        y: Math.max(20,
+                    Math.min((parent.height - height) / 2,
+                             parent.height - height - (inputPanel.active ? keyboardContainer.height + 20 : 0)))
 
         onConnectRequested: function(ssid, password) {
             NetworkManager.connectWifi(ssid, password)
