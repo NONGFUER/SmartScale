@@ -254,6 +254,8 @@ Rectangle {
     }
 
     // ===== 日期时间显示（上下两行）— 锚定到大标题右侧 =====
+    // 布局：ColumnLayout 宽度自动跟随 Row（"星期五 18:10:20"）的宽度，
+    //       dateText 居中于 ColumnLayout = 居中于时间行的整体中心。
     ColumnLayout {
         id: dateTimeCol
         anchors.left: titleText.right
@@ -267,9 +269,10 @@ Rectangle {
             font.pixelSize: 24
             font.bold: true
             color: "#FFFFFF"
+            Layout.alignment: Qt.AlignHCenter  // 年月日居中于（星期+时分秒）的总宽度
         }
 
-        Row {
+        RowLayout {
             spacing: 8
             Layout.alignment: Qt.AlignHCenter
 
@@ -279,15 +282,22 @@ Rectangle {
                 font.pixelSize: 24
                 font.bold: true
                 color: "#FFFFFF"
+                Layout.alignment: Qt.AlignVCenter
+                // 显式设 height + verticalAlignment 让中文字符框与数字字符框行内垂直居中
+                height: 32
+                verticalAlignment: Text.AlignVCenter
             }
 
             Text {
                 id: timeText
                 text: "00:00:00"
                 font.pixelSize: 24
-                font.family: "Monospace"
+               
                 font.bold: true
                 color: "#FFFFFF"
+                Layout.alignment: Qt.AlignVCenter
+                height: 32
+                verticalAlignment: Text.AlignVCenter
             }
         }
     }
