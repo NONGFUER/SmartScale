@@ -93,6 +93,43 @@ Popup {
             radius: 16
             color: "#FFFFFF"
 
+            // 左侧：返回按钮 — back2.png + "返回"（圆角胶囊）
+            Rectangle {
+                id: backBtn
+                anchors.left: parent.left
+                anchors.leftMargin: 16
+                anchors.verticalCenter: parent.verticalCenter
+                width: 116; height: 44; radius: 22
+                color: backMouse.containsMouse ? "#F1F5F9" : "transparent"
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 6
+
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 22; height: 22
+                        fillMode: Image.PreserveAspectFit
+                        source: "qrc:/resources/img/back2.png"
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "返回"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "#4649E5"
+                    }
+                }
+
+                MouseArea {
+                    id: backMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.close()
+                }
+            }
+
+            // 中间：标题（绝对居中）
             RowLayout {
                 anchors.centerIn: parent
                 spacing: 10

@@ -207,7 +207,7 @@ ApplicationWindow {
         anchors.bottom: parent.bottom
         height: inputPanel.active ? inputPanel.height * inputPanel.scale : 0
         clip: true   // 裁剪掉缩小后顶部空白
-        color: "#E8E8E8"  // 与 retro 明亮键盘背景一致，遮住缩放露出的边缘
+        color: "#FFFFFF"  // 与 light 明亮键盘背景一致（纯白底）
 
         InputPanel {
             id: inputPanel

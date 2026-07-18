@@ -143,6 +143,50 @@ Dialog {
         width: parent.width - 80
         spacing: 12
 
+        // ===== 返回按钮栏 =====
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.bottomMargin: 8
+            spacing: 0
+
+            // 返回按钮 — back2.png + "返回"（圆角胶囊）
+            Rectangle {
+                width: 116; height: 44; radius: 22
+                color: backMouse.containsMouse ? "#F1F5F9" : "transparent"
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 6
+
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 22; height: 22
+                        fillMode: Image.PreserveAspectFit
+                        source: "qrc:/resources/img/back2.png"
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "返回"
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "#4649E5"
+                    }
+                }
+
+                MouseArea {
+                    id: backMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: {
+                        root.dismissed()
+                        root.close()
+                    }
+                }
+            }
+
+            Item { Layout.fillWidth: true }
+        }
+
         // ===== 图标 + 标题行 =====
         RowLayout {
             Layout.fillWidth: true
@@ -151,13 +195,13 @@ Dialog {
 
             // 类型图标
             Rectangle {
-                width: 34; height: 34; radius: 8
+                width: 40; height: 40; radius: 10
                 color: root._color("iconBg")
 
                 Text {
                     anchors.centerIn: parent
                     text: root._color("icon")
-                    font.pixelSize: 18
+                    font.pixelSize: 22
                     font.bold: true
                     color: root._color("iconColor")
                 }
@@ -176,7 +220,7 @@ Dialog {
         Text {
             id: messageText
             text: root.message
-            font.pixelSize: 22
+            font.pixelSize: 24
             color: "#334155"
             wrapMode: Text.Wrap
             Layout.fillWidth: true
@@ -201,7 +245,7 @@ Dialog {
 
                 Text {
                     text: root.showDetail ? "收起详情 \u25B2" : "查看详情 \u25BC"
-                    font.pixelSize: 15
+                    font.pixelSize: 24
                     color: root._color("accent")
 
                     MouseArea {
@@ -234,7 +278,7 @@ Dialog {
                     Text {
                         id: detailContent
                         text: root.detail
-                        font.pixelSize: 14
+                        font.pixelSize: 24
                         font.family: "monospace"
                         color: "#64748B"
                         wrapMode: Text.Wrap
@@ -266,7 +310,7 @@ Dialog {
                 Text {
                     anchors.centerIn: parent
                     text: root.confirmText
-                    font.pixelSize: 18
+                    font.pixelSize: 24
                     font.bold: true
                     color: "white"
                 }
@@ -296,7 +340,7 @@ Dialog {
                     border.color: "#D1D5DB"
                     border.width: 1
 
-                    Text { anchors.centerIn: parent; text: root.cancelText; font.pixelSize: 17; font.bold: true; color: "#475569" }
+                    Text { anchors.centerIn: parent; text: root.cancelText; font.pixelSize: 24; font.bold: true; color: "#475569" }
                     MouseArea {
                         id: cancelBtnMouse
                         anchors.fill: parent
@@ -332,7 +376,7 @@ Dialog {
                     Text {
                         anchors.centerIn: parent
                         text: root.actionText
-                        font.pixelSize: 17
+                        font.pixelSize: 24
                         font.bold: true
                         color: "white"
                     }
