@@ -294,9 +294,12 @@ ApplicationWindow {
     LoginDialog {
         id: loginDialog
         // Popup 不支持 anchors，用 x/y 手动居中 + 键盘避让
+        // 注意：用 keyboardContainer.height（scale 后实际视觉高度），
+        // 而非 inputPanel.height（未缩放原始高度，偏大导致弹窗上移过多、顶部贴顶）
         x: (parent.width - width) / 2
-        y: Math.min((parent.height - height) / 2,
-                    parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+        y: Math.max(20,
+                    Math.min((parent.height - height) / 2,
+                             parent.height - height - (inputPanel.active ? keyboardContainer.height + 20 : 0)))
 
         // 自动登录失败时打开登录弹窗让用户手动输入
         Connections {

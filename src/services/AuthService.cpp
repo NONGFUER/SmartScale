@@ -5,6 +5,7 @@
 
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QNetworkRequest>
 #include <QDebug>
 #include <QElapsedTimer>
@@ -24,6 +25,7 @@ AuthService::AuthService(QObject *parent)
             this, &AuthService::onNetworkReply);
     loadProductFromCache();
     loadLastLogin();  // 加载记住的登录信息
+    loadLoginHistory();  // 加载最近登录历史
 }
 
 AuthService::~AuthService()
@@ -318,48 +320,51 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
 
     // --- User/by-id 分支：解析用户信息（头像等），失败不影响登录态 ---
     if (isUserInfo) {
+        QString userNm = m_currentUser;  // 昵称兜底为登录用户名
         if (reply->error() != QNetworkReply::NoError) {
             qWarning() << "[Auth] User/by-id 网络错误:" << reply->errorString();
-            // 失败也继续串行链
-            if (m_ingredientSvc) {
-                m_ingredientSvc->fetchIngredients();
-            }
-            return;
-        }
-        QByteArray data = reply->readAll();
-        qDebug() << "[Auth] User/by-id 响应:" << data;
-
-        QJsonParseError parseErr;
-        QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
-        if (parseErr.error != QJsonParseError::NoError) {
-            qWarning() << "[Auth] User/by-id JSON 解析失败:" << parseErr.errorString();
-            if (m_ingredientSvc) {
-                m_ingredientSvc->fetchIngredients();
-            }
-            return;
-        }
-
-        QJsonObject root = doc.object();
-        QJsonObject dataObj = root.value("data").toObject();
-        QJsonObject src     = dataObj.isEmpty() ? root : dataObj;
-
-        QString avatar = src.value("img").toString();
-        if (!avatar.isEmpty() && avatar != m_avatarUrl) {
-            m_avatarUrl = avatar;
-            Q_EMIT avatarChanged();
-            qInfo() << "[Auth] User/by-id 成功: avatarUrl=" << m_avatarUrl.left(80) + "...";
         } else {
-            qDebug() << "[Auth] User/by-id 返回但 avatar 为空或未变化";
+            QByteArray data = reply->readAll();
+            qDebug() << "[Auth] User/by-id 响应:" << data;
+
+            QJsonParseError parseErr;
+            QJsonDocument doc = QJsonDocument::fromJson(data, &parseErr);
+            if (parseErr.error != QJsonParseError::NoError) {
+                qWarning() << "[Auth] User/by-id JSON 解析失败:" << parseErr.errorString();
+            } else {
+                QJsonObject root = doc.object();
+                QJsonObject dataObj = root.value("data").toObject();
+                QJsonObject src     = dataObj.isEmpty() ? root : dataObj;
+
+                QString avatar = src.value("img").toString();
+                if (!avatar.isEmpty() && avatar != m_avatarUrl) {
+                    m_avatarUrl = avatar;
+                    Q_EMIT avatarChanged();
+                    qInfo() << "[Auth] User/by-id 成功: avatarUrl=" << m_avatarUrl.left(80) + "...";
+                } else {
+                    qDebug() << "[Auth] User/by-id 返回但 avatar 为空或未变化";
+                }
+
+                QString custNm = src.value("custNm").toString();
+                if (!custNm.isEmpty() && custNm != m_custNm) {
+                    m_custNm = custNm;
+                    Q_EMIT custNmChanged();
+                    qInfo() << "[Auth] User/by-id 成功: custNm=" << m_custNm;
+                } else {
+                    qDebug() << "[Auth] User/by-id 返回但 custNm 为空或未变化";
+                }
+
+                // 昵称优先取后端 userNm 字段，缺省回退到登录用户名
+                QString backendUserNm = src.value("userNm").toString();
+                if (!backendUserNm.isEmpty()) {
+                    userNm = backendUserNm;
+                }
+            }
         }
 
-        QString custNm = src.value("custNm").toString();
-        if (!custNm.isEmpty() && custNm != m_custNm) {
-            m_custNm = custNm;
-            Q_EMIT custNmChanged();
-            qInfo() << "[Auth] User/by-id 成功: custNm=" << m_custNm;
-        } else {
-            qDebug() << "[Auth] User/by-id 返回但 custNm 为空或未变化";
-        }
+        // 记录最近登录历史（在线登录成功后，三元组齐全或尽力填充）
+        addLoginHistory(m_pendingUserCode, userNm, m_custNm, m_pendingPassword);
+
         // 串行链：User/by-id 完成 → 触发食材列表拉取
         if (m_ingredientSvc) {
             m_ingredientSvc->fetchIngredients();
@@ -771,4 +776,154 @@ void AuthService::clearSavedLogin()
     clearSavedLoginData();
     setRememberLogin(false);
     Q_EMIT lastLoginChanged();
+}
+
+// ==========================================================================
+//  最近登录历史
+//  存储: ~/.cache/smartscale/login_history.json（不含密码，最多 10 条）
+// ==========================================================================
+
+void AuthService::loadLoginHistory()
+{
+    QString path = QDir::homePath() + "/.cache/smartscale/login_history.json";
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return;
+    }
+
+    QJsonParseError parseErr;
+    QJsonDocument doc = QJsonDocument::fromJson(file.readAll(), &parseErr);
+    file.close();
+
+    if (parseErr.error != QJsonParseError::NoError) {
+        qWarning() << "[Auth] login_history 缓存 JSON 解析失败:" << parseErr.errorString();
+        return;
+    }
+
+    QJsonArray arr = doc.array();
+    m_loginHistory.clear();
+    for (const QJsonValue &v : arr) {
+        m_loginHistory.append(v.toObject().toVariantMap());
+    }
+    qInfo() << "[Auth] 加载最近登录历史:" << m_loginHistory.size() << "条";
+}
+
+void AuthService::saveLoginHistory() const
+{
+    QString dir = QDir::homePath() + "/.cache/smartscale";
+    QDir().mkpath(dir);
+    QString path = dir + "/login_history.json";
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qWarning() << "[Auth] 写入 login_history 缓存失败:" << file.errorString();
+        return;
+    }
+
+    QJsonArray arr;
+    for (const QVariant &e : m_loginHistory) {
+        arr.append(QJsonObject::fromVariantMap(e.toMap()));
+    }
+    file.write(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+    file.close();
+    qDebug() << "[Auth] login_history 已写入缓存:" << path;
+}
+
+void AuthService::addLoginHistory(const QString &userCode,
+                                  const QString &userNm,
+                                  const QString &custNm,
+                                  const QString &password)
+{
+    if (userCode.trimmed().isEmpty()) return;
+
+    // 去重：移除同 userCode 的旧记录，并保留其已存密码避免覆盖为空
+    QString existingPwd;
+    for (int i = m_loginHistory.size() - 1; i >= 0; --i) {
+        QVariantMap e = m_loginHistory.at(i).toMap();
+        if (e.value("userCode").toString() == userCode) {
+            existingPwd = e.value("password").toString();
+            m_loginHistory.removeAt(i);
+        }
+    }
+
+    QVariantMap entry;
+    entry["userCode"] = userCode;
+    entry["userNm"]   = userNm.isEmpty() ? userCode : userNm;
+    entry["custNm"]   = custNm;
+    entry["lastTime"] = QDateTime::currentSecsSinceEpoch();
+    // 密码：优先用本次传入（base64 存储），缺省回退已有记录，保持历史密码不丢失
+    QString pwdToStore = password.isEmpty() ? existingPwd : password.toUtf8().toBase64();
+    if (!pwdToStore.isEmpty()) entry["password"] = pwdToStore;
+    m_loginHistory.prepend(entry);
+
+    // 截断到最多 10 条
+    while (m_loginHistory.size() > 10) {
+        m_loginHistory.removeLast();
+    }
+
+    saveLoginHistory();
+    Q_EMIT loginHistoryChanged();
+    qInfo() << "[Auth] 新增最近登录历史:" << userCode
+            << "当前共" << m_loginHistory.size() << "条";
+}
+
+void AuthService::removeLoginHistory(int index)
+{
+    if (index < 0 || index >= m_loginHistory.size()) return;
+    m_loginHistory.removeAt(index);
+    saveLoginHistory();
+    Q_EMIT loginHistoryChanged();
+}
+
+void AuthService::clearLoginHistory()
+{
+    if (m_loginHistory.isEmpty()) return;
+    m_loginHistory.clear();
+    saveLoginHistory();
+    Q_EMIT loginHistoryChanged();
+}
+
+bool AuthService::hasRememberedPassword(const QString &userCode) const
+{
+    // 优先：历史记录中该账号是否存有密码（快捷登录选中即登录的基础）
+    for (const QVariant &e : m_loginHistory) {
+        QVariantMap m = e.toMap();
+        if (m.value("userCode").toString() == userCode
+                && !m.value("password").toString().isEmpty()) {
+            return true;
+        }
+    }
+    // 回退：记住登录的单账号密码（兼容旧行为）
+    return m_rememberLogin && !m_lastUserCode.isEmpty()
+           && m_lastUserCode == userCode && !m_lastPassword.isEmpty();
+}
+
+void AuthService::loginByHistory(int index)
+{
+    if (index < 0 || index >= m_loginHistory.size()) {
+        qWarning() << "[Auth] 历史一键登录失败: 索引越界" << index;
+        Q_EMIT loginFailed("历史记录不存在");
+        return;
+    }
+
+    QVariantMap entry = m_loginHistory.at(index).toMap();
+    QString userCode = entry.value("userCode").toString();
+
+    // 优先用历史记录中保存的密码，缺省回退记住登录的单账号密码
+    QString pwdB64 = entry.value("password").toString();
+    if (pwdB64.isEmpty() && m_rememberLogin && m_lastUserCode == userCode) {
+        pwdB64 = m_lastPassword;
+    }
+    if (pwdB64.isEmpty()) {
+        qWarning() << "[Auth] 历史一键登录失败: 该账号未记住密码" << userCode;
+        Q_EMIT loginFailed("该账号未记住密码");
+        return;
+    }
+
+    // 解码保存的密码
+    QByteArray decoded = QByteArray::fromBase64(pwdB64.toUtf8());
+    QString password = QString::fromUtf8(decoded);
+
+    qInfo() << "[Auth] 通过历史记录一键登录:" << userCode;
+    login(userCode, password);
 }

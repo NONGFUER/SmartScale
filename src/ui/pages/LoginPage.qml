@@ -216,13 +216,15 @@ Item {
                     id: userIn
                     anchors.fill: parent
                     anchors.margins: 5
-                    placeholderText: "请输入用户名"
+                    placeholderText: "请输入9位数字账号"
                     font.family: "Microsoft YaHei"
                     font.pixelSize: 20
                     color: "#1B263B"
                     verticalAlignment: TextInput.AlignVCenter
                     background: Rectangle { color: "transparent" }
-                    inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhPreferLowercase     //不自动大写
+                    inputMethodHints: Qt.ImhDigitsOnly     // 仅数字键盘
+                    maximumLength: 9
+                    validator: RegularExpressionValidator { regularExpression: /^\d{0,9}$/ }
                    // leftPadding: 15
                     focus: true
                     

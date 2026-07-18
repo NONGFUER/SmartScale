@@ -802,6 +802,7 @@ Item {
                                                 text: "金额（元）"
                                                 font.pixelSize: 24
                                                 font.family: "PingFang SC"
+                                                font.bold:true
                                                 color: "#FFFFFF"
                                             }
                                            

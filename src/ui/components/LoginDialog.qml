@@ -7,7 +7,7 @@ import App.Backend 1.0
 Dialog {
     id: loginDialog
     width: 600
-    height: 520
+    height: 560
     leftPadding: 73
     rightPadding: 73
     topPadding: 30
@@ -105,6 +105,32 @@ Dialog {
     // 登录逻辑（按钮点击 / Enter 快捷键共用）
     function doLogin() {
         errorText.opacity = 0
+
+        // 快捷登录模式：使用选中的历史账号 + 记住的密码直接登录
+        if (loginMode === 1) {
+            if (selectedHistoryIndex < 0) {
+                errorText.text = "请选择要登录的账号"
+                errorAnim.start()
+                errorText.opacity = 1
+                return
+            }
+            var item = BackendAuth.loginHistory[selectedHistoryIndex]
+            if (BackendAuth.hasRememberedPassword(item.userCode)) {
+                loginLoadingOverlay.open()
+                BackendAuth.loginByHistory(selectedHistoryIndex)
+            } else {
+                // 该账号未记住密码 → 切回账号登录并预填，提示输密码
+                loginMode = 0
+                selectedHistoryIndex = -1
+                userIn.text = item.userCode
+                pwdIn.text = ""
+                errorText.text = "请输入密码"
+                errorText.opacity = 1
+                pwdIn.forceActiveFocus()
+            }
+            return
+        }
+
 
         // 前端输入校验
         if (!userIn.text.trim()) {
@@ -208,12 +234,17 @@ Dialog {
         }
     }
 
+    // 登录模式：0 = 账号登录，1 = 快捷登录
+    property int loginMode: 0
+    // 快捷登录中选中的历史记录索引（-1 表示未选）
+    property int selectedHistoryIndex: -1
+
     contentItem: ColumnLayout {
-        spacing: 18
+        spacing: 16
         // 头像 + 欢迎登录标题
         Item {
             Layout.alignment: Qt.AlignHCenter
-            Layout.preferredHeight: 48
+            Layout.preferredHeight: 44
             Layout.fillWidth: true
 
             ColumnLayout {
@@ -223,196 +254,368 @@ Dialog {
                     Layout.alignment: Qt.AlignHCenter
                     text: "欢迎登录"
                     font.family: "Microsoft YaHei"
-                    font.pixelSize: 36
+                    font.pixelSize: 34
                     font.bold: true
                     color: "#1B263B"
                 }
             }
         }
 
-        // 账号输入框
-        TextField {
-            id: userIn
-            Layout.preferredWidth:  454
-            Layout.preferredHeight: 60
-            leftPadding: 24
-            placeholderText: "请输入账号"
-            font.family: "PingFang SC"
-            font.pixelSize: 24
-            color: "#1B263B"
-            verticalAlignment: TextInput.AlignVCenter
-            inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhPreferLowercase
+        // 登录模式切换 Tab（账号登录 | 快捷登录）
+        RowLayout {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: 454
+            Layout.preferredHeight: 52
+            spacing: 12
 
-            background: Rectangle {
-                radius: 1
-                border.color: userIn.activeFocus ? "#4361EE" : "#E2E8F0"
-                color: "#F7F7F7"
-            }
-        }
-
-        // 密码输入框
-        TextField {
-            id: pwdIn
-            Layout.preferredWidth:  454
-            Layout.preferredHeight: 60
-            leftPadding: 24
-            rightPadding: 40
-            placeholderText: "请输入登录密码"
-            font.family: "PingFang SC"
-            font.pixelSize: 24
-            color: "#1B263B"
-            echoMode: showPwdCheck.checked ? TextInput.Normal : TextInput.Password
-            verticalAlignment: TextInput.AlignVCenter
-            inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhPreferLowercase
-
-            background: Rectangle {
-                radius: 1
-                border.color: pwdIn.activeFocus ? "#4361EE" : "#E2E8F0"
-                color: "#F7F7F7"
-            }
-
-            // 眼睛图标按钮（切换密码可见性）
             Rectangle {
-                id: eyeBtn
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                anchors.rightMargin: 6
-                width: 34; height: 34; radius: 17
-                color: showPwdCheck.checked ? "#E0E7FF" : "transparent"
-
-                Image {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                radius: 12
+                color: loginMode === 0 ? "#4361EE" : "#F1F5F9"
+                Text {
                     anchors.centerIn: parent
-                    source: showPwdCheck.checked ? "qrc:/resources/icon/eye-fill.png" : "qrc:/resources/icon/eye-close-fill.png"
-                    sourceSize: Qt.size(20, 20)
-                    cache: true
+                    text: "账号登录"
+                    font.family: "PingFang SC"
+                    font.pixelSize: 24
+                    font.bold: true
+                    color: loginMode === 0 ? "#FFFFFF" : "#64748B"
                 }
-
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: showPwdCheck.toggle()
+                    onClicked: { loginMode = 0; selectedHistoryIndex = -1 }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                radius: 12
+                color: loginMode === 1 ? "#4361EE" : "#F1F5F9"
+                Text {
+                    anchors.centerIn: parent
+                    text: "快捷登录"
+                    font.family: "PingFang SC"
+                    font.pixelSize: 24
+                    font.bold: true
+                    color: loginMode === 1 ? "#FFFFFF" : "#64748B"
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    onClicked: { loginMode = 1; selectedHistoryIndex = -1 }
                 }
             }
         }
 
-        // 显示密码选项
-        Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 36
-            Layout.topMargin: -6
+        // 内容区：根据 loginMode 切换
+        StackLayout {
+            id: loginStack
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: 454
+            Layout.preferredHeight: 230
+            currentIndex: loginMode
 
-            RowLayout {
-                anchors.left: parent.left
-                spacing: 6
+            // ===== Page 0: 账号登录 =====
+            ColumnLayout {
+                spacing: 14
 
-                CheckBox {
-                    id: showPwdCheck
-                    text: ""
-                    implicitWidth: 28
-                    implicitHeight: 28
+                // 账号输入框（仅允许 9 位数字）
+                TextField {
+                    id: userIn
+                    Layout.preferredWidth:  454
+                    Layout.preferredHeight: 60
+                    leftPadding: 24
+                    placeholderText: "请输入9位数字账号"
+                    font.family: "PingFang SC"
+                    font.pixelSize: 24
+                    color: "#1B263B"
+                    verticalAlignment: TextInput.AlignVCenter
+                    inputMethodHints: Qt.ImhDigitsOnly
+                    maximumLength: 9
+                    validator: RegularExpressionValidator { regularExpression: /^\d{0,9}$/ }
 
-                    indicator: Rectangle {
-                        implicitWidth: 28
-                        implicitHeight: 28
-                        x: 0; y: parent.height / 2 - height / 2
-                        radius: 4
-                        color: showPwdCheck.checked ? "#4361EE" : "#FFFFFF"
-                        border.color: showPwdCheck.checked ? "#4361EE" : "#CBD5E1"
-                        border.width: 1.5
+                    background: Rectangle {
+                        radius: 1
+                        border.color: userIn.activeFocus ? "#4361EE" : "#E2E8F0"
+                        color: "#F7F7F7"
+                    }
+                }
 
-                        Text {
-                            visible: showPwdCheck.checked
+                // 密码输入框
+                TextField {
+                    id: pwdIn
+                    Layout.preferredWidth:  454
+                    Layout.preferredHeight: 60
+                    leftPadding: 24
+                    rightPadding: 40
+                    placeholderText: "请输入登录密码"
+                    font.family: "PingFang SC"
+                    font.pixelSize: 24
+                    color: "#1B263B"
+                    echoMode: showPwdCheck.checked ? TextInput.Normal : TextInput.Password
+                    verticalAlignment: TextInput.AlignVCenter
+                    inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhPreferLowercase
+
+                    background: Rectangle {
+                        radius: 1
+                        border.color: pwdIn.activeFocus ? "#4361EE" : "#E2E8F0"
+                        color: "#F7F7F7"
+                    }
+
+                    // 眼睛图标按钮（切换密码可见性）
+                    Rectangle {
+                        id: eyeBtn
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.rightMargin: 6
+                        width: 34; height: 34; radius: 17
+                        color: showPwdCheck.checked ? "#E0E7FF" : "transparent"
+
+                        Image {
                             anchors.centerIn: parent
-                            text: "\u2713"
-                            font.pixelSize: 18
-                            font.bold: true
-                            color: "#FFFFFF"
+                            source: showPwdCheck.checked ? "qrc:/resources/icon/eye-fill.png" : "qrc:/resources/icon/eye-close-fill.png"
+                            sourceSize: Qt.size(20, 20)
+                            cache: true
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: showPwdCheck.toggle()
                         }
                     }
-                    contentItem: null
                 }
 
-                Text {
-                    text: "显示密码"
-                    font.family: "Microsoft YaHei"
-                    font.pixelSize: 24
-                    color: "#64748B"
-                    verticalAlignment: Text.AlignVCenter
+                // 显示密码选项
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36
+                    Layout.topMargin: -4
 
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: showPwdCheck.toggle()
-                    }
-                }
-            }
-        }
+                    RowLayout {
+                        anchors.left: parent.left
+                        spacing: 6
 
-       
-        // 记住登录复选框
-        Item {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 36
-            Layout.topMargin: 4
+                        CheckBox {
+                            id: showPwdCheck
+                            text: ""
+                            implicitWidth: 28
+                            implicitHeight: 28
 
-            RowLayout {
-                anchors.left: parent.left
-                spacing: 8
+                            indicator: Rectangle {
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                x: 0; y: parent.height / 2 - height / 2
+                                radius: 4
+                                color: showPwdCheck.checked ? "#4361EE" : "#FFFFFF"
+                                border.color: showPwdCheck.checked ? "#4361EE" : "#CBD5E1"
+                                border.width: 1.5
 
-                CheckBox {
-                    id: rememberCheck
-                    text: ""
-                    implicitWidth: 28
-                    implicitHeight: 28
-                    checked: false
-
-                    onCheckedChanged: {
-                        BackendAuth.rememberLogin = checked
-                    }
-
-                    indicator: Rectangle {
-                        implicitWidth: 28
-                        implicitHeight: 28
-                        x: 0
-                        y: parent.height / 2 - height / 2
-                        radius: 4
-                        color: rememberCheck.checked ? "#4361EE" : "#FFFFFF"
-                        border.color: rememberCheck.checked ? "#4361EE" : "#CBD5E1"
-                        border.width: 1.5
+                                Text {
+                                    visible: showPwdCheck.checked
+                                    anchors.centerIn: parent
+                                    text: "\u2713"
+                                    font.pixelSize: 18
+                                    font.bold: true
+                                    color: "#FFFFFF"
+                                }
+                            }
+                            contentItem: null
+                        }
 
                         Text {
-                            visible: rememberCheck.checked
-                            anchors.centerIn: parent
-                            text: "\u2713"
-                            font.pixelSize: 18
-                            font.bold: true
-                            color: "#FFFFFF"
+                            text: "显示密码"
+                            font.family: "Microsoft YaHei"
+                            font.pixelSize: 24
+                            color: "#64748B"
+                            verticalAlignment: Text.AlignVCenter
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: showPwdCheck.toggle()
+                            }
                         }
                     }
-
-                    contentItem: null
                 }
 
-                Text {
-                    text: "记住登录"
-                    font.family: "Microsoft YaHei"
-                    font.pixelSize: 24
-                    color: "#64748B"
-                    verticalAlignment: Text.AlignVCenter
+                // 记住登录复选框
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36
 
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: rememberCheck.toggle()
+                    RowLayout {
+                        anchors.left: parent.left
+                        spacing: 8
+
+                        CheckBox {
+                            id: rememberCheck
+                            text: ""
+                            implicitWidth: 28
+                            implicitHeight: 28
+                            checked: false
+
+                            onCheckedChanged: {
+                                BackendAuth.rememberLogin = checked
+                            }
+
+                            indicator: Rectangle {
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                x: 0
+                                y: parent.height / 2 - height / 2
+                                radius: 4
+                                color: rememberCheck.checked ? "#4361EE" : "#FFFFFF"
+                                border.color: rememberCheck.checked ? "#4361EE" : "#CBD5E1"
+                                border.width: 1.5
+
+                                Text {
+                                    visible: rememberCheck.checked
+                                    anchors.centerIn: parent
+                                    text: "\u2713"
+                                    font.pixelSize: 18
+                                    font.bold: true
+                                    color: "#FFFFFF"
+                                }
+                            }
+
+                            contentItem: null
+                        }
+
+                        Text {
+                            text: "记住登录"
+                            font.family: "Microsoft YaHei"
+                            font.pixelSize: 24
+                            color: "#64748B"
+                            verticalAlignment: Text.AlignVCenter
+
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: rememberCheck.toggle()
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ===== Page 1: 快捷登录（最近登录历史） =====
+            ColumnLayout {
+                spacing: 10
+
+                Text {
+                    visible: BackendAuth.loginHistory.length === 0
+                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillHeight: true
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    text: "暂无最近登录记录"
+                    font.family: "Microsoft YaHei"
+                    font.pixelSize: 22
+                    color: "#94A3B8"
+                }
+
+                ListView {
+                    id: historyList
+                    visible: BackendAuth.loginHistory.length > 0
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    model: BackendAuth.loginHistory
+                    spacing: 10
+                    clip: true
+                    // 历史变化时刷新（loginHistoryChanged 触发 model 更新）
+                    delegate: Rectangle {
+                        width: historyList.width
+                        height: 80
+                        radius: 14
+                        color: (selectedHistoryIndex === index) ? "#E0E7FF" : "#F7F7F7"
+                        border.color: (selectedHistoryIndex === index) ? "#4361EE" : "#E2E8F0"
+                        border.width: (selectedHistoryIndex === index) ? 2 : 1
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 16
+                            anchors.rightMargin: 16
+                            spacing: 14
+
+                            // 头像占位（昵称首字）
+                            Rectangle {
+                                Layout.preferredWidth: 50
+                                Layout.preferredHeight: 50
+                                radius: 25
+                                color: "#4361EE"
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: (modelData.userNm || "").charAt(0)
+                                    font.family: "PingFang SC"
+                                    font.pixelSize: 24
+                                    font.bold: true
+                                    color: "#FFFFFF"
+                                }
+                            }
+
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 4
+                                Text {
+                                    text: modelData.userNm || ""
+                                    font.family: "PingFang SC"
+                                    font.pixelSize: 24
+                                    font.bold: true
+                                    color: "#1B263B"
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    text: ((modelData.custNm || "") ? (modelData.custNm + "   ") : "")
+                                          + "账号 ****" + String(modelData.userCode).slice(-4)
+                                    font.family: "Microsoft YaHei"
+                                    font.pixelSize: 18
+                                    color: "#64748B"
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                            }
+                        }
+
+                        // 整行点击（选中该账号，登录由"登录"按钮触发）
+                        MouseArea {
+                            id: historyMA
+                            anchors.fill: parent
+                            onClicked: selectedHistoryIndex = index
+                        }
+
+                        // 删除按钮（覆盖在 historyMA 之上，z 更高）
+                        Rectangle {
+                            width: 40; height: 40; radius: 20
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.rightMargin: 10
+                            color: delMA.pressed ? "#FEE2E2" : "transparent"
+                            z: 2
+                            Text {
+                                anchors.centerIn: parent
+                                text: "\u2715"
+                                font.pixelSize: 20
+                                color: "#94A3B8"
+                            }
+                            MouseArea {
+                                id: delMA
+                                anchors.fill: parent
+                                z: 2
+                                onClicked: BackendAuth.removeLoginHistory(index)
+                            }
+                        }
                     }
                 }
             }
         }
 
-
-        // 错误提示（带动画）
+        // 错误提示（绝对定位，不占 ColumnLayout 空间，避免挤压上方内容）
         Text {
             id: errorText
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignHCenter
-            horizontalAlignment: Text.AlignHCenter // 【新增】确保文字在宽区域内居中
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: loginStack.bottom
+            anchors.topMargin: 4
+            horizontalAlignment: Text.AlignHCenter
             font.family: "Microsoft YaHei"
             font.pixelSize: 24
             color: "#EF4444"
@@ -420,7 +623,6 @@ Dialog {
             visible: opacity > 0
             opacity: 0
 
-            Behavior on height { NumberAnimation { duration: 200 } }
             Behavior on opacity { NumberAnimation { duration: 200 } }
 
             SequentialAnimation on color {
@@ -436,7 +638,7 @@ Dialog {
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 60
-            Layout.topMargin: 8
+            Layout.topMargin: 4
 
             RowLayout {
                 anchors.centerIn: parent
@@ -468,11 +670,12 @@ Dialog {
                     }
                 }
 
-                // 登录按钮（右侧，蓝色实底）
+                // 登录按钮（右侧，蓝色实底；两种模式均显示）
                 Rectangle {
                     width: 180
                     height: 60
                     radius: 15
+                    visible: true
                     color: loginMA.containsMouse ? "#4649E5" : "#4361EE"
 
                     Behavior on color { ColorAnimation { duration: 120 } }
@@ -495,13 +698,14 @@ Dialog {
                 }
             }
         }
-
-        
     }
 
     // 打开时初始化，自动填充保存的账号密码
     onOpened: {
         errorText.opacity = 0
+        selectedHistoryIndex = -1
+        // 有最近登录历史时默认进入快捷登录，方便直接选昵称登录
+        loginMode = (BackendAuth.loginHistory.length > 0) ? 1 : 0
         // 如果有保存的登录信息，自动填充
         if (BackendAuth.hasSavedLogin) {
             userIn.text = BackendAuth.lastUserCode

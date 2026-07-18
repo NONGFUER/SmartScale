@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QDateTime>
+#include <QVariantList>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 
@@ -28,6 +29,7 @@ class AuthService : public QObject
     Q_PROPERTY(bool rememberLogin READ rememberLogin WRITE setRememberLogin NOTIFY rememberLoginChanged)
     Q_PROPERTY(QString lastUserCode READ lastUserCode NOTIFY lastLoginChanged)
     Q_PROPERTY(bool hasSavedLogin READ hasSavedLogin NOTIFY lastLoginChanged)
+    Q_PROPERTY(QVariantList loginHistory READ loginHistory NOTIFY loginHistoryChanged)
 
 public:
     explicit AuthService(QObject *parent = nullptr);
@@ -100,6 +102,17 @@ public:
     Q_INVOKABLE void autoLogin();  // 使用保存的凭据自动登录
     Q_INVOKABLE void clearSavedLogin();  // 清除记住的登录信息
 
+    // === 最近登录历史（缓存 userCode/userNm/custNm，最多 10 条）===
+    QVariantList loginHistory() const { return m_loginHistory; }
+    Q_INVOKABLE void addLoginHistory(const QString &userCode,
+                                     const QString &userNm,
+                                     const QString &custNm,
+                                     const QString &password = QString());
+    Q_INVOKABLE void removeLoginHistory(int index);
+    Q_INVOKABLE void clearLoginHistory();
+    Q_INVOKABLE bool hasRememberedPassword(const QString &userCode) const;
+    Q_INVOKABLE void loginByHistory(int index);
+
 Q_SIGNALS:
     void loginSuccess();
     void loginFailed(const QString &errorMsg);
@@ -126,6 +139,7 @@ Q_SIGNALS:
     void deviceSnChanged();
     void rememberLoginChanged();
     void lastLoginChanged();
+    void loginHistoryChanged();
 
 private Q_SLOTS:
     /** @brief 处理网络回复 */
@@ -180,6 +194,10 @@ private:
     void saveLastLogin();
     void clearSavedLoginData();
 
+    // === 最近登录历史本地缓存读写 ===
+    void loadLoginHistory();
+    void saveLoginHistory() const;
+
     // === 成员变量 ===
     QNetworkAccessManager *m_networkMgr;
     UserRepo *m_userRepo = nullptr;
@@ -206,6 +224,9 @@ private:
     bool m_rememberLogin = false;
     QString m_lastUserCode;        // 保存的用户名
     QString m_lastPassword;        // 保存的密码
+
+    // === 最近登录历史（最多 10 条，不含密码）===
+    QVariantList m_loginHistory;
 
     // === Token 刷新协调器（无感刷新核心） ===
     bool   m_isRefreshing = false;       // 全局刷新锁：防止并发重复请求

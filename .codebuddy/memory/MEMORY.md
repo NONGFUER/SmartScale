@@ -51,7 +51,7 @@
 - **SaveSuccessDialog.qml**（`src/ui/components/`）：modal Dialog 460×380 居中白卡+绿勾 OutBack 入场+文案+"确认 (Ns)"按钮（N 从3递减，3秒后自动关，可手动立即关）。
 
 ## 项目关键文件索引
-- 登录：`src/services/AuthService.h/.cpp`+`src/ui/pages/LoginPage.qml`+`src/ui/components/LoginDialog.qml`，退出 `LogoutConfirmDialog.qml`。
+- 登录：`src/services/AuthService.h/.cpp`+`src/ui/pages/LoginPage.qml`+`src/ui/components/LoginDialog.qml`，退出 `LogoutConfirmDialog.qml`。快捷登录：历史记录（`~/.cache/smartscale/login_history.json`，含 userCode/userNm/custNm + base64 密码）随登录成功写入；`hasRememberedPassword`/`loginByHistory` 优先用历史密码，回退单账号记住密码。任意历史账号选中点登录即可直接登录。
 - Modbus 串口：`src/hardware/WeightSensorWorker.h/.cpp`（QMutexLocker RAII+连续5次错误重启）。
 - 语音：`src/hardware/VoiceSpeaker.h/.cpp`（piper TTS，QML 名 `VoiceSpeaker`），`warmup()` 在 `Main.qml` 开机预加载模型。
 - ONNX Runtime：`3rdparty/onnxruntime-linux-aarch64-1.24.4/lib/`。
@@ -62,6 +62,7 @@
 - 环境变量（main.cpp）：`QT_IM_MODULE=qtvirtualkeyboard`+`QT_VIRTUALKEYBOARD_STYLE=retro`（**retro=浅色明亮风格**，default=深色暗黑）。`Main.qml` 的 `keyboardContainer` 背景须与键盘一致：retro 用 `#E8E8E8`。勿设 `QT_VIRTUALKEYBOARD_LAYOUTS`/`QT_VIRTUALKEYBOARD_LANGUAGE_FILTER`（非标准）。
 - 样式可选值（Qt6 内置仅2个）：`default`（深灰硬编码背景）、`retro`（浅色金黄装饰复古风）。如需纯白现代风须自定义 `KeyboardStyle.qml`（60+ 属性，放 qrc `/qt-project.org/imports/QtQuick/VirtualKeyboard/Styles/<name>/`，集成风险高）。
 - API（Qt 6.8.2）：`locale`(rw)/`activeLocales`(rw)/`availableLocales`(ro)/`visibleFunctionKeys`(rw，None=0/Hide=1/Language=2/All=3)。**不存在** `languageFilterFunc`。验证引擎 `nm -D libqtvkbpinyinplugin.so | grep -i pinyin`。
+- **键盘避让坑（强制）**：InputPanel 设了 `scale:0.5`，实际视觉高度是 `keyboardContainer.height`（缩放后），而 `inputPanel.height` 是原始高度（约2倍）。弹窗 y 避让**必须用 `keyboardContainer.height`**，否则弹窗被上移过多、几乎贴顶。写法：`y: Math.max(20, Math.min((parent.height-height)/2, parent.height-height-(inputPanel.active?keyboardContainer.height+20:0)))`。LoginDialog/WifiPasswordDialog 已对齐此写法。
 
 ## 资源编译（rcc OOM 防护）
 - `CMakeLists.txt` 用 `qt_add_big_resources`（**非** `qt_add_resources`）：rcc 把图片内联成多个小 .cpp 分片编译，避免单个 `qrc_app_assets.cpp` 巨大导致 `cc1plus 已杀死`（OOM）。大图主因 `workstation_bg.png`(1MB)。
