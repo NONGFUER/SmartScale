@@ -156,8 +156,13 @@ Item {
                                             MouseArea {
                                                 anchors.fill: parent
                                                 hoverEnabled: true
-                                                // [入口] 点击打开称重记录表格弹窗
-                                                onClicked: tableDialog.open()
+                                            onClicked: {
+                                                if (!BackendAuth.currentUser) {
+                                                    loginRequiredOverlay.open()
+                                                    return
+                                                }
+                                                tableDialog.open()
+                                            }
                                             }
                                         }
                                     }
@@ -172,7 +177,13 @@ Item {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             // [入口] 点击打开称重记录查询弹窗
-                                            onClicked: searchDialog.open()
+                                            onClicked: {
+                                                if (!BackendAuth.currentUser) {
+                                                    loginRequiredOverlay.open()
+                                                    return
+                                                }
+                                                searchDialog.open()
+                                            }
                                         }
                                     }
                                 }
@@ -659,6 +670,10 @@ Item {
                                         hoverEnabled: true
                                         z: -1   // 置于 RowLayout 内容之下，避免拦截 RowLayout 内部交互
                                         onClicked: {
+                                            if (!BackendAuth.currentUser) {
+                                                loginRequiredOverlay.open()
+                                                return
+                                            }
                                             CategoryService.fetchIngrCategories()
                                             root.categorySelectMode = true
                                             correctionDialog.recommendCandidates = root.aiCandidates
@@ -673,7 +688,7 @@ Item {
 
                                         // ===== 左侧：食材标签 + 食材名（价格开启时固定 180，价格关闭时撑满整卡）=====
                                         Item {
-                                            Layout.preferredWidth: AppSettings.priceInputEnabled ? 350 : 0
+                                            Layout.preferredWidth: AppSettings.priceInputEnabled ? 320 : 0
                                             Layout.fillWidth: !AppSettings.priceInputEnabled
                                             Layout.fillHeight: true
 
@@ -707,7 +722,7 @@ Item {
                                                     var translated = Translator.translate(pred);
                                                     return (translated === pred) ? "--" : translated;
                                                 }
-                                                font.pixelSize: AppSettings.priceInputEnabled ? 40 : 68
+                                                font.pixelSize: AppSettings.priceInputEnabled ? 50 : 68
                                                 font.bold: true
                                                 color: "#FFFFFF"
                                                 elide: Text.ElideRight
@@ -716,17 +731,17 @@ Item {
 
                                         // ===== 竖直分隔线（仅价格输入开启时显示）=====
                                         Rectangle {
-                                            Layout.preferredWidth: 1
-                                            Layout.fillHeight: true
+                                            Layout.preferredWidth: 2
+                                            Layout.preferredHeight: 87
                                             Layout.topMargin: 24
                                             Layout.bottomMargin: 24
                                             color: "#FFFFFF"
                                             visible: AppSettings.priceInputEnabled
                                         }
 
-                                        // ===== 右侧：单价 + 金额 两段式（与左侧固定 180 对称）=====
+                                        // ===== 右侧：单价 + 金额 两段式 =====
                                         ColumnLayout {
-                                            Layout.preferredWidth: 240
+                                            Layout.preferredWidth: 270
                                             Layout.fillWidth: true
                                             Layout.maximumWidth: 220
                                             Layout.fillHeight: true
@@ -740,7 +755,7 @@ Item {
                                             // ---- 单价标签 ----
                                             Text {
                                                 text: "单价（元/kg）"
-                                                font.pixelSize: 18
+                                                font.pixelSize: 24
                                                 font.bold:true
                                                 font.family: "PingFang SC"
                                                 color: "#FFFFFF"
@@ -748,7 +763,7 @@ Item {
 
                                             // ---- 单价输入框（点击弹出9宫格键盘）----
                                             Rectangle {
-                                                Layout.fillWidth: true
+                                                Layout.preferredWidth:195
                                                 Layout.preferredHeight: 64
                                                 radius: 12
                                                 color: priceMA.pressed ? "#FFFFF" : "transparent"
@@ -767,9 +782,9 @@ Item {
                                                         text: root.currentUnitPrice > 0
                                                               ? root.currentUnitPrice.toFixed(2)
                                                               : "—"
-                                                        font.pixelSize: 36
+                                                        font.pixelSize: 40
                                                         font.bold: true
-                                                        font.family: "PingFang SC"
+                                                        font.family: "DIN"
                                                         color: "#FFFFFF"
                                                     }
                                                     
@@ -782,20 +797,10 @@ Item {
                                                     onClicked: numberPad.openPad(root.currentUnitPrice)
                                                 }
                                             }
-
-                                            // ---- 水平分隔线 ----
-                                            Rectangle {
-                                                Layout.fillWidth: true
-                                                Layout.preferredHeight: 1
-                                                Layout.topMargin: 4
-                                                Layout.bottomMargin: 4
-                                                color: "#FFFFFF"
-                                            }
-
                                             // ---- 金额标签 ----
                                             Text {
                                                 text: "金额（元）"
-                                                font.pixelSize: 18
+                                                font.pixelSize: 24
                                                 font.family: "PingFang SC"
                                                 color: "#FFFFFF"
                                             }
@@ -808,13 +813,15 @@ Item {
                                                 color: "#00000033"           // 深色半透明背景（与设计稿一致）
 
                                                 Text {
-                                                    anchors.centerIn: parent
+                                                    anchors.left: parent.left
+                                                    anchors.verticalCenter: parent.verticalCenter
+                                                    anchors.leftMargin: 16
                                                     text: root.currentAmount > 0
                                                           ? root.currentAmount.toFixed(2)
                                                           : "—"
-                                                    font.pixelSize: 42
+                                                    font.pixelSize: 40
                                                     font.bold: true
-                                                    font.family: "PingFang SC"
+                                                    font.family: "DIN"
                                                     color: "#FFFFFF"
                                                 }
                                             }
@@ -946,9 +953,8 @@ Item {
                                             }
                                             console.log("[WSP] 点击识别按钮，手动触发 AI 识别")
                                             if (!BackendAuth.currentUser) {
-                                                console.warn("[WSP] 未登录，拦截识别操作，弹出登录窗口")
-                                                window.toast("请先登录后再识别", "warning", 2000)
-                                                window.showLogin()
+                                                console.warn("[WSP] 未登录，拦截识别操作，弹出登录提示")
+                                                loginRequiredOverlay.open()
                                                 return
                                             }
                                             if (WeightManager.netWeight <= 0.05) {
@@ -995,6 +1001,10 @@ Item {
                                         id: selectFoodMA
                                         anchors.fill: parent
                                         onClicked: {
+                                            if (!BackendAuth.currentUser) {
+                                                loginRequiredOverlay.open()
+                                                return
+                                            }
                                             console.log("[WSP] 点击选择食材按钮，打开品类选择弹窗")
                                             CategoryService.fetchIngrCategories()
                                             root.categorySelectMode = true
@@ -1635,6 +1645,120 @@ Item {
         }
 
         onOpened: lockOverlayAutoClose.restart()
+    }
+
+    // 通用未登录提示遮罩（表格 / 选择食材 / 品类卡片 / 更多> / 智能识别 等入口共用）
+    // 底部"前往登录"倒计时按钮（3 秒），点击跳转登录；倒计时归零或点遮罩自动关闭
+    Popup {
+        id: loginRequiredOverlay
+        modal: true
+        closePolicy: Popup.NoAutoClose
+        padding: 0
+        anchors.centerIn: parent
+        width: 600
+        height: 380
+
+        Overlay.modal: Rectangle { color: "#80000000" }
+
+        background: Rectangle {
+            radius: 24
+            color: "#FFFFFF"
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: "#002A75"
+                shadowOpacity: 0.1
+                shadowBlur: 1.0
+                shadowHorizontalOffset: 0
+                shadowVerticalOffset: 0
+            }
+        }
+
+        enter: Transition {
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 200 }
+            NumberAnimation { property: "scale"; from: 0.9; to: 1.0; duration: 200; easing.type: Easing.OutCubic }
+        }
+        exit: Transition {
+            NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 150 }
+        }
+
+        // 3 秒倒计时自动关闭
+        property int loginCountdown: 3
+        Timer {
+            id: loginRequiredTimer
+            interval: 1000
+            repeat: true
+            onTriggered: {
+                loginRequiredOverlay.loginCountdown -= 1
+                if (loginRequiredOverlay.loginCountdown <= 0)
+                    loginRequiredOverlay.close()
+            }
+        }
+
+        onOpened: {
+            loginRequiredOverlay.loginCountdown = 3
+            loginRequiredTimer.start()
+        }
+        onClosed: loginRequiredTimer.stop()
+
+        // 点击遮罩关闭（按钮在其上方，点按钮不会触发此处）
+        MouseArea {
+            anchors.fill: parent
+            onClicked: loginRequiredOverlay.close()
+        }
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 28
+
+            Text {
+                text: "请先登录"
+                font.pixelSize: 36
+                font.bold: true
+                font.family: Theme.fontFamilyUi
+                color: "#4649E5"
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            Text {
+                text: "登录后即可使用完整功能，\n获取更佳服务体验"
+                font.pixelSize: 26
+                font.family: Theme.fontFamilyUi
+                color: "#475569"
+                horizontalAlignment: Text.AlignHCenter
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+
+            // 倒计时按钮：前往登录
+            Rectangle {
+                width: 240
+                height: 64
+                radius: 16
+                color: goLoginMA.containsMouse ? "#4649E5" : "#4361EE"
+                anchors.horizontalCenter: parent.horizontalCenter
+
+                Behavior on color { ColorAnimation { duration: 120 } }
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "前往登录 (" + loginRequiredOverlay.loginCountdown + "s)"
+                    font.pixelSize: 26
+                    font.bold: true
+                    font.family: Theme.fontFamilyUi
+                    color: "#FFFFFF"
+                }
+
+                MouseArea {
+                    id: goLoginMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: {
+                        loginRequiredOverlay.close()
+                        window.showLogin()
+                    }
+                }
+            }
+        }
     }
 
     // ==========================================

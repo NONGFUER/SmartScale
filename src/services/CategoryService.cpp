@@ -34,6 +34,12 @@ void CategoryService::setAuthService(AuthService *auth)
 
 void CategoryService::fetchCategories()
 {
+    // === 登录态预检：未登录不触发网络请求 ===
+    if (!m_authService || m_authService->currentUser().isEmpty()) {
+        qDebug() << "[CategoryService] 未登录，跳过品类列表拉取";
+        return;
+    }
+
     if (m_loading) return;
 
     // === Token 预检 ===
@@ -73,6 +79,12 @@ QString CategoryService::ingrCateCacheFilePath() const
 
 void CategoryService::fetchIngrCategories()
 {
+    // === 登录态预检：未登录不触发网络请求 ===
+    if (!m_authService || m_authService->currentUser().isEmpty()) {
+        qDebug() << "[CategoryService] 未登录，跳过食材品类拉取";
+        return;
+    }
+
     QString token = m_authService ? m_authService->token() : QString();
     // custId 是雪花 ID，用 QString 拼接避免溢出
     QString custId = m_authService ? QString::number(m_authService->custId()) : QStringLiteral("0");
