@@ -207,7 +207,7 @@ ApplicationWindow {
         anchors.bottom: parent.bottom
         height: inputPanel.active ? inputPanel.height * inputPanel.scale : 0
         clip: true   // 裁剪掉缩小后顶部空白
-        color: "#1E1E2E"  // 与键盘深色背景一致，遮住露出的蓝色
+        color: "#E8E8E8"  // 与 retro 明亮键盘背景一致，遮住缩放露出的边缘
 
         InputPanel {
             id: inputPanel
@@ -215,7 +215,7 @@ ApplicationWindow {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
-            scale: 0.82
+            scale: 0.5
             transformOrigin: Item.Bottom
 
             // 中英切换按钮（盖在键盘右上角，避免误触内置语言选择器）

@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
     // 注意：Debian 13 的 Qt6 VirtualKeyboard 不打包 Pinyin 插件，
     // 触摸屏键盘只能输入英文/数字/符号，无法输入中文（除非自编译 Pinyin 插件）。
     qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
-    qputenv("QT_VIRTUALKEYBOARD_STYLE", "default");
+    qputenv("QT_VIRTUALKEYBOARD_STYLE", "retro");  // retro 浅色明亮风格（default 为深色暗黑）
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");
 
     QGuiApplication app(argc, argv);

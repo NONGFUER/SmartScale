@@ -59,5 +59,6 @@
 ## 虚拟键盘（VirtualKeyboard）
 - Qt6 官方 `QtQuick.VirtualKeyboard`。核心在 `src/ui/Main.qml`：`locale="zh_CN"`+`InputPanel`+右上"中/EN"按钮。
 - Debian 13 自编译 v6.8.2 Pinyin 插件部署到 `/usr/lib/aarch64-linux-gnu/qt6/qml/QtQuick/VirtualKeyboard/Plugins/Pinyin/`。
-- 环境变量（main.cpp）：`QT_IM_MODULE=qtvirtualkeyboard`+`QT_VIRTUALKEYBOARD_STYLE=default`。勿设 `QT_VIRTUALKEYBOARD_LAYOUTS`/`QT_VIRTUALKEYBOARD_LANGUAGE_FILTER`（非标准）。
+- 环境变量（main.cpp）：`QT_IM_MODULE=qtvirtualkeyboard`+`QT_VIRTUALKEYBOARD_STYLE=retro`（**retro=浅色明亮风格**，default=深色暗黑）。`Main.qml` 的 `keyboardContainer` 背景须与键盘一致：retro 用 `#E8E8E8`。勿设 `QT_VIRTUALKEYBOARD_LAYOUTS`/`QT_VIRTUALKEYBOARD_LANGUAGE_FILTER`（非标准）。
+- 样式可选值（Qt6 内置仅2个）：`default`（深灰硬编码背景）、`retro`（浅色金黄装饰复古风）。如需纯白现代风须自定义 `KeyboardStyle.qml`（60+ 属性，放 qrc `/qt-project.org/imports/QtQuick/VirtualKeyboard/Styles/<name>/`，集成风险高）。
 - API（Qt 6.8.2）：`locale`(rw)/`activeLocales`(rw)/`availableLocales`(ro)/`visibleFunctionKeys`(rw，None=0/Hide=1/Language=2/All=3)。**不存在** `languageFilterFunc`。验证引擎 `nm -D libqtvkbpinyinplugin.so | grep -i pinyin`。
