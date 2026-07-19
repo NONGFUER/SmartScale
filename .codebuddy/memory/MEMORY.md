@@ -59,8 +59,12 @@
 ## 虚拟键盘（VirtualKeyboard）
 - Qt6 官方 `QtQuick.VirtualKeyboard`。核心在 `src/ui/Main.qml`：`locale="zh_CN"`+`InputPanel`+右上"中/EN"按钮。
 - Debian 13 自编译 v6.8.2 Pinyin 插件部署到 `/usr/lib/aarch64-linux-gnu/qt6/qml/QtQuick/VirtualKeyboard/Plugins/Pinyin/`。
-- 环境变量（main.cpp）：`QT_IM_MODULE=qtvirtualkeyboard`+`QT_VIRTUALKEYBOARD_STYLE=retro`（**retro=浅色明亮风格**，default=深色暗黑）。`Main.qml` 的 `keyboardContainer` 背景须与键盘一致：retro 用 `#E8E8E8`。勿设 `QT_VIRTUALKEYBOARD_LAYOUTS`/`QT_VIRTUALKEYBOARD_LANGUAGE_FILTER`（非标准）。
-- 样式可选值（Qt6 内置仅2个）：`default`（深灰硬编码背景）、`retro`（浅色金黄装饰复古风）。如需纯白现代风须自定义 `KeyboardStyle.qml`（60+ 属性，放 qrc `/qt-project.org/imports/QtQuick/VirtualKeyboard/Styles/<name>/`，集成风险高）。
+- 环境变量（main.cpp）：`QT_IM_MODULE=qtvirtualkeyboard`+`QT_VIRTUALKEYBOARD_STYLE=light`（light=自定义纯白明亮风格，白底黑字）。`Main.qml` 的 `keyboardContainer` 背景与键盘一致用 `#FFFFFF`。勿设 `QT_VIRTUALKEYBOARD_LAYOUTS`/`QT_VIRTUALKEYBOARD_LANGUAGE_FILTER`（非标准）。
+- **自定义样式 light（2026-07-19 完成）**：源文件 `src/ui/vkbdstyle/light/style.qml`，经 app.qrc alias 嵌入 `:/qt-project.org/imports/QtQuick/VirtualKeyboard/Styles/light/style.qml`，并拷贝到系统 `/usr/lib/aarch64-linux-gnu/qt6/qml/QtQuick/VirtualKeyboard/Styles/light/style.qml`（该路径免重编译即生效）。
+- **Qt6.8 样式查找规则（实测+源码确认，关键）**：搜索 `<QML导入路径>/QtQuick/VirtualKeyboard/Styles/<风格名>/`**`style.qml`**（入口文件名必须是 style.qml，不是 KeyboardStyle.qml！找不到则警告 `Cannot find style "x" - fallback: "default"` 回退暗黑）。样式目录**不要放 qmldir**。样式文件**编译失败则 `keyboard.style=null` 键盘整体消失**（不是回退！），改完必须看日志确认。
+- **KeyboardStyle 实现约束（对照 Qt6.8.2 内置 default 样式）**：它是 QtObject——`keyboardDesignWidth/Height` 默认 0 必须显式设置（否则 scaleHint=NaN 全毁，用 2560×800）；`selectionListHeight`/`alternateKeysListItemWidth/Height` 默认 0 也要设。`SelectionListItem` 是裸 Item（无 background/text/highlight 属性），Text 直接放里面，`display` 是上下文属性，高亮用 `ListView.isCurrentItem` State。参考实现：github qtvirtualkeyboard v6.8.2 `src/styles/builtin/default/style.qml`。
+- **KeyPanel control 可用属性**（BaseKey）：key/text/displayText/smallText/smallTextVisible/alternativeKeys/enabled/pressed/uppercased/highlighted/functionKey。**不存在 `control.mode`**（仅 ModeKey 有 mode 属性）；Shift 激活态用 `control.uppercased`。
+- Qt6 内置样式仅2个：`default`（深灰暗黑）、`retro`（浅灰 #E8E8E8 复古风），均不满足白底黑字需求。
 - API（Qt 6.8.2）：`locale`(rw)/`activeLocales`(rw)/`availableLocales`(ro)/`visibleFunctionKeys`(rw，None=0/Hide=1/Language=2/All=3)。**不存在** `languageFilterFunc`。验证引擎 `nm -D libqtvkbpinyinplugin.so | grep -i pinyin`。
 - **键盘避让坑（强制）**：InputPanel 设了 `scale:0.5`，实际视觉高度是 `keyboardContainer.height`（缩放后），而 `inputPanel.height` 是原始高度（约2倍）。弹窗 y 避让**必须用 `keyboardContainer.height`**，否则弹窗被上移过多、几乎贴顶。写法：`y: Math.max(20, Math.min((parent.height-height)/2, parent.height-height-(inputPanel.active?keyboardContainer.height+20:0)))`。LoginDialog/WifiPasswordDialog 已对齐此写法。
 

@@ -27,5 +27,7 @@
         <file>resources/img/back.png</file>
         <file>resources/img/back2.png</file>
         <file>resources/img/back_w.png</file>
+        <!-- 自定义虚拟键盘明亮风格：Qt6.8 查找 <导入路径>/QtQuick/VirtualKeyboard/Styles/<名>/style.qml -->
+        <file alias="qt-project.org/imports/QtQuick/VirtualKeyboard/Styles/light/style.qml">src/ui/vkbdstyle/light/style.qml</file>
     </qresource>
 </RCC>
