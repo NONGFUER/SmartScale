@@ -27,7 +27,7 @@ Dialog {
     id: root
 
     x: (parent.width - width) / 2
-    y: Math.min((parent.height - height) / 2, parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+    y: (parent.height - height) / 2  // 居中（键盘悬浮覆盖，不做避让）
     width: Math.min(parent.width * 0.92, 1300)
     height: Math.min(parent.height * 0.88, 900)
     modal: false

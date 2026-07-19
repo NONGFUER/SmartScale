@@ -152,7 +152,8 @@ ApplicationWindow {
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: inputPanel.active ? keyboardContainer.top : parent.bottom
+        // 键盘悬浮覆盖（keyboardContainer 挂在 Overlay 层 z:99999 在最上层），主布局不再为键盘抬升
+        anchors.bottom: parent.bottom
         spacing: 0
 
         onVisibleChanged: {
@@ -201,19 +202,25 @@ ApplicationWindow {
     // 在 StackView 下方添加键盘面板（包裹容器：裁剪缩放后多余区域）
     Rectangle {
         id: keyboardContainer
-        z: 99
-        anchors.left: parent.left
-        anchors.right: parent.right
+        // Popup/Dialog 渲染在窗口的 Overlay 层，普通 item 设多大 z 都压不过；
+        // 键盘必须挂进 Overlay.overlay 并设高 z，才能浮在所有弹窗之上
+        parent: Overlay.overlay
+        z: 99999
+        anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
+        // 折叠两侧空白：容器宽度 = 键盘缩放后的实际视觉宽度，两侧透出应用背景
+        width: inputPanel.width * inputPanel.scale
         height: inputPanel.active ? inputPanel.height * inputPanel.scale : 0
         clip: true   // 裁剪掉缩小后顶部空白
-        color: "#FFFFFF"  // 与 light 明亮键盘背景一致（纯白底）
+        color: "#E9EEF4"  // 与 light 键盘背景一致（浅灰蓝底，衬托白色键帽）
 
         InputPanel {
             id: inputPanel
             y: 0
-            anchors.left: parent.left
-            anchors.right: parent.right
+            // 保持全宽布局（键位比例不变），仅靠 scale 视觉缩放；
+            // x 居中使缩放后的视觉区域恰好填满收窄后的容器
+            width: window.width
+            x: (parent.width - width) / 2
             anchors.bottom: parent.bottom
             scale: 0.62
             transformOrigin: Item.Bottom
@@ -250,7 +257,7 @@ ApplicationWindow {
         color: "#0D1B2A"
         opacity: loginDialog.visible ? 0.5 : 0
         visible: opacity > 0
-        z: 40  // 低于 loginDialog(z:50)，远低于键盘(z:99)
+        z: 40  // 低于 loginDialog(z:50)；键盘在 Overlay 层(z:99999)，不受影响
 
         Behavior on opacity { NumberAnimation { duration: 200 } }
 
@@ -263,13 +270,10 @@ ApplicationWindow {
     // 登录弹窗（启动自动弹出，退出登录时重新弹出）
     LoginDialog {
         id: loginDialog
-        // Popup 不支持 anchors，用 x/y 手动居中 + 键盘避让
-        // 注意：用 keyboardContainer.height（scale 后实际视觉高度），
-        // 而非 inputPanel.height（未缩放原始高度，偏大导致弹窗上移过多、顶部贴顶）
+        // Popup 不支持 anchors，用 x/y 手动居中；
+        // 键盘挂在 Overlay 层(z:99999) 悬浮覆盖在弹窗之上，不再做键盘避让
         x: (parent.width - width) / 2
-        y: Math.max(20,
-                    Math.min((parent.height - height) / 2,
-                             parent.height - height - (inputPanel.active ? keyboardContainer.height + 20 : 0)))
+        y: (parent.height - height) / 2
 
         // 自动登录失败时打开登录弹窗让用户手动输入
         Connections {
@@ -316,10 +320,9 @@ ApplicationWindow {
     // 系统调试信息弹窗（独立组件，与工作台解耦）
     SystemInfoDialog {
         id: systemInfoDialog
-        // 居中显示，考虑键盘避让
+        // 居中显示（键盘悬浮覆盖，不做避让）
         x: (parent.width - width) / 2
-        y: Math.min((parent.height - height) / 2,
-                    parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+        y: (parent.height - height) / 2
     }
 
     // 退出登录确认弹窗
@@ -332,8 +335,7 @@ ApplicationWindow {
     WifiListDialog {
         id: wifiListDialog
         x: (parent.width - width) / 2
-        y: Math.min((parent.height - height) / 2,
-                    parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+        y: (parent.height - height) / 2
 
         onNetworkSelected: function(ssid, secured) {
             console.log("[Main] 选中网络:", ssid, "加密:", secured)
@@ -352,12 +354,8 @@ ApplicationWindow {
     WifiPasswordDialog {
         id: wifiPasswordDialog
         x: (parent.width - width) / 2
-        // 键盘避让：用 keyboardContainer.height（scale 后实际视觉高度）
-        // 而非 inputPanel.height（未缩放原始高度，偏大导致弹窗上移过多、顶部超出屏幕）
-        // Math.max(20,...) 兜底防弹窗顶部贴顶/被裁
-        y: Math.max(20,
-                    Math.min((parent.height - height) / 2,
-                             parent.height - height - (inputPanel.active ? keyboardContainer.height + 20 : 0)))
+        // 居中显示（键盘悬浮覆盖，不做避让）
+        y: (parent.height - height) / 2
 
         onConnectRequested: function(ssid, password) {
             NetworkManager.connectWifi(ssid, password)
@@ -368,8 +366,7 @@ ApplicationWindow {
     CellularDialog {
         id: cellularDialog
         x: (parent.width - width) / 2
-        y: Math.min((parent.height - height) / 2,
-                    parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+        y: (parent.height - height) / 2
     }
 
     // 连接 StatusBar 调试信号 -> 弹窗打开

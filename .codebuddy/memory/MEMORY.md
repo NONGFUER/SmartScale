@@ -55,12 +55,16 @@
 
 ## 虚拟键盘（VirtualKeyboard）
 - Qt6 官方 QtQuick.VirtualKeyboard：Main.qml locale="zh_CN"+InputPanel。中英切换用键盘自带 ChangeLanguageKey（light 样式按 InputContext.locale 动态显示"中文"/"英文"）；右上角浮动切换按钮已删。
-- 环境变量（main.cpp）：QT_IM_MODULE=qtvirtualkeyboard+QT_VIRTUALKEYBOARD_STYLE=light（自定义白底黑字）。勿设 QT_VIRTUALKEYBOARD_LAYOUTS/LANGUAGE_FILTER。keyboardContainer 背景与键盘一致 #FFFFFF。
+- 环境变量（main.cpp）：QT_IM_MODULE=qtvirtualkeyboard+QT_VIRTUALKEYBOARD_STYLE=light（自定义白底黑字）。勿设 QT_VIRTUALKEYBOARD_LAYOUTS/LANGUAGE_FILTER。keyboardContainer 背景与键盘一致 **#E9EEF4**（2026-07-19 由纯白改浅灰蓝，衬托白色键帽）。
+- **键盘视觉标准（2026-07-20 字号加大）**：键帽白底 + 边框 #CBD5E1（激活态 #60A5FA）宽 `Math.max(2, Math.round(3.5*scaleHint))`；键帽字号统一 `80*scaleHint`（≈视觉37px，字符预览 100、长按备选 68）；回车键 #2563EB（按下 #1D4ED8）。边框/底色全局统一勿单独改。
+- **两侧空白折叠（2026-07-19）**：keyboardContainer 不再全宽，`anchors.horizontalCenter` 居中 + `width: inputPanel.width*inputPanel.scale`（1920×0.62=1190）；InputPanel 改 `width: window.width` + `x:(parent.width-width)/2` 居中，保持全宽布局仅靠 scale 缩放，视觉区恰好填满收窄容器。
 - 自定义 light 样式：源 src/ui/vkbdstyle/light/style.qml，经 app.qrc alias 嵌入，并拷贝到系统 /usr/lib/aarch64-linux-gnu/qt6/qml/QtQuick/VirtualKeyboard/Styles/light/style.qml（系统路径免重编译即生效）。
 - **Qt6.8 样式查找（关键）**：搜索 Styles/<风格名>/**style.qml**（入口文件名必须 style.qml，找不到警告 fallback default 暗黑）；样式目录不放 qmldir；**样式编译失败→keyboard.style=null 键盘整体消失**（不是回退！改完必须看日志确认）。
 - **KeyboardStyle 约束（QtObject）**：keyboardDesignWidth/Height 默认 0 必须显式设（2560×800，否则 scaleHint=NaN 全毁）；selectionListHeight/alternateKeysListItemWidth/Height 也要设；SelectionListItem 是裸 Item（Text 直接放，display 上下文属性，高亮用 ListView.isCurrentItem State）。参考 github qtvirtualkeyboard v6.8.2 default/style.qml。
 - **KeyPanel control 属性**：key/text/displayText/smallText/smallTextVisible/alternativeKeys/enabled/pressed/uppercased/highlighted/functionKey。无 control.mode；Shift 激活态用 control.uppercased；Shift/语言键 displayText 为空，须 Canvas 画图标。
-- 键盘大小：Main.qml InputPanel.scale（现 0.62）。**弹窗 y 避让必须用 keyboardContainer.height（缩放后）非 inputPanel.height**：`y: Math.max(20, Math.min((parent.height-height)/2, parent.height-height-(inputPanel.active?keyboardContainer.height+20:0)))`。LoginDialog/WifiPasswordDialog 已对齐。
+- 键盘大小：Main.qml InputPanel.scale（现 0.62）。
+- **键盘悬浮覆盖模式（2026-07-20，替代旧避让方案）**：键盘像手机一样直接浮在最上层，主布局与所有弹窗一律 `y:(parent.height-height)/2` 纯居中、**不做任何键盘避让**；mainLayout `anchors.bottom: parent.bottom` 固定。已统一：Main.qml（mainLayout/Login/SystemInfo/WifiList/WifiPassword/Cellular）+ SaveConfirm/AddIngredient/WeightRecordSearch/CategoryCorrection 四弹窗。旧的 `inputPanel.active?...` 避让公式已全部删除，勿再加回。
+- **键盘必须在 Overlay 层（2026-07-20 关键修复）**：Qt 的 Dialog/Popup 渲染在窗口 Overlay 层，普通 item 设多大 z 都压不过（z:99 无效，弹窗会盖住键盘）。keyboardContainer 必须 `parent: Overlay.overlay` + `z: 99999` 才能浮在所有弹窗之上。
 - Pinyin 插件：Debian 13 自编译 v6.8.2 部署到系统 QtQuick/VirtualKeyboard/Plugins/Pinyin/。
 
 ## 资源编译（rcc OOM 防护）

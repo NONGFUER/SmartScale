@@ -1,7 +1,7 @@
 // ============================================================
 // SmartScale 明亮虚拟键盘风格 (light)
 //
-// 纯白背景 + 黑字 + 浅灰边框的现代 iOS 风格。
+// 浅灰蓝底 + 白色键帽 + 清晰边框的现代 iOS 风格。
 // 通过 QT_VIRTUALKEYBOARD_STYLE=light 启用。
 //
 // Qt6.8 自定义样式查找规则（实测 + 源码确认）：
@@ -22,9 +22,13 @@
 //      不存在 control.mode（仅 ModeKey 有）；Shift 激活态用 control.uppercased。
 //
 // 字号换算（本机 1920 宽屏）：键盘高 = 1920×(800/2560) = 600 → scaleHint = 0.75；
-//   InputPanel 再经 scale:0.62 视觉缩放。键帽文字统一 52*scaleHint
-//   = 52×0.75×0.62 ≈ 视觉 24px（与应用内 24 号字体一致）。
+//   InputPanel 再经 scale:0.62 视觉缩放。键帽文字统一 80*scaleHint
+//   = 80×0.75×0.62 ≈ 视觉 37px（2026-07-20 由 64 加大，提升可读性）。
 //   改屏幕宽度或 InputPanel.scale 后需重算：字号 = 目标px / (0.3125宽比×scale)。
+//
+// 键帽轮廓（2026-07-19 增强）：键盘底 #E9EEF4（与 Main.qml keyboardContainer
+//   一致），白色键帽 + #CBD5E1 加粗边框（3px 设计单位 ≈ 视觉 1.9px），
+//   底/帽对比 + 粗边框共同强化按键边界感。边框改色需全局统一，勿单独改。
 // ============================================================
 
 import QtQuick
@@ -40,9 +44,9 @@ KeyboardStyle {
 
     readonly property real keyBackgroundMargin: Math.round(6 * scaleHint)
 
-    // ---- 键盘整体背景：纯白 ----
+    // ---- 键盘整体背景：浅灰蓝（衬托白色键帽，强化轮廓）----
     keyboardBackground: Rectangle {
-        color: "#FFFFFF"
+        color: "#E9EEF4"
     }
 
     // ---- 普通字符键 ----
@@ -52,13 +56,13 @@ KeyboardStyle {
             anchors.margins: keyBackgroundMargin
             radius: 12 * scaleHint
             color: control.pressed ? "#E2E8F0" : "#FFFFFF"
-            border.color: "#E5E7EB"
-            border.width: Math.max(1, Math.round(2 * scaleHint))
+            border.color: "#CBD5E1"
+            border.width: Math.max(2, Math.round(3.5 * scaleHint))
 
             Text {
                 anchors.centerIn: parent
                 text: control.displayText
-                font.pixelSize: 52 * scaleHint
+                font.pixelSize: 80 * scaleHint
                 font.family: "PingFang SC"
                 font.bold: true
                 color: control.enabled ? "#1F2937" : "#9CA3AF"
@@ -73,13 +77,13 @@ KeyboardStyle {
             anchors.margins: keyBackgroundMargin
             radius: 12 * scaleHint
             color: control.pressed ? "#D1D5DB" : "#F3F4F6"
-            border.color: "#E5E7EB"
-            border.width: Math.max(1, Math.round(2 * scaleHint))
+            border.color: "#CBD5E1"
+            border.width: Math.max(2, Math.round(3.5 * scaleHint))
 
             Text {
                 anchors.centerIn: parent
                 text: control.displayText
-                font.pixelSize: 52 * scaleHint
+                font.pixelSize: 80 * scaleHint
                 font.family: "PingFang SC"
                 font.bold: true
                 color: "#6B7280"
@@ -93,12 +97,12 @@ KeyboardStyle {
             anchors.fill: parent
             anchors.margins: keyBackgroundMargin
             radius: 12 * scaleHint
-            color: control.pressed ? "#2563EB" : "#3B82F6"
+            color: control.pressed ? "#1D4ED8" : "#2563EB"
 
             Text {
                 anchors.centerIn: parent
                 text: "回车"
-                font.pixelSize: 52 * scaleHint
+                font.pixelSize: 80 * scaleHint
                 font.family: "PingFang SC"
                 font.bold: true
                 color: "#FFFFFF"
@@ -113,13 +117,13 @@ KeyboardStyle {
             anchors.margins: keyBackgroundMargin
             radius: 12 * scaleHint
             color: control.pressed ? "#E2E8F0" : "#FFFFFF"
-            border.color: "#E5E7EB"
-            border.width: Math.max(1, Math.round(2 * scaleHint))
+            border.color: "#CBD5E1"
+            border.width: Math.max(2, Math.round(3.5 * scaleHint))
 
             Text {
                 anchors.centerIn: parent
                 text: "⌫"
-                font.pixelSize: 52 * scaleHint
+                font.pixelSize: 80 * scaleHint
                 font.bold: true
                 color: "#374151"
             }
@@ -134,14 +138,14 @@ KeyboardStyle {
             anchors.margins: keyBackgroundMargin
             radius: 12 * scaleHint
             color: control.pressed ? "#E2E8F0" : (control.uppercased ? "#DBEAFE" : "#FFFFFF")
-            border.color: control.uppercased ? "#93C5FD" : "#E5E7EB"
-            border.width: Math.max(1, Math.round(2 * scaleHint))
+            border.color: control.uppercased ? "#60A5FA" : "#CBD5E1"
+            border.width: Math.max(2, Math.round(3.5 * scaleHint))
 
             Canvas {
                 id: shiftArrow
                 anchors.centerIn: parent
-                width: 72 * scaleHint
-                height: 72 * scaleHint
+                width: 84 * scaleHint
+                height: 84 * scaleHint
                 property color arrowColor: control.uppercased ? "#2563EB" : "#374151"
                 onArrowColorChanged: requestPaint()
                 onPaint: {
@@ -171,13 +175,13 @@ KeyboardStyle {
             anchors.margins: keyBackgroundMargin
             radius: 12 * scaleHint
             color: control.pressed ? "#E2E8F0" : "#FFFFFF"
-            border.color: "#E5E7EB"
-            border.width: Math.max(1, Math.round(2 * scaleHint))
+            border.color: "#CBD5E1"
+            border.width: Math.max(2, Math.round(3.5 * scaleHint))
 
             Text {
                 anchors.centerIn: parent
                 text: control.displayText
-                font.pixelSize: 52 * scaleHint
+                font.pixelSize: 80 * scaleHint
                 font.family: "PingFang SC"
                 font.bold: true
                 color: "#374151"
@@ -192,13 +196,13 @@ KeyboardStyle {
             anchors.margins: keyBackgroundMargin
             radius: 12 * scaleHint
             color: control.pressed ? "#E2E8F0" : "#FFFFFF"
-            border.color: "#E5E7EB"
-            border.width: Math.max(1, Math.round(2 * scaleHint))
+            border.color: "#CBD5E1"
+            border.width: Math.max(2, Math.round(3.5 * scaleHint))
 
             Text {
                 anchors.centerIn: parent
                 text: "收起"
-                font.pixelSize: 52 * scaleHint
+                font.pixelSize: 80 * scaleHint
                 font.bold: true
                 color: "#374151"
             }
@@ -212,13 +216,13 @@ KeyboardStyle {
             anchors.margins: keyBackgroundMargin
             radius: 12 * scaleHint
             color: control.pressed ? "#E2E8F0" : (control.mode ? "#DBEAFE" : "#FFFFFF")
-            border.color: control.mode ? "#93C5FD" : "#E5E7EB"
-            border.width: Math.max(1, Math.round(2 * scaleHint))
+            border.color: control.mode ? "#60A5FA" : "#CBD5E1"
+            border.width: Math.max(2, Math.round(3.5 * scaleHint))
 
             Text {
                 anchors.centerIn: parent
                 text: control.displayText
-                font.pixelSize: 52 * scaleHint
+                font.pixelSize: 80 * scaleHint
                 font.bold: true
                 color: control.mode ? "#2563EB" : "#374151"
             }
@@ -232,13 +236,13 @@ KeyboardStyle {
             anchors.margins: keyBackgroundMargin
             radius: 12 * scaleHint
             color: control.pressed ? "#E2E8F0" : "#FFFFFF"
-            border.color: "#E5E7EB"
-            border.width: Math.max(1, Math.round(2 * scaleHint))
+            border.color: "#CBD5E1"
+            border.width: Math.max(2, Math.round(3.5 * scaleHint))
 
             Text {
                 anchors.centerIn: parent
                 text: InputContext.locale.substring(0, 2) === "zh" ? "中文" : "英文"
-                font.pixelSize: 52 * scaleHint
+                font.pixelSize: 80 * scaleHint
                 font.family: "PingFang SC"
                 font.bold: true
                 color: "#374151"
@@ -260,13 +264,13 @@ KeyboardStyle {
             anchors.fill: parent
             radius: 12 * scaleHint
             color: "#FFFFFF"
-            border.color: "#E5E7EB"
-            border.width: Math.max(1, Math.round(2 * scaleHint))
+            border.color: "#CBD5E1"
+            border.width: Math.max(2, Math.round(3.5 * scaleHint))
 
             Text {
                 anchors.centerIn: parent
                 text: charPreview.text
-                font.pixelSize: 64 * scaleHint
+                font.pixelSize: 100 * scaleHint
                 font.family: "PingFang SC"
                 color: "#1F2937"
             }
@@ -274,8 +278,8 @@ KeyboardStyle {
     }
 
     // ---- 长按备选字符弹窗（尺寸默认 0 必须显式设置，否则弹窗不可见）----
-    alternateKeysListItemWidth: 120 * scaleHint
-    alternateKeysListItemHeight: 170 * scaleHint
+    alternateKeysListItemWidth: 132 * scaleHint
+    alternateKeysListItemHeight: 180 * scaleHint
     alternateKeysListDelegate: Item {
         id: alternateKeysListItem
         width: alternateKeysListItemWidth
@@ -284,7 +288,7 @@ KeyboardStyle {
         Text {
             anchors.centerIn: parent
             text: model.text
-            font.pixelSize: 48 * scaleHint
+            font.pixelSize: 68 * scaleHint
             font.family: "PingFang SC"
             color: "#1F2937"
             opacity: 0.8
@@ -308,7 +312,7 @@ KeyboardStyle {
             height: parent.height + 2 * margin
             radius: 12 * scaleHint
             color: "#FFFFFF"
-            border.color: "#E5E7EB"
+            border.color: "#CBD5E1"
             border.width: 1
         }
     }
@@ -326,7 +330,7 @@ KeyboardStyle {
             anchors.leftMargin: Math.round(80 * scaleHint)
             anchors.verticalCenter: parent.verticalCenter
             text: display
-            font.pixelSize: 64 * scaleHint
+            font.pixelSize: 80 * scaleHint
             font.family: "PingFang SC"
             font.bold: true
             color: "#1F2937"
@@ -343,7 +347,15 @@ KeyboardStyle {
         radius: 8 * scaleHint
     }
     selectionListBackground: Rectangle {
-        color: "#F9FAFB"
+        color: "#F4F7FA"
+        // 与键区分隔：顶部 1px 分割线
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: Math.max(1, Math.round(1.5 * scaleHint))
+            color: "#CBD5E1"
+        }
     }
 
     // ---- 弹出式候选列表（ShadowInputControl 用）----
@@ -359,7 +371,7 @@ KeyboardStyle {
             anchors.leftMargin: Math.round(48 * scaleHint)
             anchors.topMargin: Math.round(32 * scaleHint)
             text: display
-            font.pixelSize: 64 * scaleHint
+            font.pixelSize: 80 * scaleHint
             font.family: "PingFang SC"
             font.bold: true
             color: "#1F2937"
@@ -377,7 +389,7 @@ KeyboardStyle {
     }
     popupListBackground: Rectangle {
         color: "#FFFFFF"
-        border.color: "#E5E7EB"
+        border.color: "#CBD5E1"
         border.width: 1
         radius: 12 * scaleHint
     }

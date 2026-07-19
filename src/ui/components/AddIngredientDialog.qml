@@ -30,7 +30,7 @@ Dialog {
     property string selectedTopCateName: ""        // 当前选中一级品类的 cateNm
 
     x: (parent.width - width) / 2
-    y: Math.min((parent.height - height) / 2, parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+    y: (parent.height - height) / 2  // 居中（键盘悬浮覆盖，不做避让）
     width: Math.min(parent.width * 0.85, 680)
     height: Math.min(parent.height * 0.75, 480)
     modal: false

@@ -53,7 +53,7 @@ Dialog {
     // Dialog 基础配置（非模态 + 外部遮罩避让虚拟键盘）
     modal: false
     x: (parent.width - width) / 2
-    y: Math.min((parent.height - height) / 2, parent.height - height - (inputPanel.active ? inputPanel.height + 20 : 0))
+    y: (parent.height - height) / 2  // 居中（键盘悬浮覆盖，不做避让）
     width: 680
     height: 690
     padding: 0
