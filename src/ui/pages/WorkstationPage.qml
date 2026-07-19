@@ -937,7 +937,7 @@ Item {
                                             recent.push(now)
                                             root.aiRecognizeClickTimes = recent
                                             // 3 秒内点击达 3 次 → 判定恶意频繁操作，锁定 20 秒
-                                            if (recent.length >= 3) {
+                                            if (recent.length >= 7) {
                                                 root.aiRecognizeClickTimes = []
                                                 root.aiRecognizeLocked = true
                                                 root.aiRecognizeLockCountdown = 20
@@ -1620,7 +1620,7 @@ Item {
             spacing: 20
 
             Text {
-                text: "⚠ 请勿频繁操作"
+                text: "请勿频繁操作"
                 font.pixelSize: 36
                 font.bold: true
                 font.family: Theme.fontFamilyUi

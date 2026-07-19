@@ -215,39 +215,9 @@ ApplicationWindow {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
-            scale: 0.5
+            scale: 0.62
             transformOrigin: Item.Bottom
 
-            // 中英切换按钮（盖在键盘右上角，避免误触内置语言选择器）
-            Rectangle {
-                id: langToggle
-                width: 100
-                height: 60
-                radius: 12
-                color: window.chineseInputMode ? "#4361EE" : "#E2E8F0"
-                anchors.right: parent.right
-                anchors.rightMargin: 4
-                anchors.top: parent.top
-                anchors.topMargin: 4
-                z: 100  // 高于键盘内部
-                visible: inputPanel.active
-                border.color: window.chineseInputMode ? "#4361EE" : "#9CA3AF"
-                border.width: 1
-
-                Text {
-                    anchors.centerIn: parent
-                    text: window.chineseInputMode ? "中" : "EN"
-                    font.pixelSize: 32
-                    font.bold: true
-                    color: window.chineseInputMode ? "white" : "#1B263B"
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: window.toggleInputMode()
-                }
-            }
-            
             states: State {
                 name: "visible"
                 when: inputPanel.active

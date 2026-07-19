@@ -20,9 +20,15 @@
 //   3. control（BaseKey）属性：key/text/displayText/smallText/smallTextVisible/
 //      alternativeKeys/enabled/pressed/uppercased/highlighted/functionKey。
 //      不存在 control.mode（仅 ModeKey 有）；Shift 激活态用 control.uppercased。
+//
+// 字号换算（本机 1920 宽屏）：键盘高 = 1920×(800/2560) = 600 → scaleHint = 0.75；
+//   InputPanel 再经 scale:0.62 视觉缩放。键帽文字统一 52*scaleHint
+//   = 52×0.75×0.62 ≈ 视觉 24px（与应用内 24 号字体一致）。
+//   改屏幕宽度或 InputPanel.scale 后需重算：字号 = 目标px / (0.3125宽比×scale)。
 // ============================================================
 
 import QtQuick
+import QtQuick.VirtualKeyboard
 import QtQuick.VirtualKeyboard.Styles
 
 KeyboardStyle {
@@ -52,10 +58,10 @@ KeyboardStyle {
             Text {
                 anchors.centerIn: parent
                 text: control.displayText
-                font.pixelSize: 48 * scaleHint
+                font.pixelSize: 52 * scaleHint
                 font.family: "PingFang SC"
+                font.bold: true
                 color: control.enabled ? "#1F2937" : "#9CA3AF"
-                font.bold: control.uppercased
             }
         }
     }
@@ -73,8 +79,9 @@ KeyboardStyle {
             Text {
                 anchors.centerIn: parent
                 text: control.displayText
-                font.pixelSize: 36 * scaleHint
+                font.pixelSize: 52 * scaleHint
                 font.family: "PingFang SC"
+                font.bold: true
                 color: "#6B7280"
             }
         }
@@ -90,8 +97,8 @@ KeyboardStyle {
 
             Text {
                 anchors.centerIn: parent
-                text: control.displayText
-                font.pixelSize: 36 * scaleHint
+                text: "回车"
+                font.pixelSize: 52 * scaleHint
                 font.family: "PingFang SC"
                 font.bold: true
                 color: "#FFFFFF"
@@ -112,13 +119,15 @@ KeyboardStyle {
             Text {
                 anchors.centerIn: parent
                 text: "⌫"
-                font.pixelSize: 44 * scaleHint
+                font.pixelSize: 52 * scaleHint
+                font.bold: true
                 color: "#374151"
             }
         }
     }
 
-    // ---- Shift 键（激活态用 uppercased：Shift 按下后 BaseKey.uppercased 为 true）----
+    // ---- Shift 键（Qt6.8 的 ShiftKey displayText 为空，内置样式用 SVG 图标；
+    //      这里用 Canvas 画上箭头，激活态用 uppercased 判断并变蓝色）----
     shiftKeyPanel: KeyPanel {
         Rectangle {
             anchors.fill: parent
@@ -128,11 +137,29 @@ KeyboardStyle {
             border.color: control.uppercased ? "#93C5FD" : "#E5E7EB"
             border.width: Math.max(1, Math.round(2 * scaleHint))
 
-            Text {
+            Canvas {
+                id: shiftArrow
                 anchors.centerIn: parent
-                text: control.displayText
-                font.pixelSize: 44 * scaleHint
-                color: control.uppercased ? "#2563EB" : "#374151"
+                width: 72 * scaleHint
+                height: 72 * scaleHint
+                property color arrowColor: control.uppercased ? "#2563EB" : "#374151"
+                onArrowColorChanged: requestPaint()
+                onPaint: {
+                    var ctx = getContext("2d")
+                    ctx.reset()
+                    ctx.fillStyle = arrowColor
+                    var w = width, h = height
+                    ctx.beginPath()
+                    ctx.moveTo(w * 0.5,  h * 0.08)  // 箭头尖
+                    ctx.lineTo(w * 0.92, h * 0.52)
+                    ctx.lineTo(w * 0.68, h * 0.52)
+                    ctx.lineTo(w * 0.68, h * 0.92)
+                    ctx.lineTo(w * 0.32, h * 0.92)
+                    ctx.lineTo(w * 0.32, h * 0.52)
+                    ctx.lineTo(w * 0.08, h * 0.52)
+                    ctx.closePath()
+                    ctx.fill()
+                }
             }
         }
     }
@@ -150,8 +177,9 @@ KeyboardStyle {
             Text {
                 anchors.centerIn: parent
                 text: control.displayText
-                font.pixelSize: 32 * scaleHint
+                font.pixelSize: 52 * scaleHint
                 font.family: "PingFang SC"
+                font.bold: true
                 color: "#374151"
             }
         }
@@ -169,8 +197,9 @@ KeyboardStyle {
 
             Text {
                 anchors.centerIn: parent
-                text: "⏏"
-                font.pixelSize: 40 * scaleHint
+                text: "收起"
+                font.pixelSize: 52 * scaleHint
+                font.bold: true
                 color: "#374151"
             }
         }
@@ -189,13 +218,14 @@ KeyboardStyle {
             Text {
                 anchors.centerIn: parent
                 text: control.displayText
-                font.pixelSize: 40 * scaleHint
+                font.pixelSize: 52 * scaleHint
+                font.bold: true
                 color: control.mode ? "#2563EB" : "#374151"
             }
         }
     }
 
-    // ---- 语言切换键 ----
+    // ---- 语言切换键（默认 displayText 是 "zh"/"en" 语言码，改为中文名显示）----
     languageKeyPanel: KeyPanel {
         Rectangle {
             anchors.fill: parent
@@ -207,8 +237,10 @@ KeyboardStyle {
 
             Text {
                 anchors.centerIn: parent
-                text: control.displayText
-                font.pixelSize: 32 * scaleHint
+                text: InputContext.locale.substring(0, 2) === "zh" ? "中文" : "英文"
+                font.pixelSize: 52 * scaleHint
+                font.family: "PingFang SC"
+                font.bold: true
                 color: "#374151"
             }
         }
@@ -282,7 +314,8 @@ KeyboardStyle {
     }
 
     // ---- 候选词列表（拼音候选栏；高度默认 0 必须显式设置）----
-    selectionListHeight: 85 * scaleHint
+    // 触摸友好：栏高 ≈ 视觉 60px，字号 ≈ 视觉 30px，每项两侧留白 ≈ 视觉 37px
+    selectionListHeight: 130 * scaleHint
     selectionListDelegate: SelectionListItem {
         id: selectionListItem
         width: Math.round(selectionListLabel.width + selectionListLabel.anchors.leftMargin * 2)
@@ -290,11 +323,12 @@ KeyboardStyle {
         Text {
             id: selectionListLabel
             anchors.left: parent.left
-            anchors.leftMargin: Math.round(50 * scaleHint)
+            anchors.leftMargin: Math.round(80 * scaleHint)
             anchors.verticalCenter: parent.verticalCenter
             text: display
-            font.pixelSize: 44 * scaleHint
+            font.pixelSize: 64 * scaleHint
             font.family: "PingFang SC"
+            font.bold: true
             color: "#1F2937"
             opacity: 0.85
         }
@@ -322,11 +356,12 @@ KeyboardStyle {
             id: popupListLabel
             anchors.left: parent.left
             anchors.top: parent.top
-            anchors.leftMargin: Math.round(24 * scaleHint)
-            anchors.topMargin: Math.round(16 * scaleHint)
+            anchors.leftMargin: Math.round(48 * scaleHint)
+            anchors.topMargin: Math.round(32 * scaleHint)
             text: display
-            font.pixelSize: 40 * scaleHint
+            font.pixelSize: 64 * scaleHint
             font.family: "PingFang SC"
+            font.bold: true
             color: "#1F2937"
             opacity: 0.8
         }
