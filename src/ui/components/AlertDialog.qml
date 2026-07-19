@@ -137,10 +137,12 @@ Dialog {
 
     // ---- 内容布局 ----
     ColumnLayout {
-        anchors.centerIn: parent
-        anchors.leftMargin: 40
-        anchors.rightMargin: 40
-        width: parent.width - 80
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+        anchors.topMargin: 24
+        anchors.leftMargin: 20
+        anchors.rightMargin: 20
+        width: parent.width - 40
         spacing: 12
 
         // ===== 返回按钮栏 =====
@@ -188,33 +190,33 @@ Dialog {
         }
 
         // ===== 图标 + 标题行 =====
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 10
-            visible: root.alertTitle !== ""
+        // RowLayout {
+        //     Layout.fillWidth: true
+        //     spacing: 10
+        //     visible: root.alertTitle !== ""
 
-            // 类型图标
-            Rectangle {
-                width: 40; height: 40; radius: 10
-                color: root._color("iconBg")
+        //     // 类型图标
+        //     Rectangle {
+        //         width: 40; height: 40; radius: 10
+        //         color: root._color("iconBg")
 
-                Text {
-                    anchors.centerIn: parent
-                    text: root._color("icon")
-                    font.pixelSize: 22
-                    font.bold: true
-                    color: root._color("iconColor")
-                }
-            }
+        //         Text {
+        //             anchors.centerIn: parent
+        //             text: root._color("icon")
+        //             font.pixelSize: 22
+        //             font.bold: true
+        //             color: root._color("iconColor")
+        //         }
+        //     }
 
-            Text {
-                text: root.alertTitle
-                font.pixelSize: 24
-                font.bold: true
-                color: "#1E293B"
-                Layout.fillWidth: true
-            }
-        }
+        //     Text {
+        //         text: root.alertTitle
+        //         font.pixelSize: 24
+        //         font.bold: true
+        //         color: "#1E293B"
+        //         Layout.fillWidth: true
+        //     }
+        // }
 
         // ===== 消息正文 =====
         Text {
@@ -224,7 +226,9 @@ Dialog {
             color: "#334155"
             wrapMode: Text.Wrap
             Layout.fillWidth: true
+            Layout.preferredHeight: 100
             horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
             Layout.topMargin: root.alertTitle === "" ? 4 : 0
             Layout.bottomMargin: 4
             // 限制最大行数，超出时截断
