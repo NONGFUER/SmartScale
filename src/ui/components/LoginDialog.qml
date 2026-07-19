@@ -247,6 +247,43 @@ Dialog {
             Layout.preferredHeight: 44
             Layout.fillWidth: true
 
+            // 返回按钮 — back2.png + "返回"（圆角胶囊，绝对定位左侧，不挤压居中标题）
+            Rectangle {
+                id: backBtn
+                anchors.left: parent.left
+                anchors.leftMargin: -40
+                anchors.verticalCenter: parent.verticalCenter
+                width: 116; height: 44; radius: 22
+                color: backMouse.containsMouse ? "#F1F5F9" : "transparent"
+
+                Row {
+                    anchors.centerIn: parent
+                    spacing: 6
+
+                    Image {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 22; height: 22
+                        fillMode: Image.PreserveAspectFit
+                        source: "qrc:/resources/img/back2.png"
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "返回"
+                        font.pixelSize: 24
+                        font.bold: true
+                        font.family: "PingFang SC"
+                        color: "#4649E5"
+                    }
+                }
+
+                MouseArea {
+                    id: backMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: loginDialog.close()
+                }
+            }
+
             ColumnLayout {
                 anchors.centerIn: parent
                 spacing: 12

@@ -3,73 +3,66 @@
 > 跨会话稳定约定与硬性规则。冲突时直接更新本文档，不另起条目。
 
 ## 编译约束（强制）
-- **禁止 AI 自行执行 `make` / `cmake --build`**。目标主板资源有限，并行编译会宕机。
-- 用户用 `make -j1` 手动编译。AI 改完用 `read_lints` 验证语法即可，不要触发构建；需验证时告知用户自跑 `make -j1`。
+- **禁止 AI 自行执行 `make`/`cmake --build`**（目标板资源有限，并行编译会宕机）。用户自跑 `make -j1`；AI 改完用 `read_lints` 验证语法即可。
 
 ## 触摸屏环境（强制）
-- 目标设备无鼠标光标。`main.cpp` 中 `QGuiApplication` 创建后立即 `setOverrideCursor(Qt::BlankCursor)`。
-- QML 所有 `MouseArea` 禁止写 `cursorShape`。清理进行中：CategoryCorrectionDialog 已清；WorkstationPage/AddIngredientDialog/AlertDialog/SettingsDialog/WeightRecordSearchDialog/WifiListDialog/SettingsPage 仍有残留，遇相关改动时顺手清理。
-- **弹窗输入框禁止自动聚焦**（强制）：Dialog/Popup 内 `TextField`/`TextInput` 必须 `focus:false`，且 `onOpened` 末尾用 `Qt.callLater(function(){ someCloseBtnMouseArea.forceActiveFocus() })` 把焦点移到关闭/返回按钮 MouseArea，防虚拟键盘自动弹出。LoginDialog/WifiPasswordDialog 例外（打开即为输入）。
+- 无鼠标光标：`main.cpp` 创建 QGuiApplication 后立即 `setOverrideCursor(Qt::BlankCursor)`；QML 所有 MouseArea 禁止 `cursorShape`。
+- **弹窗输入框禁止自动聚焦**：Dialog/Popup 内 TextField/TextInput 必须 `focus:false`，`onOpened` 末尾 `Qt.callLater(function(){ closeBtnMouseArea.forceActiveFocus() })` 把焦点移到关闭/返回按钮 MouseArea。LoginDialog/WifiPasswordDialog 例外（打开即为输入）。
 
 ## QML 浮层与弹窗规则（强制）
-- **Toast/通知根节点必须用 `Popup`/`Dialog`**，禁止裸 `Item`+`anchors`+`z:9999`（会被 StackView 覆盖）。写法：`modal:false`+`closePolicy:Popup.NoAutoClose`+`padding:0`+透明 `background:Item{}`，用 `open()/close()` 控制，配 `enter/exit:Transition`。
-- **弹窗遮罩**：`modal:true` + 显式 `Overlay.modal: Rectangle{color:"#80000000"}`，**删除 `dim:false`**。LoginDialog 例外保留 `modal:false`+外部遮罩勿动。
-- **CategoryCorrectionDialog 外部遮罩必须 reparent 到 `window.contentItem`**（`anchors.fill:parent`+`z:40`），否则盖不到顶部 StatusBar/底部 BottomStatusBar。该弹窗不可改 `modal:true`（Qt modal 层 z 高于 InputPanel(99) 会遮键盘）。`window`（Main.qml ApplicationWindow id）跨文件可见。
+- Toast/通知根节点必须用 Popup/Dialog（禁裸 Item+z:9999）：`modal:false`+`closePolicy:Popup.NoAutoClose`+`padding:0`+透明 background，open()/close() 控制，配 enter/exit Transition。
+- 弹窗遮罩：`modal:true`+显式 `Overlay.modal: Rectangle{color:"#80000000"}`，删 `dim:false`。LoginDialog 例外（保留 modal:false+外部遮罩）。
+- CategoryCorrectionDialog 外部遮罩必须 reparent 到 `window.contentItem`（anchors.fill+z:40），否则盖不住 StatusBar；该弹窗不可改 modal:true（modal 层 z 高于 InputPanel(99) 会遮键盘）。
+
+## 弹窗返回按钮标准样式
+- back2.png + "返回"文字圆角胶囊：116×44, radius:22，图标 22×22，文字 24px bold `#4649E5`，hover `#F1F5F9`。标题用 `anchors.centerIn` 绝对居中，避免被返回按钮挤压。参考 WifiPasswordDialog/AlertDialog/SettingsDialog/CategoryCorrectionDialog。
 
 ## 雪花 ID 类型安全
-- 字段（ingrId/emsId/cateId/recoId/userId/productId/custId/devId）一律 `qint64`/`QString`，禁止 `toInt()`。详见 `.codebuddy/skills/id-type-safety/SKILL.md`。
+- ingrId/emsId/cateId/recoId/userId/productId/custId/devId 一律 qint64/QString，禁止 toInt()。详见 `.codebuddy/skills/id-type-safety/SKILL.md`。
 
 ## 版本号系统
-- 主版本号：`CMakeLists.txt` 的 `project(SmartScale VERSION x.y.z)`。构建号：`cmake -DBUILD_NUMBER=N`（默认9）。经 `src/version.h.in` → `configure_file` → `SystemInfoService` 暴露 `appVersion`。
+- 主版本号：CMakeLists.txt `project(SmartScale VERSION x.y.z)`；构建号 `cmake -DBUILD_NUMBER=N`（默认9）；version.h.in → configure_file → SystemInfoService 暴露 appVersion。
 
 ## Token 无感刷新协调器
-- `AuthService` 内置全局锁 `m_isRefreshing`+信号 `tokenRefreshCompleted(bool,QString)`。接口：`requestTokenRefresh()`、`isRefreshingToken()`、静态 `isUnauthorizedError(QNetworkReply*)`（检测 401/403）。防竞态：每 Service `m_refreshing`+全局 `m_isRefreshing` 双层锁；`m_refreshFailCount` 超 2 次建议重登。已接入 WeightHistoryService/UserIngredientService/CategoryService/CameraController。
+- AuthService 全局锁 m_isRefreshing+信号 tokenRefreshCompleted(bool,QString)；接口 requestTokenRefresh()/isRefreshingToken()/isUnauthorizedError()（401/403）。每 Service m_refreshing+全局双层锁；失败>2次建议重登。已接入 WeightHistory/UserIngredient/Category/CameraController。
 
-## 网络请求约定（NetworkUtils）
-- 位置 `src/core/NetworkUtils.h|.cpp`。域名：`API_BASE_URL="https://api.shxgs.cn:5196"`（ems 域）、`USER_BASE_URL="https://user.shxgs.cn:5196"`（user 域）。
-- EMS 域 `createApiRequest(apiPath,token)`；USER 域 `createUserApiRequest(apiPath,token)`。统一 `Content-Type:application/json`+`Bearer` token+SSL VerifyNone+HTTP/1.1。本地缓存 `~/.cache/smartscale/`。
+## 网络请求（NetworkUtils，src/core/）
+- API_BASE_URL=https://api.shxgs.cn:5196（ems 域），USER_BASE_URL=https://user.shxgs.cn:5196（user 域）。createApiRequest/createUserApiRequest(apiPath,token)：json+Bearer+SSL VerifyNone+HTTP/1.1。缓存 ~/.cache/smartscale/。
 
-## 网络管理服务（NetworkManagerService）
-- 位置 `src/services/NetworkManagerService.h|.cpp`，QML 名 `App.Backend::NetworkManager`。nmcli(Wi-Fi) + mmcli(4G)。每 10 秒轮询状态。入口：SettingsPage「网络控制」+状态栏 WiFi 弹窗。
-- **nmcli 踩坑**：`device show` 只认 `GENERAL.*`（不含 WIFI.SIGNAL 等）；`GENERAL.CONNECTION` 是 profile 名需 `nmcli -t -f 802-11-wireless.ssid connection show <conn>` 反查；`-t` 输出取首冒号后首行；设备名动态发现；两步连接 `connection add`→`connection up`；扫描需 polkit 放行。Qt 资源 `qrc:/resources/icon/x.png`。
+## NetworkManagerService
+- src/services/，QML 名 App.Backend::NetworkManager。nmcli(Wi-Fi)+mmcli(4G)，10秒轮询。nmcli 坑：device show 只认 GENERAL.*；GENERAL.CONNECTION 是 profile 名需 connection show 反查 ssid；-t 输出取首冒号后首行；两步连接 connection add→up；扫描需 polkit 放行。
 
 ## QML 工程规范
-- **跨目录引用**：pages/ 引用 components/ 必须 `import "../components"`。
-- **Singleton**：纯 QML（Theme）`pragma Singleton`+CMake `set_source_files_properties(... QT_QML_SINGLETON_TYPE TRUE)`（`qt_add_qml_module` 前）；C++ 用 `qmlRegisterSingletonInstance("App.Backend",1,0,"XXX",ptr)`。
-- **AppSettingsService**（`src/services/AppSettingsService.h/.cpp`）：C++ 单例 QML 名 `AppSettings`，`Q_PROPERTY bool priceInputEnabled`（默认 false）+QSettings INI 持久化。项目启用 `QT_NO_KEYWORDS`，信号 `Q_SIGNALS:`/发射 `Q_EMIT`。
-- **价格输入单位（元/kg）**：链路统一元/kg——QML `currentUnitPrice`/`pendingUnitPrice`、DB `WeightRecord.unitPrice`、上传 json["price"]、表格。公式 `amount = unitPrice * netWeight(kg)`，**不要**做元/斤换算。`WeightHistoryService.addRecord(...,unitPrice)` 接收元/kg，内部 `qRound(price*100)/100` 存 DB+上传。
-- **两套模块**：UI 主题 `SmartScale`，业务服务 `App.Backend`。
-- **主题常量**：`src/ui/Theme.qml` 集中字体/字号/颜色，禁止硬编码。
-- **图片圆角（Qt6 坑）**：`Rectangle.clip:true` 不跟随 radius，图片四角仍直角。用 `MultiEffect` mask：源 `Image{visible:false}`+遮罩 `Rectangle{id:mask;radius;color:"#FFFFFF";visible:false;layer.enabled:true}`+`MultiEffect{source:img;maskEnabled:true;maskSource:mask}`（需 `import QtQuick.Effects`）。hover 缩放放外层容器勿放被 clip 的 Image。
-- **MultiEffect 阴影标准参数**：`shadowColor:"#002A75"`, `shadowOpacity:0.1`, `shadowBlur:1.0`, offset:0。
-- **错误提示脱敏（强制）**：`window.alert()`（Main.qml）内置智能脱敏——URL 替换为 `<接口地址>`；含技术错误特征（`Error transferring`/`server replied`/`HTTP `/`SSL`/`网络请求失败`/`JSON 解析失败` 等）且未传 detail，自动移入 detail（默认收起），message 改 `title+"，请稍后重试"`。业务友好提示原样保留。C++ 层 emit 错误消息禁止含技术细节（走 `qWarning` 日志）。LoginDialog/LoginPage 有 `sanitizeLoginError(msg)` QML 兜底。
-- **全局字体**：主字体族 `PingFang SC`。`main.cpp` 经 `addApplicationFontFromData` 注册内嵌 `resources/fonts/PingFangSC-Regular.ttf`，`app.setFont(QFont("PingFang SC"))` 兜底；`Theme.qml` fontFamilyUi/Title 已改 PingFang SC。`setFont` 只覆盖未写 `font.family` 的文本。仅 Regular 一个字重。授权：Apple 专有字体，分发受限改思源黑体/Noto Sans CJK SC。
+- 跨目录：pages/ 引 components/ 必须 `import "../components"`。
+- Singleton：纯 QML 用 `pragma Singleton`+CMake `QT_QML_SINGLETON_TYPE`（qt_add_qml_module 前）；C++ 用 qmlRegisterSingletonInstance。
+- AppSettingsService（QML 名 AppSettings）：priceInputEnabled（默认 false）等，QSettings INI 持久化。项目启用 QT_NO_KEYWORDS（用 Q_SIGNALS/Q_EMIT）。
+- **价格单位统一元/kg**：amount = unitPrice × netWeight(kg)，不做元/斤换算；addRecord 内部 qRound(price*100)/100。
+- 两套模块：UI 主题 SmartScale，业务服务 App.Backend。主题常量集中 src/ui/Theme.qml，禁硬编码。
+- 图片圆角（Qt6 坑）：clip 不随 radius，用 MultiEffect mask（maskEnabled+maskSource，需 import QtQuick.Effects）。
+- MultiEffect 阴影标准：shadowColor "#002A75"/shadowOpacity 0.1/shadowBlur 1.0/offset 0。
+- **错误提示脱敏（强制）**：window.alert() 内置智能脱敏（URL→`<接口地址>`，技术错误特征自动移入 detail 收起）。C++ emit 错误禁含技术细节（走 qWarning）。LoginDialog/LoginPage 有 sanitizeLoginError QML 兜底。
+- 全局字体 PingFang SC（仅 Regular 字重，粗体靠 Qt 合成）：main.cpp addApplicationFontFromData 注册内嵌 ttf + setFont 兜底。授权受限，分发可改 Noto Sans CJK SC。
 
 ## 保存流程（addRecord 乐观完成）
-- `WeightHistoryService.addRecord`：DB 写入后立即 `uploadSingleRecord(model,true)` 异步上传，**立即 `Q_EMIT cloudSyncSuccess(newId)`**（关 overlay，用户感知完成），不等网络。`onCloudReply` 成功：fromAddRecord 不重复 emit（只静默更新 DB synced）。
-- QML `onCloudSyncSuccess`（本地保存完成点）：关 overlay + `VoiceSpeaker.speak("已保存")` + `saveSuccessDialog.openDialog()`（"已保存，将上传至服务器"，3秒倒计时自动消失）。`onCloudSyncFailed`：`window.toast("记录已保存，云端同步失败将自动重试","warning",3000)`。
-- **SaveSuccessDialog.qml**（`src/ui/components/`）：modal Dialog 460×380 居中白卡+绿勾 OutBack 入场+文案+"确认 (Ns)"按钮（N 从3递减，3秒后自动关，可手动立即关）。
+- WeightHistoryService.addRecord：DB 写入即 uploadSingleRecord(model,true) 异步上传，**立即 emit cloudSyncSuccess(newId)** 关 overlay。onCloudReply fromAddRecord 不重复 emit。
+- QML onCloudSyncSuccess：关 overlay+VoiceSpeaker.speak("已保存")+SaveSuccessDialog.openDialog()（460×380 绿勾白卡，"确认 (Ns)" 3秒倒计时自动关）。onCloudSyncFailed：toast warning "记录已保存，云端同步失败将自动重试"。
 
-## 项目关键文件索引
-- 登录：`src/services/AuthService.h/.cpp`+`src/ui/pages/LoginPage.qml`+`src/ui/components/LoginDialog.qml`，退出 `LogoutConfirmDialog.qml`。快捷登录：历史记录（`~/.cache/smartscale/login_history.json`，含 userCode/userNm/custNm + base64 密码）随登录成功写入；`hasRememberedPassword`/`loginByHistory` 优先用历史密码，回退单账号记住密码。任意历史账号选中点登录即可直接登录。
-- Modbus 串口：`src/hardware/WeightSensorWorker.h/.cpp`（QMutexLocker RAII+连续5次错误重启）。
-- 语音：`src/hardware/VoiceSpeaker.h/.cpp`（piper TTS，QML 名 `VoiceSpeaker`），`warmup()` 在 `Main.qml` 开机预加载模型。
-- ONNX Runtime：`3rdparty/onnxruntime-linux-aarch64-1.24.4/lib/`。
+## 关键文件索引
+- 登录：AuthService.h/.cpp + LoginPage.qml + LoginDialog.qml + LogoutConfirmDialog.qml。快捷登录历史 ~/.cache/smartscale/login_history.json（userCode/userNm/custNm+base64 密码）随登录成功写入；hasRememberedPassword/loginByHistory 优先历史密码，回退单账号记住密码。
+- Modbus 串口：src/hardware/WeightSensorWorker.h/.cpp（QMutexLocker RAII+连续5次错误重启）。
+- 语音：src/hardware/VoiceSpeaker（piper TTS，QML 名 VoiceSpeaker），Main.qml 开机 warmup()。
+- ONNX Runtime：3rdparty/onnxruntime-linux-aarch64-1.24.4/lib/。
 
 ## 虚拟键盘（VirtualKeyboard）
-- Qt6 官方 `QtQuick.VirtualKeyboard`。核心在 `src/ui/Main.qml`：`locale="zh_CN"`+`InputPanel`。中英切换用键盘自带 ChangeLanguageKey（语言键显示"中文"/"英文"，由 light 样式按 `InputContext.locale` 动态出）；原右上角浮动"中/EN"按钮已删（2026-07-19），`chineseInputMode`/`toggleInputMode()` 保留但无调用方。
-- Debian 13 自编译 v6.8.2 Pinyin 插件部署到 `/usr/lib/aarch64-linux-gnu/qt6/qml/QtQuick/VirtualKeyboard/Plugins/Pinyin/`。
-- 环境变量（main.cpp）：`QT_IM_MODULE=qtvirtualkeyboard`+`QT_VIRTUALKEYBOARD_STYLE=light`（light=自定义纯白明亮风格，白底黑字）。`Main.qml` 的 `keyboardContainer` 背景与键盘一致用 `#FFFFFF`。勿设 `QT_VIRTUALKEYBOARD_LAYOUTS`/`QT_VIRTUALKEYBOARD_LANGUAGE_FILTER`（非标准）。
-- **自定义样式 light（2026-07-19 完成）**：源文件 `src/ui/vkbdstyle/light/style.qml`，经 app.qrc alias 嵌入 `:/qt-project.org/imports/QtQuick/VirtualKeyboard/Styles/light/style.qml`，并拷贝到系统 `/usr/lib/aarch64-linux-gnu/qt6/qml/QtQuick/VirtualKeyboard/Styles/light/style.qml`（该路径免重编译即生效）。
-- **Qt6.8 样式查找规则（实测+源码确认，关键）**：搜索 `<QML导入路径>/QtQuick/VirtualKeyboard/Styles/<风格名>/`**`style.qml`**（入口文件名必须是 style.qml，不是 KeyboardStyle.qml！找不到则警告 `Cannot find style "x" - fallback: "default"` 回退暗黑）。样式目录**不要放 qmldir**。样式文件**编译失败则 `keyboard.style=null` 键盘整体消失**（不是回退！），改完必须看日志确认。
-- **KeyboardStyle 实现约束（对照 Qt6.8.2 内置 default 样式）**：它是 QtObject——`keyboardDesignWidth/Height` 默认 0 必须显式设置（否则 scaleHint=NaN 全毁，用 2560×800）；`selectionListHeight`/`alternateKeysListItemWidth/Height` 默认 0 也要设。`SelectionListItem` 是裸 Item（无 background/text/highlight 属性），Text 直接放里面，`display` 是上下文属性，高亮用 `ListView.isCurrentItem` State。参考实现：github qtvirtualkeyboard v6.8.2 `src/styles/builtin/default/style.qml`。
-- **KeyPanel control 可用属性**（BaseKey）：key/text/displayText/smallText/smallTextVisible/alternativeKeys/enabled/pressed/uppercased/highlighted/functionKey。**不存在 `control.mode`**（仅 ModeKey 有 mode 属性）；Shift 激活态用 `control.uppercased`。**Shift/语言键 displayText 为空**（Qt 内置样式用 SVG 图片），自定义样式须 Canvas 画图标（light 样式已用 Canvas 上箭头）。
-- 键盘大小：`Main.qml` `InputPanel.scale`（现 0.62，曾 0.5）控制整体缩放，`keyboardContainer.height` 自动含 scale，弹窗避让无需联动。PingFang SC 仅 Regular 字重，粗体靠 Qt 合成（`font.bold:true` 可用）。
-- Qt6 内置样式仅2个：`default`（深灰暗黑）、`retro`（浅灰 #E8E8E8 复古风），均不满足白底黑字需求。
-- API（Qt 6.8.2）：`locale`(rw)/`activeLocales`(rw)/`availableLocales`(ro)/`visibleFunctionKeys`(rw，None=0/Hide=1/Language=2/All=3)。**不存在** `languageFilterFunc`。验证引擎 `nm -D libqtvkbpinyinplugin.so | grep -i pinyin`。
-- **键盘避让坑（强制）**：InputPanel 设了 `scale:0.5`，实际视觉高度是 `keyboardContainer.height`（缩放后），而 `inputPanel.height` 是原始高度（约2倍）。弹窗 y 避让**必须用 `keyboardContainer.height`**，否则弹窗被上移过多、几乎贴顶。写法：`y: Math.max(20, Math.min((parent.height-height)/2, parent.height-height-(inputPanel.active?keyboardContainer.height+20:0)))`。LoginDialog/WifiPasswordDialog 已对齐此写法。
+- Qt6 官方 QtQuick.VirtualKeyboard：Main.qml locale="zh_CN"+InputPanel。中英切换用键盘自带 ChangeLanguageKey（light 样式按 InputContext.locale 动态显示"中文"/"英文"）；右上角浮动切换按钮已删。
+- 环境变量（main.cpp）：QT_IM_MODULE=qtvirtualkeyboard+QT_VIRTUALKEYBOARD_STYLE=light（自定义白底黑字）。勿设 QT_VIRTUALKEYBOARD_LAYOUTS/LANGUAGE_FILTER。keyboardContainer 背景与键盘一致 #FFFFFF。
+- 自定义 light 样式：源 src/ui/vkbdstyle/light/style.qml，经 app.qrc alias 嵌入，并拷贝到系统 /usr/lib/aarch64-linux-gnu/qt6/qml/QtQuick/VirtualKeyboard/Styles/light/style.qml（系统路径免重编译即生效）。
+- **Qt6.8 样式查找（关键）**：搜索 Styles/<风格名>/**style.qml**（入口文件名必须 style.qml，找不到警告 fallback default 暗黑）；样式目录不放 qmldir；**样式编译失败→keyboard.style=null 键盘整体消失**（不是回退！改完必须看日志确认）。
+- **KeyboardStyle 约束（QtObject）**：keyboardDesignWidth/Height 默认 0 必须显式设（2560×800，否则 scaleHint=NaN 全毁）；selectionListHeight/alternateKeysListItemWidth/Height 也要设；SelectionListItem 是裸 Item（Text 直接放，display 上下文属性，高亮用 ListView.isCurrentItem State）。参考 github qtvirtualkeyboard v6.8.2 default/style.qml。
+- **KeyPanel control 属性**：key/text/displayText/smallText/smallTextVisible/alternativeKeys/enabled/pressed/uppercased/highlighted/functionKey。无 control.mode；Shift 激活态用 control.uppercased；Shift/语言键 displayText 为空，须 Canvas 画图标。
+- 键盘大小：Main.qml InputPanel.scale（现 0.62）。**弹窗 y 避让必须用 keyboardContainer.height（缩放后）非 inputPanel.height**：`y: Math.max(20, Math.min((parent.height-height)/2, parent.height-height-(inputPanel.active?keyboardContainer.height+20:0)))`。LoginDialog/WifiPasswordDialog 已对齐。
+- Pinyin 插件：Debian 13 自编译 v6.8.2 部署到系统 QtQuick/VirtualKeyboard/Plugins/Pinyin/。
 
 ## 资源编译（rcc OOM 防护）
-- `CMakeLists.txt` 用 `qt_add_big_resources`（**非** `qt_add_resources`）：rcc 把图片内联成多个小 .cpp 分片编译，避免单个 `qrc_app_assets.cpp` 巨大导致 `cc1plus 已杀死`（OOM）。大图主因 `workstation_bg.png`(1MB)。
-- **关键坑**：`qt_add_big_resources` 是**旧式 API，签名与 `qt_add_resources` 不同**——第一参数是输出变量（非 target），**不支持 `PREFIX`/`FILES` 关键字**（只接受 `.qrc` 文件）。正确用法：手写 `app.qrc`（项目根，file 路径 `resources/...` 保持 `qrc:/resources/...` 不变）→ `qt_add_big_resources(RCC_SOURCES app.qrc)` → `target_sources(appSmartScale PRIVATE ${RCC_SOURCES})`。误用 `PREFIX "/" FILES ...` 会报 `configure_file input / is a directory`。
-- **新增图片资源**：编辑 `app.qrc` 加 `<file>` 行（仅放文件不够，`qrc:/` 不可用）。未在原 `qt_add_resources` 列表、且无 `qrc:/` 引用的文件（如 `lock.png`/`shuiyin.png`/`history*.png`/`camera.png`/`opr.png`）**不要**加进 qrc。改资源后须清理 build 重新 `cmake ..` 再 `make -j1`。大图(>100K)尽量压缩。
+- CMakeLists.txt 用 qt_add_big_resources（**旧式 API**：首参是输出变量，不支持 PREFIX/FILES）：手写 app.qrc → `qt_add_big_resources(RCC_SOURCES app.qrc)` → `target_sources(appSmartScale PRIVATE ${RCC_SOURCES})`。
+- 新增图片必须编辑 app.qrc 加 `<file>` 行；无 qrc:/ 引用的文件（lock.png/shuiyin.png/history*.png/camera.png/opr.png）不要加。改资源后清 build 重新 `cmake ..`+`make -j1`。大图(>100K)尽量压缩。
