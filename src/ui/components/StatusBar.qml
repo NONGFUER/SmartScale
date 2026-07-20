@@ -117,7 +117,7 @@ Rectangle {
                 Image {
                     anchors.centerIn: parent
                     source: "qrc:/resources/img/Signal" + signalLevel(NetworkManager.cellularSignal) + ".png"
-                    width: 40; height: 40
+                    width: 44; height: 44
                     fillMode: Image.PreserveAspectFit
                 }
 
@@ -159,7 +159,7 @@ Rectangle {
                 Image {
                     anchors.centerIn: parent
                     source: "qrc:/resources/img/Wifi" + signalLevel(NetworkManager.wifiSignal) + ".png"
-                    width: 40; height: 40
+                    width: 44; height: 44
                     fillMode: Image.PreserveAspectFit
                 }
 
@@ -191,7 +191,7 @@ Rectangle {
                 Image {
                     anchors.centerIn: parent
                     source: "qrc:/resources/img/Wifi0.png"
-                    width: 40; height: 40
+                    width: 44; height: 44
                     fillMode: Image.PreserveAspectFit
                 }
 
