@@ -273,7 +273,7 @@ ApplicationWindow {
         // Popup 不支持 anchors，用 x/y 手动居中；
         // 键盘挂在 Overlay 层(z:99999) 悬浮覆盖在弹窗之上，不再做键盘避让
         x: (parent.width - width) / 2
-        y: (parent.height - height) / 2
+        y: (parent.height - height) / 2 - 100
 
         // 自动登录失败时打开登录弹窗让用户手动输入
         Connections {
@@ -355,7 +355,7 @@ ApplicationWindow {
         id: wifiPasswordDialog
         x: (parent.width - width) / 2
         // 居中显示（键盘悬浮覆盖，不做避让）
-        y: (parent.height - height) / 2
+        y: (parent.height - height) / 2 - 100
 
         onConnectRequested: function(ssid, password) {
             NetworkManager.connectWifi(ssid, password)
