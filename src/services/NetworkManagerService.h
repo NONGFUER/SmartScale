@@ -94,6 +94,9 @@ public:
     /** @brief 断开当前 Wi-Fi 连接 */
     Q_INVOKABLE void disconnectWifi();
 
+    /** @brief 开启/关闭 Wi-Fi 射频（nmcli radio wifi on/off） */
+    Q_INVOKABLE void setWifiEnabled(bool enabled);
+
     /** @brief 刷新当前 Wi-Fi 状态 */
     Q_INVOKABLE void refreshWifiStatus();
 

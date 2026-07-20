@@ -577,6 +577,27 @@ void NetworkManagerService::disconnectWifi()
     m_process->start(m_nmcliPath, args);
 }
 
+void NetworkManagerService::setWifiEnabled(bool enabled)
+{
+    if (m_nmcliPath.isEmpty()) {
+        setLastError(QStringLiteral("未找到 nmcli，无法切换 Wi-Fi 射频开关"));
+        qWarning() << "[NetworkManager]" << m_lastError;
+        return;
+    }
+
+    qInfo() << "[NetworkManager] 切换 Wi-Fi 射频:" << (enabled ? "on" : "off");
+
+    // 射频开关为无副作用命令，使用独立一次性进程，结束后刷新状态
+    QProcess *proc = new QProcess(this);
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, proc](int exitCode, QProcess::ExitStatus) {
+        Q_UNUSED(exitCode)
+        proc->deleteLater();
+        refreshWifiStatus();
+    });
+    proc->start(m_nmcliPath, QStringList() << "radio" << "wifi" << (enabled ? "on" : "off"));
+}
+
 void NetworkManagerService::onWifiDisconnectFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     Q_UNUSED(exitStatus)

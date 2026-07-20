@@ -25,7 +25,7 @@ Dialog {
     x: (parent.width - width) / 2
     y: (parent.height - height) / 2
     width: Math.min(parent.width * 0.85, 680)
-    height: Math.min(parent.height * 0.92, 760)
+    height: Math.min(parent.height * 0.92, 1000)
     modal: true
     Overlay.modal: Rectangle { color: "#80000000" }
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -46,10 +46,18 @@ Dialog {
         }
     }
 
-    ColumnLayout {
+    Flickable {
         anchors.fill: parent
         anchors.margins: 32
-        spacing: 0
+        contentWidth: width
+        contentHeight: col.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+
+        ColumnLayout {
+            id: col
+            width: parent.width
+            spacing: 0
 
         // ====== 标题栏：返回箭头（圆形背景）+ 设置（居中）======
         RowLayout {
@@ -95,7 +103,7 @@ Dialog {
             Text {
                 text: "设备信息"
                 font.family: Theme.fontFamilyUi
-                font.pixelSize: 28
+                font.pixelSize: 24
                 font.bold: true
                 color: Theme.colorTextPrimary
             }
@@ -120,106 +128,105 @@ Dialog {
         SettingRow { label: "秤型号:"; value: "WLC200A-13C"; isLast: false }
         SettingRow { label: "序列号:"; value: WeightManager.sn.length > 0 ? WeightManager.sn : "----"; isLast: false }
         SettingRow { label: "量程范围及精度:"; value: "200kg / \u00B13‰"; isLast: false }
-        SettingRow { label: "秤自重:"; value: "20kg"; isLast: false }
+        //SettingRow { label: "秤自重:"; value: "20kg"; isLast: false }
         SettingRow { label: "SIM卡号(ICCID):"; value: (CellularModem.ccid !== undefined && CellularModem.ccid.length > 0) ? CellularModem.ccid : "—"; isLast: false }
-        SettingRow { label: "IMSI:"; value: (CellularModem.imsi !== undefined && CellularModem.imsi.length > 0) ? CellularModem.imsi : "—"; isLast: true }
+       // SettingRow { label: "IMSI:"; value: (CellularModem.imsi !== undefined && CellularModem.imsi.length > 0) ? CellularModem.imsi : "—"; isLast: true }
 
         // 分隔间距
         Item { Layout.preferredHeight: 20 }
 
         // ========================================
-        // 软件版本 — 独立圆角背景卡片
-        // ========================================
-
-        // Rectangle {
-        //     Layout.fillWidth: true
-        //     height: 56
-        //     radius: 12
-        //     color: "#F5F7FA"
-
-        //     RowLayout {
-        //         anchors.fill: parent
-        //         anchors.leftMargin: 20
-        //         anchors.rightMargin: 20
-        //         spacing: 0
-
-        //         Text {
-        //             text: "软件版本:"
-        //             font.family: Theme.fontFamilyUi
-        //             font.pixelSize: 20
-        //             color: Theme.colorTextSecondary
-        //             Layout.alignment: Qt.AlignVCenter
-        //         }
-
-        //         Item { Layout.fillWidth: true }
-
-        //         Text {
-        //             text: SystemInfo.appVersion
-        //             font.family: Theme.fontFamilyUi
-        //             font.pixelSize: 20
-        //             color: Theme.colorTextPrimary
-        //             Layout.alignment: Qt.AlignVCenter
-        //         }
-        //     }
-        // }
-
-        Item { Layout.preferredHeight: 12 }
-
-        // ========================================
-        // 功能设置 — 价格输入开关
+        // 功能设置 — 统一灰色圆角卡片（价格输入 + 网络开关）
         // ========================================
         Rectangle {
             Layout.fillWidth: true
-            height: 56
+            Layout.preferredHeight: swCardCol.implicitHeight + 40
             radius: 12
             color: "#F5F7FA"
 
-            RowLayout {
+            ColumnLayout {
+                id: swCardCol
                 anchors.fill: parent
-                anchors.leftMargin: 20
-                anchors.rightMargin: 20
-                spacing: 0
+                anchors.margins: 20
+                spacing: 16
 
-                Text {
-                    text: "价格输入"
-                    font.family: Theme.fontFamilyUi
-                    font.pixelSize: 20
-                    color: Theme.colorTextSecondary
-                    Layout.alignment: Qt.AlignVCenter
+                // ----- 价格输入（最上面）-----
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Text {
+                        text: "价格输入"
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: 24
+                        color: Theme.colorTextSecondary
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { Layout.fillWidth: true }
+                    ToggleSwitch { id: swPrice; checked: AppSettings.priceInputEnabled; onToggled: AppSettings.priceInputEnabled = checked }
                 }
 
-                Item { Layout.fillWidth: true }
+                // 分隔线
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
 
-                Switch {
-                    id: priceSwitch
-                    checked: AppSettings.priceInputEnabled
-                    onCheckedChanged: AppSettings.priceInputEnabled = checked
-                    Layout.alignment: Qt.AlignVCenter
-
-                    // 蓝色圆角 toggle（iOS 风格）：开启#4361EE蓝 / 关闭#CBD5E1灰 + 白色圆形滑块
-                    indicator: Rectangle {
-                        implicitWidth: 56
-                        implicitHeight: 32
-                        x: priceSwitch.leftPadding
-                        y: parent.height / 2 - height / 2
-                        radius: 16
-                        color: priceSwitch.checked ? "#4361EE" : "#CBD5E1"
-                        border.color: priceSwitch.checked ? "#4361EE" : "#CBD5E1"
-                        border.width: 1
-
-                        Behavior on color { ColorAnimation { duration: 150 } }
-
-                        Rectangle {
-                            x: priceSwitch.checked ? parent.width - width - 4 : 4
-                            y: 4
-                            width: parent.height - 8
-                            height: parent.height - 8
-                            radius: width / 2
-                            color: "#FFFFFF"
-
-                            Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
+                // ----- 启用4G网络 -----
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Text {
+                        text: "启用4G网络"
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: 24
+                        color: Theme.colorTextSecondary
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { Layout.fillWidth: true }
+                    ToggleSwitch {
+                        id: sw4g; checked: AppSettings.cellularEnabled
+                        onToggled: {
+                            AppSettings.cellularEnabled = checked
+                            if (checked) NetworkManager.enableCellular()
+                            else NetworkManager.disableCellular()
                         }
                     }
+                }
+
+                // 分隔线
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
+
+                // ----- 启用WiFi -----
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Text {
+                        text: "启用WiFi"
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: 24
+                        color: Theme.colorTextSecondary
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { Layout.fillWidth: true }
+                    ToggleSwitch {
+                        id: swWifi; checked: AppSettings.wifiEnabled
+                        onToggled: { AppSettings.wifiEnabled = checked; NetworkManager.setWifiEnabled(checked) }
+                    }
+                }
+
+                // 分隔线
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
+
+                // ----- 网络自动切换 -----
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Text {
+                        text: "网络自动切换"
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: 24
+                        color: Theme.colorTextSecondary
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { Layout.fillWidth: true }
+                    ToggleSwitch { id: swAuto; checked: AppSettings.networkAutoSwitch; onToggled: AppSettings.networkAutoSwitch = checked }
                 }
             }
         }
@@ -242,7 +249,7 @@ Dialog {
                 Text {
                     text: "上海小管事机器人有限公司"
                     font.family: Theme.fontFamilyUi
-                    font.pixelSize: 20
+                    font.pixelSize: 24
                     font.bold: true
                     color: Theme.colorTextPrimary
                     Layout.alignment: Qt.AlignHCenter
@@ -250,7 +257,7 @@ Dialog {
                 Text {
                     text: "© 2026 版权所有"
                     font.family: Theme.fontFamilyUi
-                    font.pixelSize: 16
+                    font.pixelSize: 24
                     color: Theme.colorTextSecondary
                     Layout.alignment: Qt.AlignHCenter
                 }
@@ -286,7 +293,8 @@ Dialog {
 
         Item { Layout.preferredHeight: 8 }
         Item { Layout.fillHeight: true }
-    }  // end ColumnLayout
+        }  // end ColumnLayout
+    }  // end Flickable
 
     // ==========================================
     // 内联组件定义
@@ -310,7 +318,7 @@ Dialog {
             Text {
                 text: label
                 font.family: Theme.fontFamilyUi
-                font.pixelSize: 20
+                font.pixelSize: 24
                 color: "#5A6577"
                 Layout.alignment: Qt.AlignVCenter
             }
@@ -320,7 +328,7 @@ Dialog {
             Text {
                 text: value
                 font.family: Theme.fontFamilyUi
-                font.pixelSize: 20
+                font.pixelSize: 24
                 color: "#1A1A2E"
                 Layout.alignment: Qt.AlignVCenter
             }
@@ -332,6 +340,36 @@ Dialog {
             height: 1
             visible: !isLast
             color: "#EEF0F4"
+        }
+    }
+
+    // 开关控件（无背景，仅 iOS 风格 toggle）
+    // 直接复用 Switch 自带的 toggled(bool) 信号（仅用户点击触发，程序赋值不触发）
+    component ToggleSwitch: Switch {
+        id: sw
+
+        indicator: Rectangle {
+            implicitWidth: 56
+            implicitHeight: 32
+            x: sw.leftPadding
+            y: parent.height / 2 - height / 2
+            radius: 16
+            color: sw.checked ? "#4361EE" : "#CBD5E1"
+            border.color: sw.checked ? "#4361EE" : "#CBD5E1"
+            border.width: 1
+
+            Behavior on color { ColorAnimation { duration: 150 } }
+
+            Rectangle {
+                x: sw.checked ? parent.width - width - 4 : 4
+                y: 4
+                width: parent.height - 8
+                height: parent.height - 8
+                radius: width / 2
+                color: "#FFFFFF"
+
+                Behavior on x { NumberAnimation { duration: 150; easing.type: Easing.InOutQuad } }
+            }
         }
     }
 }

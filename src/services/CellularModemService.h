@@ -29,9 +29,10 @@
 class CellularModemService : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(QString ccid      READ ccid      NOTIFY ccidChanged)
-    Q_PROPERTY(QString imsi      READ imsi      NOTIFY imsiChanged)
-    Q_PROPERTY(bool    available READ available NOTIFY availableChanged)
+    Q_PROPERTY(QString ccid         READ ccid         NOTIFY ccidChanged)
+    Q_PROPERTY(QString imsi         READ imsi         NOTIFY imsiChanged)
+    Q_PROPERTY(QString operatorName READ operatorName NOTIFY operatorNameChanged)
+    Q_PROPERTY(bool    available    READ available    NOTIFY availableChanged)
 
 public:
     explicit CellularModemService(QObject *parent = nullptr);
@@ -39,9 +40,10 @@ public:
 
     QString ccid() const { return m_ccid; }
     QString imsi() const { return m_imsi; }
+    QString operatorName() const { return m_operatorName; }
     bool    available() const { return m_available; }
 
-    /** 启动 CCID/IMSI 获取：遍历候选端口动态探测 AT 接口并依次读取 +ICCID / +CIMI（已在进行中或已完成则忽略） */
+    /** 启动 CCID/IMSI/运营商 获取：遍历候选端口动态探测 AT 接口并依次读取 +ICCID / +CIMI / +COPS?（已在进行中或已完成则忽略） */
     Q_INVOKABLE void start();
 
 Q_SIGNALS:
@@ -49,6 +51,8 @@ Q_SIGNALS:
     void ccidChanged(const QString &ccid);
     /** IMSI(CIMI) 获取成功（非空串），或后续被刷新时触发 */
     void imsiChanged(const QString &imsi);
+    /** 运营商名称(AT+COPS?) 获取成功（非空串），或后续被刷新时触发 */
+    void operatorNameChanged(const QString &operatorName);
     /** 模组可用性变化（探测到 AT 接口且成功解析为 true） */
     void availableChanged(bool available);
 
@@ -59,18 +63,22 @@ private Q_SLOTS:
     void onRetryTimeout();
 
 private:
-    enum class State { Idle, Probing, Querying, QueryingImsi, Done, Failed };
+    enum class State { Idle, Probing, Querying, QueryingImsi, QueryingOperator, Done, Failed };
 
     void probeNext();
     void beginQuery();
     void beginQueryImsi();
+    void beginQueryOperator();
     void finishWithAll();
+
+    /** 运营商名中文化：长字母名/短字母名/数字 PLMN 码 统一映射为"中国移动"等中文 */
+    static QString normalizeOperatorName(const QString &raw);
     void fail(const QString &reason);
     void cleanupSerial();
 
     QSerialPort *m_serial      = nullptr;
     QTimer     *m_probeTimer   = nullptr;   // 单端口 AT 探测超时
-    QTimer     *m_queryTimer   = nullptr;   // AT+ICCID / AT+CIMI 查询超时
+    QTimer     *m_queryTimer   = nullptr;   // AT+ICCID / AT+CIMI / AT+COPS? 查询超时
     QTimer     *m_retryTimer   = nullptr;   // 整体重试间隔
 
     QStringList m_candidates;              // 候选 AT 端口 systemLocation 列表
@@ -78,6 +86,7 @@ private:
     State       m_state = State::Idle;
     QString     m_ccid;
     QString     m_imsi;
+    QString     m_operatorName;            // 运营商名称（AT+COPS? 第3个字段，如 "CHINA MOBILE"）
     bool        m_available = false;
     QByteArray  m_buffer;                   // readyRead 累积缓冲
     int         m_retries = 0;              // 已重试次数

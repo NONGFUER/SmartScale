@@ -335,8 +335,20 @@ Popup {
     // 辅助函数
     // ========================================================================
 
-    /** @brief 运营商显示文本：已连接取运营商名，未连接/无硬件显示占位 */
+    /**
+     * @brief 运营商显示文本
+     *
+     * 数据源优先级：
+     *   1. CellularModem.operatorName — AT+COPS? 串口直查的真实运营商名（如 "CHINA MOBILE"）
+     *      不依赖网络连接状态，只要 SIM 已注册网络就有值
+     *   2. NetworkManager.cellularOperator — nmcli 接口模式的连接名（仅已连接时有意义）
+     *   3. 状态占位文案（未启用/搜索中/未检测到模块）
+     */
     function operatorText() {
+        // AT 直查到的运营商名最权威，有就直接用
+        if (CellularModem.operatorName && CellularModem.operatorName.length > 0)
+            return CellularModem.operatorName
+
         var s = NetworkManager.cellularStatus
         if (!NetworkManager.hasCellularHardware)
             return "未检测到模块"

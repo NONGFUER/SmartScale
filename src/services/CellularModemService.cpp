@@ -36,8 +36,9 @@ CellularModemService::~CellularModemService()
 
 void CellularModemService::start()
 {
-    // 已在进行中（探测/查询）则忽略重复调用
-    if (m_state == State::Probing || m_state == State::Querying)
+    // 已在进行中（探测/任一查询阶段）则忽略重复调用
+    if (m_state == State::Probing || m_state == State::Querying
+        || m_state == State::QueryingImsi || m_state == State::QueryingOperator)
         return;
     // 已成功获取过 CCID 则无需再来一遍
     if (m_state == State::Done && !m_ccid.isEmpty())
@@ -165,6 +166,16 @@ void CellularModemService::beginQueryImsi()
     m_queryTimer->start(kQueryTimeoutMs);
 }
 
+// 拿到 IMSI 后继续查询运营商（AT+COPS?）
+void CellularModemService::beginQueryOperator()
+{
+    m_state = State::QueryingOperator;
+    m_buffer.clear();
+    m_serial->write("AT+COPS?\r");
+    m_serial->flush();
+    m_queryTimer->start(kQueryTimeoutMs);
+}
+
 // ============================================================================
 // 接收处理
 // ============================================================================
@@ -217,13 +228,33 @@ void CellularModemService::onReadyRead()
         const QRegularExpressionMatch m = re.match(QString::fromLatin1(m_buffer));
         if (m.hasMatch()) {
             m_imsi = m.captured(1);
+            qInfo() << "[CellularModem] 已获取 IMSI:" << m_imsi
+                    << "，继续查询运营商(AT+COPS?)";
+            beginQueryOperator();
+            return;
+        }
+        // 已收到 OK 但仍未解析出 IMSI（或明确 ERROR）→ 跳过 IMSI 直接查运营商
+        if (m_buffer.contains("OK") || m_buffer.contains("ERROR")) {
+            qWarning() << "[CellularModem] 未能解析 IMSI（缓冲:" << m_buffer
+                       << "），跳过继续查询运营商";
+            beginQueryOperator();
+        }
+    } else if (m_state == State::QueryingOperator) {
+        // 解析 +COPS: 响应，缓冲示例:
+        //   "AT+COPS?\r\r\n+COPS: 0,0,\"CHINA MOBILE\",7\r\n\r\nOK\r\n"
+        //   "AT+COPS?\r\r\n+COPS: 0,2,\"46000\",7\r\n\r\nOK\r\n"（数字模式，第2字段=2 时第3字段是 PLMN 数字）
+        // 提取第 3 个逗号分隔字段的引号内字符串作为运营商名（长格式字母名优先）
+        QRegularExpression re("\\+COPS:\\s*\\d+\\s*,\\s*\\d+\\s*,\\s*\"([^\"]*)\"");
+        const QRegularExpressionMatch m = re.match(QString::fromLatin1(m_buffer));
+        if (m.hasMatch()) {
+            m_operatorName = normalizeOperatorName(m.captured(1));
             finishWithAll();
             return;
         }
-        // 已收到 OK 但仍未解析出 IMSI（或明确 ERROR）→ 以已获取的 CCID 收尾，IMSI 留空
+        // 已收到 OK 但仍未解析出运营商（或未注册: +COPS: 0 / ERROR）→ 以已获取结果收尾，运营商留空
         if (m_buffer.contains("OK") || m_buffer.contains("ERROR")) {
-            qWarning() << "[CellularModem] 未能解析 IMSI（缓冲:" << m_buffer
-                       << "），以 CCID 收尾";
+            qWarning() << "[CellularModem] 未能解析运营商（缓冲:" << m_buffer
+                       << "），以 CCID/IMSI 收尾";
             finishWithAll();
         }
     }
@@ -245,8 +276,14 @@ void CellularModemService::onProbeTimeout()
 void CellularModemService::onQueryTimeout()
 {
     if (m_state == State::QueryingImsi) {
-        // IMSI 查询超时：仍保有 CCID，则以已获取结果收尾
-        qWarning() << "[CellularModem] AT+CIMI 查询超时，以 CCID 收尾，缓冲:" << m_buffer;
+        // IMSI 查询超时：仍保有 CCID，跳过直接查运营商
+        qWarning() << "[CellularModem] AT+CIMI 查询超时，跳过继续查询运营商，缓冲:" << m_buffer;
+        beginQueryOperator();
+        return;
+    }
+    if (m_state == State::QueryingOperator) {
+        // 运营商查询超时：以已获取的 CCID/IMSI 收尾
+        qWarning() << "[CellularModem] AT+COPS? 查询超时，以 CCID/IMSI 收尾，缓冲:" << m_buffer;
         finishWithAll();
         return;
     }
@@ -264,6 +301,55 @@ void CellularModemService::onRetryTimeout()
 }
 
 // ============================================================================
+// 运营商名中文化映射
+// ============================================================================
+
+QString CellularModemService::normalizeOperatorName(const QString &raw)
+{
+    const QString s = raw.trimmed();
+    if (s.isEmpty())
+        return s;
+
+    // 1) 数字 PLMN 码（AT+COPS? 第2字段=2 时返回，如 "46000"）
+    static const QHash<QString, QString> plmnMap = {
+        // 中国移动
+        { "46000", "中国移动" }, { "46002", "中国移动" }, { "46004", "中国移动" },
+        { "46007", "中国移动" }, { "46008", "中国移动" },
+        // 中国联通
+        { "46001", "中国联通" }, { "46006", "中国联通" }, { "46009", "中国联通" },
+        // 中国电信
+        { "46003", "中国电信" }, { "46005", "中国电信" }, { "46011", "中国电信" },
+        // 中国广电
+        { "46015", "中国广电" },
+        // 中国铁通（已并入移动）
+        { "46020", "中国移动" },
+    };
+    if (plmnMap.contains(s))
+        return plmnMap.value(s);
+
+    // 2) 字母名（长格式 format=0 / 短格式 format=1，忽略大小写）
+    const QString upper = s.toUpper();
+    static const QHash<QString, QString> nameMap = {
+        // 中国移动
+        { "CHINA MOBILE", "中国移动" }, { "CMCC", "中国移动" }, { "CHN-CMCC", "中国移动" },
+        { "CHN-CM", "中国移动" }, { "CM", "中国移动" },
+        // 中国联通
+        { "CHINA UNICOM", "中国联通" }, { "CUCC", "中国联通" }, { "CHN-UNICOM", "中国联通" },
+        { "CHN-CU", "中国联通" }, { "CU", "中国联通" },
+        // 中国电信
+        { "CHINA TELECOM", "中国电信" }, { "CT", "中国电信" }, { "CHN-CT", "中国电信" },
+        { "CHN-CUCC", "中国电信" },
+        // 中国广电
+        { "CHINA BROADNET", "中国广电" }, { "CBN", "中国广电" }, { "CHN-CBN", "中国广电" },
+    };
+    if (nameMap.contains(upper))
+        return nameMap.value(upper);
+
+    // 3) 未知则原样返回（如虚拟运营商或境外运营商）
+    return s;
+}
+
+// ============================================================================
 // 收尾 / 失败 / 重试
 // ============================================================================
 
@@ -271,13 +357,15 @@ void CellularModemService::finishWithAll()
 {
     m_queryTimer->stop();
     m_state = State::Done;
-    m_available = !m_ccid.isEmpty() || !m_imsi.isEmpty();
+    m_available = !m_ccid.isEmpty() || !m_imsi.isEmpty() || !m_operatorName.isEmpty();
     cleanupSerial();
     qInfo() << "[CellularModem] 成功获取 CCID(ICCID):" << m_ccid
-            << " IMSI:" << m_imsi;
+            << " IMSI:" << m_imsi
+            << " 运营商:" << m_operatorName;
     Q_EMIT availableChanged(m_available);
     Q_EMIT ccidChanged(m_ccid);
     Q_EMIT imsiChanged(m_imsi);
+    Q_EMIT operatorNameChanged(m_operatorName);
 }
 
 void CellularModemService::fail(const QString &reason)
