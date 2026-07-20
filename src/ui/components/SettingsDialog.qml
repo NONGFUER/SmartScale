@@ -269,7 +269,7 @@ Dialog {
 
             background: Rectangle {
                 radius: 8
-                color: closeBtn.hovered ? "#2563EB" : "#3B82F6"
+                color: closeBtn.hovered ? "#4361EE" : "#3B82F6"
             }
 
             contentItem: Text {

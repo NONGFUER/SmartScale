@@ -12,8 +12,10 @@ Rectangle {
     signal settingsRequested()
     // 点击调试按钮发出的信号（测试阶段）
     signal debugRequested()
-    // 点击网络图标发出的信号 — 根据状态打开 WiFi 或 4G 弹窗
+    // 点击网络图标发出的信号 — 打开 WiFi 列表弹窗
     signal networkRequested()
+    // 点击 4G 信号图标发出的信号 — 打开 4G 信息弹窗
+    signal cellularRequested()
     // 点击用户头像/名字区域发出的信号 — 已登录时弹出退出登录确认
     signal userAreaClicked()
     // 点击用户头像/名字区域发出的信号 — 未登录时打开登录弹窗
@@ -97,10 +99,10 @@ Rectangle {
             spacing: 12
             Layout.alignment: Qt.AlignVCenter
 
-            // ---- 4G 信号图标 ----
+            // ---- 4G 信号图标（始终显示；无信号/未连接时 Signal0.png 断网图标）----
             Item {
                 width: 44; height: 44
-                visible: isCellularActive()
+                visible: true
 
                 Rectangle {
                     id: cellBg
@@ -125,14 +127,14 @@ Rectangle {
                     id: cellMouse
                     anchors.fill: parent
                     hoverEnabled: true
-                    onClicked: root.networkRequested()
+                    onClicked: root.cellularRequested()
                 }
             }
 
-            // ---- WiFi 图标 ----
+            // ---- WiFi 图标（始终显示；未连接时 Wifi0.png 断网图标）----
             Item {
                 width: 44; height: 44
-                visible: NetworkManager.wifiStatus === NetworkManager.Connected
+                visible: true
 
                 Connections {
                     target: NetworkManager
@@ -165,38 +167,6 @@ Rectangle {
 
                 MouseArea {
                     id: wifiMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.networkRequested()
-                }
-            }
-
-            // ---- 断网占位（都未连接时显示，避免布局塌缩） ----
-            Item {
-                width: 44; height: 44
-                visible: !isCellularActive() && NetworkManager.wifiStatus !== NetworkManager.Connected
-
-                Rectangle {
-                    id: discBg
-                    anchors.fill: parent
-                    radius: 6
-                    color: "transparent"
-
-                    states: State {
-                        name: "hovered"; when: discMouse.containsMouse
-                        PropertyChanges { target: discBg; color: "#25FFFFFF" }
-                    }
-                }
-
-                Image {
-                    anchors.centerIn: parent
-                    source: "qrc:/resources/img/Wifi0.png"
-                    width: 44; height: 44
-                    fillMode: Image.PreserveAspectFit
-                }
-
-                MouseArea {
-                    id: discMouse
                     anchors.fill: parent
                     hoverEnabled: true
                     onClicked: root.networkRequested()

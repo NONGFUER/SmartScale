@@ -204,6 +204,20 @@ int main(int argc, char *argv[])
     // 网络管理服务 — Wi-Fi 扫描/连接/断开 + 4G 开启/关闭
     NetworkManagerService *networkManagerService = new NetworkManagerService(&app);
 
+    // 4G 开关重启记忆：上次关机前用户关闭了 4G，则本次启动后自动禁用以恢复状态。
+    // 延迟 3 秒执行：等 NetworkManagerService 构造里的首轮 refresh 完成、
+    // 4G 硬件被发现（hasCellularHardware=true）后再下发禁用，避免对不存在的接口空操作。
+    if (!appSettings->cellularEnabled()) {
+        QTimer::singleShot(3000, networkManagerService, [networkManagerService]() {
+            if (networkManagerService->hasCellularHardware()) {
+                qInfo() << "[Main] 恢复 4G 记忆状态: 上次为关闭，自动禁用 4G";
+                networkManagerService->disableCellular();
+            } else {
+                qInfo() << "[Main] 恢复 4G 记忆状态: 未检测到 4G 硬件，跳过自动禁用";
+            }
+        });
+    }
+
     // MQTT 客户端服务 — 设备信息上报 (mqtts://user.shxgs.cn:8888)
     MqttClientService *mqttClientService = new MqttClientService(&app);
 

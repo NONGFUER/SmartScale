@@ -387,6 +387,15 @@ ApplicationWindow {
         }
     }
 
+    // 连接 StatusBar 4G 图标信号 -> 打开 4G 信息弹窗
+    Connections {
+        target: statusBar
+        function onCellularRequested() {
+            console.log("[Main] 收到 4G 请求，打开 4G 信息弹窗")
+            cellularDialog.open()
+        }
+    }
+
     // Wi-Fi 连接结果处理（全局：关闭弹窗 + Toast 提示）
     Connections {
         target: NetworkManager

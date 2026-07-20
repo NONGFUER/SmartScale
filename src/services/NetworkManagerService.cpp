@@ -28,6 +28,23 @@ static const char *kMmcliPaths[] = {
     nullptr
 };
 
+// sudo 路径（4G ip link set 需要 root，走 sudo -n 免密）
+static const char *kSudoPaths[] = {
+    "/usr/bin/sudo",
+    "/bin/sudo",
+    "/usr/sbin/sudo",
+    nullptr
+};
+
+// ip 命令路径（iproute2，用于 4G 接口 up/down 强制控制）
+static const char *kIpPaths[] = {
+    "/usr/sbin/ip",
+    "/sbin/ip",
+    "/usr/bin/ip",
+    "/bin/ip",
+    nullptr
+};
+
 // ============================================================
 // 构造 / 析构
 // ============================================================
@@ -37,9 +54,13 @@ NetworkManagerService::NetworkManagerService(QObject *parent)
     // 兼容性：从候选列表中解析实际工具路径
     m_nmcliPath = findExecutable(kNmcliPaths);
     m_mmcliPath = findExecutable(kMmcliPaths);
+    m_sudoPath  = findExecutable(kSudoPaths);
+    m_ipPath    = findExecutable(kIpPaths);
 
     qDebug() << "[NetworkManager] 工具路径: nmcli=" << m_nmcliPath
-             << "mmcli=" << (m_mmcliPath.isEmpty() ? "(未找到)" : m_mmcliPath);
+             << "mmcli=" << (m_mmcliPath.isEmpty() ? "(未找到)" : m_mmcliPath)
+             << "sudo=" << (m_sudoPath.isEmpty() ? "(未找到)" : m_sudoPath)
+             << "ip=" << (m_ipPath.isEmpty() ? "(未找到)" : m_ipPath);
 
     m_process = new QProcess(this);
     m_process->setProcessChannelMode(QProcess::MergedChannels);
@@ -863,80 +884,37 @@ void NetworkManagerService::enableCellularViaDevice()
         return;
     }
 
-    qDebug() << "[NetworkManager] 通过 nmcli 启用 4G 接口:" << cellDevice;
-
-    // 策略：查找与该设备关联的 GSM/cellular 连接配置并激活
-    if (hasNetworkManager()) {
-        QProcess findProc;
-        findProc.start(m_nmcliPath, QStringList()
-                       << "-t" << "-f" << "NAME,TYPE,DEVICE"
-                       << "connection" << "show");
-
-        if (findProc.waitForFinished(3000)) {
-            const QString output = QString::fromUtf8(findProc.readAllStandardOutput());
-            QString targetConn;
-
-            for (const auto &line : output.split('\n', Qt::SkipEmptyParts)) {
-                auto parts = line.split(':');
-                if (parts.size() >= 3 && parts[2].trimmed() == cellDevice) {
-                    QString connType = parts[1].trimmed().toLower();
-                    // 找到绑定到该设备的任意连接配置
-                    targetConn = parts[0].trimmed();
-                    qDebug() << "[NetworkManager] 找到设备" << cellDevice << "的连接配置:" << targetConn;
-                    break;
-                }
-            }
-
-            if (!targetConn.isEmpty()) {
-                QStringList args;
-                args << "connection" << "up" << targetConn
-                     << "--wait-connect-timeout" << "30";
-
-                disconnect(m_process, nullptr, this, nullptr);
-                connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                        this, &NetworkManagerService::onCellularOpFinished);
-
-                m_process->start(m_nmcliPath, args);
-                m_pendingCellularOp = true;
-
-                QTimer::singleShot(35000, this, [this]() {
-                    if (m_cellularStatus == CellularStatus::CellSearching) {
-                        m_process->kill();
-                        setLastError(QStringLiteral("4G 启用超时"));
-                        setCellularStatus(CellularStatus::CellError);
-                        Q_EMIT cellularOperationFailed(m_lastError);
-                    }
-                });
-                return;
-            }
-        }
-
-        // 如果没找到现成连接，尝试直接让设备重新连接（nmcli device connect）
-        qWarning() << "[NetworkManager] 未找到" << cellDevice << "的连接配置，尝试 device connect";
-        QStringList args;
-        args << "device" << "connect" << cellDevice;
-
-        disconnect(m_process, nullptr, this, nullptr);
-        connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-                this, &NetworkManagerService::onCellularOpFinished);
-
-        m_process->start(m_nmcliPath, args);
-        m_pendingCellularOp = true;
-
-        QTimer::singleShot(30000, this, [this]() {
-            if (m_cellularStatus == CellularStatus::CellSearching) {
-                m_process->kill();
-                setLastError(QStringLiteral("4G 接口连接超时"));
-                setCellularStatus(CellularStatus::CellError);
-                Q_EMIT cellularOperationFailed(m_lastError);
-            }
-        });
+    // 必须有 sudo + ip 才能提权执行 ip link set up
+    if (m_sudoPath.isEmpty() || m_ipPath.isEmpty()) {
+        setLastError(QStringLiteral("缺少 sudo 或 ip 命令，无法控制 4G 接口"));
+        qWarning() << "[NetworkManager]" << m_lastError
+                   << "sudo=" << m_sudoPath << "ip=" << m_ipPath;
+        Q_EMIT cellularOperationFailed(m_lastError);
         return;
     }
 
-    // 没有 nmcli 的情况
-    setLastError(QStringLiteral("无 NetworkManager，无法控制 4G 接口"));
-    Q_EMIT cellularOperationFailed(m_lastError);
+    qDebug() << "[NetworkManager] 通过 sudo ip link set 启用 4G 接口:" << cellDevice;
+
+    // sudo -n: 非交互模式，无免密权限时立即失败而非卡住等密码
+    QStringList args;
+    args << "-n" << m_ipPath << "link" << "set" << cellDevice << "up";
+
+    disconnect(m_process, nullptr, this, nullptr);
+    connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &NetworkManagerService::onCellularOpFinished);
+
+    m_process->start(m_sudoPath, args);
+    m_pendingCellularOp = true;
+
+    // ip link up 后 NetworkManager 需重新拨号/DHCP，预留较长恢复时间
+    QTimer::singleShot(30000, this, [this]() {
+        if (m_cellularStatus == CellularStatus::CellSearching) {
+            m_process->kill();
+            setLastError(QStringLiteral("4G 启用超时"));
+            setCellularStatus(CellularStatus::CellError);
+            Q_EMIT cellularOperationFailed(m_lastError);
+        }
+    });
 }
 
 void NetworkManagerService::enableCellularViaModem()
@@ -1057,22 +1035,32 @@ void NetworkManagerService::disableCellularViaDevice()
         return;
     }
 
-    qDebug() << "[NetworkManager] 通过 nmcli 断开 4G 接口:" << cellDevice;
+    // 必须有 sudo + ip 才能提权执行 ip link set down
+    if (m_sudoPath.isEmpty() || m_ipPath.isEmpty()) {
+        setLastError(QStringLiteral("缺少 sudo 或 ip 命令，无法控制 4G 接口"));
+        qWarning() << "[NetworkManager]" << m_lastError
+                   << "sudo=" << m_sudoPath << "ip=" << m_ipPath;
+        Q_EMIT cellularOperationFailed(m_lastError);
+        return;
+    }
 
+    qDebug() << "[NetworkManager] 通过 sudo ip link set 断开 4G 接口:" << cellDevice;
+
+    // sudo -n: 非交互模式，无免密权限时立即失败而非卡住等密码
     QStringList args;
-    args << "device" << "disconnect" << cellDevice;
+    args << "-n" << m_ipPath << "link" << "set" << cellDevice << "down";
 
     disconnect(m_process, nullptr, this, nullptr);
     connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, &NetworkManagerService::onCellularOpFinished);
 
-    m_process->start(m_nmcliPath, args);
+    m_process->start(m_sudoPath, args);
     m_pendingCellularOp = false;
 
     QTimer::singleShot(15000, this, [this]() {
         if (m_cellularStatus == CellularStatus::CellSearching) {
             m_process->kill();
-            qDebug() << "[NetworkManager] nmcli 断开 4G 接口超时，强制标记为禁用";
+            qDebug() << "[NetworkManager] ip link set down 4G 接口超时，强制标记为禁用";
             m_cellularOperator.clear();
             m_cellularIpAddress.clear();
             m_cellularSignal = 0;
@@ -1263,10 +1251,18 @@ void NetworkManagerService::onCellularOpFinished(int exitCode, QProcess::ExitSta
         }
         QTimer::singleShot(1000, this, &NetworkManagerService::refreshCellularStatus);
     } else {
+        // sudo 的报错（如"a password is required"）走 stderr，合并读取 stdout+stderr 定位根因
         QString err = QString::fromUtf8(m_process->readAllStandardOutput()).trimmed();
+        const QString errErr = QString::fromUtf8(m_process->readAllStandardError()).trimmed();
+        if (!errErr.isEmpty())
+            err += (err.isEmpty() ? QString() : QStringLiteral(" ")) + errErr;
         qWarning() << "[NetworkManager] 4G 操作失败:" << err;
 
-        if (err.contains(QStringLiteral("not found"))) {
+        if (err.contains(QStringLiteral("password is required"), Qt::CaseInsensitive) ||
+            err.contains(QStringLiteral("a terminal is required"), Qt::CaseInsensitive)) {
+            // sudoers 免密未配置（最常见）
+            setLastError(QStringLiteral("4G 控制权限不足，请配置 sudoers 免密"));
+        } else if (err.contains(QStringLiteral("not found"))) {
             setLastError(QStringLiteral("4G 模块未就绪或 SIM 卡未插入"));
         } else if (err.contains(QStringLiteral("SIM PIN"))) {
             setLastError(QStringLiteral("SIM 卡需要 PIN 码解锁"));

@@ -253,6 +253,8 @@ private:
     // 工具实际路径（构造时从候选列表中解析，兼容不同发行版）
     QString        m_nmcliPath;
     QString        m_mmcliPath;
+    QString        m_sudoPath;   // sudo（4G ip link set 提权用）
+    QString        m_ipPath;     // ip（iproute2，4G 接口强制 up/down）
 
     // 状态轮询定时器（每 10 秒刷新一次状态）
     QTimer        *m_statusPollTimer = nullptr;
