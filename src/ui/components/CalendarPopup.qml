@@ -62,11 +62,14 @@ Dialog {
         }
     }
 
-    // 面板打开时的透明遮罩：点 picker 外部区域关闭它
-    // 放在 yearMonthPicker 同级但先声明 → z 更低，被 picker 遮挡的部分不响应
+    // 面板打开时的透明遮罩：点 picker 外部区域关闭它。
+    // 注意：必须挂在 Dialog 自身而非 contentItem —— contentItem 是 Control 的
+    // 内容区域（padding 内），子项命中区域与视觉错位会导致点击全部落到遮罩上，
+    // 表现为"年月面板一点就关、无法选择"。挂在 root 上则覆盖整个 480×580 弹窗。
     MouseArea {
-        parent: root.contentItem
+        parent: root
         anchors.fill: parent
+        z: 10              // 高于 contentItem(日历)，低于 picker
         visible: yearMonthPicker.visible
         // 点击穿透：picker 覆盖区域由 picker 自己处理，其余区域关闭面板
         onClicked: yearMonthPicker.close()
@@ -339,11 +342,13 @@ Dialog {
     // ============================================================
     Item {
         id: yearMonthPicker
-        parent: root.contentItem
+        // 与遮罩同理：挂 Dialog 自身，坐标相对整个弹窗（480×580）
+        parent: root
         x: 16
         y: 122
         width: 448
         height: 340
+        z: 20              // 高于遮罩，保证面板可点
         visible: false
 
         // 0=月份视图, 1=年份视图
@@ -396,29 +401,41 @@ Dialog {
                 Layout.preferredHeight: 36
                 spacing: 0
 
-                Text {
-                    id: pickerTitleText
+                // 年份标题（可点，切到年份网格）。用固定尺寸 Rectangle 包裹，
+                // 避免 Text 在 RowLayout 中宽度塌缩导致 MouseArea 命中区为 0 点不中。
+                Rectangle {
+                    Layout.preferredWidth: yearTitleTxt.implicitWidth + 24
+                    Layout.preferredHeight: 44
                     Layout.alignment: Qt.AlignLeft | Qt.AlignVCenter
-                    font.pixelSize: 22
-                    font.bold: true
-                    font.family: Theme.fontFamilyUi
-                    color: Theme.colorTextPrimary
+                    radius: 8
+                    color: yearTitleMA.containsMouse ? "#F1F5F9" : "transparent"
 
-                    // 根据模式动态更新文本
-                    text: {
-                        if (pickerMode === 0)
-                            return pickerYear + "年"
-                        else
-                            return decadeStart + " – " + (decadeStart + 9)
+                    Text {
+                        id: yearTitleTxt
+                        anchors.centerIn: parent
+                        font.pixelSize: 22
+                        font.bold: true
+                        font.family: Theme.fontFamilyUi
+                        color: Theme.colorTextPrimary
+                        text: {
+                            if (yearMonthPicker.pickerMode === 0)
+                                return yearMonthPicker.pickerYear + "年 ▾"
+                            else
+                                return yearMonthPicker.decadeStart + " – " + (yearMonthPicker.decadeStart + 9)
+                        }
                     }
 
                     MouseArea {
+                        id: yearTitleMA
                         anchors.fill: parent
+                        hoverEnabled: true
                         onClicked: {
-                            if (pickerMode === 0) {
+                            console.log("[Calendar] 点年份标题, 当前 pickerMode=", yearMonthPicker.pickerMode)
+                            if (yearMonthPicker.pickerMode === 0) {
                                 // 月份模式：点年份 → 切换到年份模式
-                                decadeStart = Math.floor(pickerYear / 10) * 10
-                                pickerMode = 1
+                                yearMonthPicker.decadeStart = Math.floor(yearMonthPicker.pickerYear / 10) * 10
+                                yearMonthPicker.pickerMode = 1
+                                console.log("[Calendar] 已切到年份模式, pickerMode=", yearMonthPicker.pickerMode, "decadeStart=", yearMonthPicker.decadeStart)
                             }
                         }
                     }
@@ -426,14 +443,16 @@ Dialog {
 
                 Item { Layout.fillWidth: true }
 
-                // ▲ 上翻
+                // ▲ 上翻（Layout.preferredWidth/Height 防 RowLayout 塌缩）
                 Rectangle {
-                    width: 36; height: 28; radius: 6
+                    Layout.preferredWidth: 36
+                    Layout.preferredHeight: 44
+                    radius: 6
                     color: upMA.containsMouse ? "#F1F5F9" : "transparent"
                     Text {
                         anchors.centerIn: parent
                         text: "\u25B2"   // ▲
-                        font.pixelSize: 14
+                        font.pixelSize: 16
                         color: Theme.colorTextSecondary
                     }
                     MouseArea {
@@ -441,25 +460,28 @@ Dialog {
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: {
-                            if (pickerMode === 0) {
-                                pickerYear--
+                            console.log("[Calendar] 上翻, pickerMode=", yearMonthPicker.pickerMode)
+                            if (yearMonthPicker.pickerMode === 0) {
+                                yearMonthPicker.pickerYear--
                             } else {
-                                decadeStart -= 10
+                                yearMonthPicker.decadeStart -= 10
                             }
                         }
                     }
                 }
 
-                Item { width: 8; height: 1 }
+                Item { Layout.preferredWidth: 8; Layout.preferredHeight: 1 }
 
-                // ▼ 下翻
+                // ▼ 下翻（Layout.preferredWidth/Height 防 RowLayout 塌缩）
                 Rectangle {
-                    width: 36; height: 28; radius: 6
+                    Layout.preferredWidth: 36
+                    Layout.preferredHeight: 44
+                    radius: 6
                     color: downMA.containsMouse ? "#F1F5F9" : "transparent"
                     Text {
                         anchors.centerIn: parent
                         text: "\u25BC"   // ▼
-                        font.pixelSize: 14
+                        font.pixelSize: 16
                         color: Theme.colorTextSecondary
                     }
                     MouseArea {
@@ -467,10 +489,11 @@ Dialog {
                         anchors.fill: parent
                         hoverEnabled: true
                         onClicked: {
-                            if (pickerMode === 0) {
-                                pickerYear++
+                            console.log("[Calendar] 下翻, pickerMode=", yearMonthPicker.pickerMode)
+                            if (yearMonthPicker.pickerMode === 0) {
+                                yearMonthPicker.pickerYear++
                             } else {
-                                decadeStart += 10
+                                yearMonthPicker.decadeStart += 10
                             }
                         }
                     }
@@ -497,56 +520,55 @@ Dialog {
                 }
             }
 
-            // ===== 内容区域（StackLayout 切换月份/年份视图）=====
-            StackLayout {
+            // ===== 内容区域（月份/年份视图用 visible 互斥显隐）=====
+            // 不用 StackLayout：其非首项子视图在某些情况下拿不到尺寸导致内容空白。
+            Item {
                 id: pickerContent
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                currentIndex: pickerMode
 
-                // ===== 模式 0：月份视图（Repeater + Grid 避免GridView事件问题）=====
-                Item {
-                    Grid {
-                        id: monthGridInner
-                        anchors.fill: parent
-                        columns: 4
-                        spacing: 6
-                        verticalItemAlignment: Grid.AlignVCenter
-                        horizontalItemAlignment: Grid.AlignHCenter
+                // ===== 模式 0：月份视图（Repeater + Grid）=====
+                Grid {
+                    id: monthGridInner
+                    anchors.fill: parent
+                    visible: yearMonthPicker.pickerMode === 0
+                    columns: 4
+                    spacing: 6
+                    verticalItemAlignment: Grid.AlignVCenter
+                    horizontalItemAlignment: Grid.AlignHCenter
 
-                        Repeater {
-                            model: 12
-                            Rectangle {
-                                width: (monthGridInner.width - 18) / 4
-                                height: 52
-                                radius: 22
-                                color: {
-                                    if (index === root.viewMonth) return "#2563EB"
-                                    if (monthMA.containsMouse) return "#F1F5F9"
-                                    return "transparent"
-                                }
-                                border.color: index === root.viewMonth ? "#2563EB" : "transparent"
-                                border.width: index === root.viewMonth ? 0 : 1
+                    Repeater {
+                        model: 12
+                        Rectangle {
+                            width: (monthGridInner.width - 18) / 4
+                            height: 52
+                            radius: 22
+                            color: {
+                                if (index === root.viewMonth) return "#2563EB"
+                                if (monthMA.containsMouse) return "#F1F5F9"
+                                return "transparent"
+                            }
+                            border.color: index === root.viewMonth ? "#2563EB" : "transparent"
+                            border.width: index === root.viewMonth ? 0 : 1
 
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: (index + 1) + "月"
-                                    font.pixelSize: 20
-                                    font.family: Theme.fontFamilyUi
-                                    font.bold: (index === root.viewMonth)
-                                    color: (index === root.viewMonth) ? "#FFFFFF" : Theme.colorTextPrimary
-                                }
+                            Text {
+                                anchors.centerIn: parent
+                                text: (index + 1) + "月"
+                                font.pixelSize: 20
+                                font.family: Theme.fontFamilyUi
+                                font.bold: (index === root.viewMonth)
+                                color: (index === root.viewMonth) ? "#FFFFFF" : Theme.colorTextPrimary
+                            }
 
-                                MouseArea {
-                                    id: monthMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    onClicked: {
-                                        console.log("[Calendar] 选月份:", index + 1)
-                                        root.viewYear = pickerYear
-                                        root.viewMonth = index
-                                        yearMonthPicker.close()
-                                    }
+                            MouseArea {
+                                id: monthMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                onClicked: {
+                                    console.log("[Calendar] 选月份:", index + 1)
+                                    root.viewYear = yearMonthPicker.pickerYear
+                                    root.viewMonth = index
+                                    yearMonthPicker.close()
                                 }
                             }
                         }
@@ -554,55 +576,55 @@ Dialog {
                 }
 
                 // ===== 模式 1：年份视图（Repeater + Grid）=====
-                Item {
-                    Grid {
-                        id: yearGridInner
-                        anchors.fill: parent
-                        columns: 4
-                        spacing: 6
-                        verticalItemAlignment: Grid.AlignVCenter
-                        horizontalItemAlignment: Grid.AlignHCenter
+                Grid {
+                    id: yearGridInner
+                    anchors.fill: parent
+                    visible: yearMonthPicker.pickerMode === 1
+                    onVisibleChanged: console.log("[Calendar] 年份视图 visible=", visible, "宽=", width, "高=", height)
+                    columns: 4
+                    spacing: 6
+                    verticalItemAlignment: Grid.AlignVCenter
+                    horizontalItemAlignment: Grid.AlignHCenter
 
-                        Repeater {
-                            model: 12
-                            Rectangle {
-                                readonly property int yr: decadeStart - 1 + index
+                    Repeater {
+                        model: 12
+                        Rectangle {
+                            readonly property int yr: yearMonthPicker.decadeStart - 1 + index
 
-                                width: (yearGridInner.width - 18) / 4
-                                height: 52
-                                radius: 22
+                            width: (yearGridInner.width - 18) / 4
+                            height: 52
+                            radius: 22
+                            color: {
+                                if (yr === root.viewYear) return "#2563EB"
+                                if (yr >= yearMonthPicker.decadeStart && yr <= yearMonthPicker.decadeStart + 9 && yearMA.containsMouse) return "#F1F5F9"
+                                return "transparent"
+                            }
+                            border.color: yr === root.viewYear ? "#2563EB" : "transparent"
+                            border.width: yr === root.viewYear ? 0 : 1
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: parent.yr
+                                font.pixelSize: 20
+                                font.family: Theme.fontFamilyUi
+                                font.bold: (parent.yr === root.viewYear)
                                 color: {
-                                    if (yr === root.viewYear) return "#2563EB"
-                                    if (yr >= decadeStart && yr <= decadeStart + 9 && yearMA.containsMouse) return "#F1F5F9"
-                                    return "transparent"
+                                    if (parent.yr < yearMonthPicker.decadeStart || parent.yr > yearMonthPicker.decadeStart + 9)
+                                        return "#CBD5E1"
+                                    if (parent.yr === root.viewYear) return "#FFFFFF"
+                                    return Theme.colorTextPrimary
                                 }
-                                border.color: yr === root.viewYear ? "#2563EB" : "transparent"
-                                border.width: yr === root.viewYear ? 0 : 1
+                            }
 
-                                Text {
-                                    anchors.centerIn: parent
-                                    text: parent.yr
-                                    font.pixelSize: 20
-                                    font.family: Theme.fontFamilyUi
-                                    font.bold: (parent.yr === root.viewYear)
-                                    color: {
-                                        if (parent.yr < decadeStart || parent.yr > decadeStart + 9)
-                                            return "#CBD5E1"
-                                        if (parent.yr === root.viewYear) return "#FFFFFF"
-                                        return Theme.colorTextPrimary
-                                    }
-                                }
-
-                                MouseArea {
-                                    id: yearMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    enabled: parent.yr >= decadeStart && parent.yr <= decadeStart + 9
-                                    onClicked: {
-                                        console.log("[Calendar] 选年份:", parent.yr)
-                                        pickerYear = parent.yr
-                                        pickerMode = 0
-                                    }
+                            MouseArea {
+                                id: yearMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                enabled: parent.yr >= yearMonthPicker.decadeStart && parent.yr <= yearMonthPicker.decadeStart + 9
+                                onClicked: {
+                                    console.log("[Calendar] 选年份:", parent.yr)
+                                    yearMonthPicker.pickerYear = parent.yr
+                                    yearMonthPicker.pickerMode = 0
                                 }
                             }
                         }
