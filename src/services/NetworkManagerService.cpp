@@ -1416,7 +1416,7 @@ void NetworkManagerService::onCellularOpFinished(int exitCode, QProcess::ExitSta
             setCellularStatus(CellularStatus::CellDisabled);
             Q_EMIT cellularDisabled();
         }
-        QTimer::singleShot(1000, this, &NetworkManagerService::refreshCellularStatus);
+        refreshCellularStatus();  // 立即刷新，不等 1s 延迟
     } else {
         // sudo 的报错（如"a password is required"）走 stderr，合并读取 stdout+stderr 定位根因
         QString err = QString::fromUtf8(m_process->readAllStandardOutput()).trimmed();

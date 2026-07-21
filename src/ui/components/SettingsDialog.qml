@@ -42,18 +42,13 @@ Dialog {
         syncSwitches()
     }
 
-    // 防重入标志：程序赋值 checked 时置 true，避免 onToggled 误触发 setNetMode 循环
-    property bool syncing: false
-
-    // 根据 netMode 强制同步四个开关的 checked（用户点击会打断绑定，故用 JS 显式同步，
-    // 确保四个中始终只有一个为开，杜绝"全不选/多选"）
+    // 根据 netMode 强制同步四个开关的 checked（用 onClicked 替代 onToggled 后无需防重入标志，
+    // 因为 clicked 仅在用户点击时触发，程序赋值 checked 不会触发）
     function syncSwitches() {
-        syncing = true
         swWifiOnly.checked = (netMode === NetworkManager.WifiOnly)
         swCellOnly.checked = (netMode === NetworkManager.CellularOnly)
         swAllWifi.checked  = (netMode === NetworkManager.AllWifiPriority)
         swAllCell.checked  = (netMode === NetworkManager.AllCellularPriority)
-        syncing = false
     }
 
     // 打开时推导应高亮的模式（四个中必须选一个，默认全开优先4G）
@@ -285,10 +280,9 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swWifiOnly
-                        onToggled: {
-                            if (syncing) return
-                            if (checked) setNetMode(NetworkManager.WifiOnly)
-                            else syncSwitches()
+                        onClicked: {
+                            if (!checked) { checked = true; return }  // 不允许关闭当前模式（单选）
+                            setNetMode(NetworkManager.WifiOnly)
                         }
                     }
                 }
@@ -310,10 +304,9 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swCellOnly
-                        onToggled: {
-                            if (syncing) return
-                            if (checked) setNetMode(NetworkManager.CellularOnly)
-                            else syncSwitches()
+                        onClicked: {
+                            if (!checked) { checked = true; return }
+                            setNetMode(NetworkManager.CellularOnly)
                         }
                     }
                 }
@@ -335,10 +328,9 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swAllWifi
-                        onToggled: {
-                            if (syncing) return
-                            if (checked) setNetMode(NetworkManager.AllWifiPriority)
-                            else syncSwitches()
+                        onClicked: {
+                            if (!checked) { checked = true; return }
+                            setNetMode(NetworkManager.AllWifiPriority)
                         }
                     }
                 }
@@ -360,10 +352,9 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swAllCell
-                        onToggled: {
-                            if (syncing) return
-                            if (checked) setNetMode(NetworkManager.AllCellularPriority)
-                            else syncSwitches()
+                        onClicked: {
+                            if (!checked) { checked = true; return }
+                            setNetMode(NetworkManager.AllCellularPriority)
                         }
                     }
                 }
