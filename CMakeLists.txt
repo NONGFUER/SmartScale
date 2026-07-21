@@ -135,10 +135,12 @@ qt_add_big_resources(RCC_SOURCES app.qrc)
 target_sources(appSmartScale PRIVATE ${RCC_SOURCES})
 
 set(ONNXRUNTIME_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/onnxruntime-linux-aarch64-1.24.4")
+set(SHERPA_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rdparty/sherpa-onnx")
 
 target_include_directories(appSmartScale
     PRIVATE
     "${ONNXRUNTIME_DIR}/include"
+    "${SHERPA_DIR}"                  # sherpa-onnx/c-api.h（仅编译期类型，运行时 dlopen 加载）
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
     "${CMAKE_CURRENT_BINARY_DIR}/generated"
 )
@@ -160,6 +162,7 @@ target_link_libraries(appSmartScale
         Qt6::Concurrent
         Qt6::Mqtt
         pthread
+        dl              # VoiceSpeaker: dlopen/dlsym 加载 sherpa-onnx (RTLD_LOCAL 隔离 ORT)
         onnxruntime
 )
 

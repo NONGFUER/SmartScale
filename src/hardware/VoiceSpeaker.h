@@ -4,10 +4,58 @@
 #include <QObject>
 #include <QProcess>
 #include <QString>
-#include <QTimer>
+#include <QThread>
+#include <atomic>
 
-class VoiceSpeaker : public QObject
-{
+// sherpa-onnx C API 前向声明（通过 dlopen RTLD_LOCAL 动态加载，避免 ORT 1.27 与项目 1.24.4 符号冲突）
+struct SherpaOnnxOfflineTts;
+struct SherpaOnnxOfflineTtsConfig;
+struct SherpaOnnxGenerationConfig;
+struct SherpaOnnxGeneratedAudio;
+
+/// 合成工作线程：持有 sherpa-onnx 引擎（本线程创建/销毁），执行 TTS 合成
+class TtsSynthWorker : public QObject {
+    Q_OBJECT
+public:
+    explicit TtsSynthWorker(QObject *parent = nullptr);
+    ~TtsSynthWorker();
+
+    /// 初始化引擎（必须在本线程调用）。成功返回 true
+    bool initializeEngine();
+
+public Q_SLOTS:
+    /// 执行合成任务（由主线程通过 signal-slot 投递到本线程）
+    void synthesize(const QString &text, uint32_t generation);
+
+Q_SIGNALS:
+    void audioReady(QByteArray pcm16Data, int sampleRate, uint32_t generation);
+    void synthError(QString message, uint32_t generation);
+
+private:
+    // dlopen 句柄（RTLD_LOCAL 隔离符号）
+    void *m_sherpaHandle;
+
+    // dlsym 函数指针类型
+    using FnCreateOfflineTts = const SherpaOnnxOfflineTts *(*)(const SherpaOnnxOfflineTtsConfig *);
+    using FnDestroyOfflineTts = void (*)(const SherpaOnnxOfflineTts *);
+    using FnGenerateWithConfig = const SherpaOnnxGeneratedAudio *(*)(
+        const SherpaOnnxOfflineTts *, const char *,
+        const SherpaOnnxGenerationConfig *,
+        int32_t (*)(const float *, int32_t, float, void *), void *);
+    using FnDestroyGeneratedAudio = void (*)(const SherpaOnnxGeneratedAudio *);
+
+    FnCreateOfflineTts     fnCreate;
+    FnDestroyOfflineTts    fnDestroy;
+    FnGenerateWithConfig   fnGenerate;
+    FnDestroyGeneratedAudio fnDestroyAudio;
+
+    // 引擎句柄（仅在本线程有效）
+    const SherpaOnnxOfflineTts *m_engine;
+
+    bool resolveSymbols();
+};
+
+class VoiceSpeaker : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool isSpeaking READ isSpeaking NOTIFY speakingChanged)
     Q_PROPERTY(bool isReady READ isReady NOTIFY readyChanged)
@@ -16,15 +64,11 @@ public:
     explicit VoiceSpeaker(QObject *parent = nullptr);
     ~VoiceSpeaker();
 
-    // Q_INVOKABLE 方法供 QML 调用
     Q_INVOKABLE void speak(const QString &text);
     Q_INVOKABLE void stop();
-    Q_INVOKABLE void warmup();  // 预热：开机加载模型到 OS page cache，避免首次语音延迟
-
-    // 检查 TTS 系统是否就绪（检查 piper 程序和模型文件）
+    Q_INVOKABLE void warmup();
     Q_INVOKABLE bool checkSystemReady();
 
-    // 属性读取器
     bool isSpeaking() const { return m_isSpeaking; }
     bool isReady() const { return m_isReady; }
 
@@ -35,25 +79,31 @@ Q_SIGNALS:
     void speakFinished();
     void errorOccurred(const QString &errorMessage);
 
+    // 内部信号（投递合成任务到工作线程）
+    void requestSynthesize(const QString &text, uint32_t generation);
+
 private Q_SLOTS:
-    void onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus);
-    void onProcessErrorOccurred(QProcess::ProcessError error);
-    void onProcessReadyReadStandardError();
+    void onAudioReady(QByteArray pcm16Data, int sampleRate, uint32_t generation);
+    void onSynthError(QString message, uint32_t generation);
+    void onAplayFinished(int exitCode, QProcess::ExitStatus exitStatus);
+    void onAplayErrorOccurred(QProcess::ProcessError error);
 
 private:
-    void initializePiperPath();
-    bool validatePiperInstallation();
-    void cleanupProcess();
-    QString sanitizeText(const QString &text) const;
+    void startAplay(const QByteArray &pcm16Data);
+    void stopAplay();
 
-private:
-    QProcess *m_process;
-    QString m_piperPath;
-    QString m_modelPath;
-    QString m_configPath;
+    // 合成线程
+    QThread m_synthThread;
+    TtsSynthWorker *m_worker;   // owned by m_synthThread
+
+    // 播放进程
+    QProcess *m_aplayProcess;
+
+    // 取消代际：每次 speak/stop 递增，callback 中比对判断是否已取消
+    std::atomic<uint32_t> m_generation;
+
     bool m_isSpeaking;
     bool m_isReady;
-    QTimer *m_healthCheckTimer;
 };
 
 #endif // VOICESPEAKER_H

@@ -1,323 +1,432 @@
 #include "VoiceSpeaker.h"
 #include <QDebug>
 #include <QCoreApplication>
-#include <QDir>
-#include <QStandardPaths>
-#include <QFileInfo>
-#include <QRegularExpression>
+#include <cmath>
+#include <dlfcn.h>
 
+// 使用官方头文件确保结构体布局与 sherpa-onnx 1.13.x 二进制完全一致
+// 仅用于编译期类型信息；运行时仍通过 dlopen(RTLD_LOCAL) 隔离加载，不产生链接依赖
+#include "c-api.h"
+
+// ============================================================
+// 模型路径常量（集中管理）
+// ============================================================
+static const QString MODEL_DIR("/home/sjwu/matcha-icefall-zh-baker");
+static const QString SHERPA_SO_PATH(
+    "/home/sjwu/.local/lib/python3.13/site-packages/sherpa_onnx/lib/libsherpa-onnx-c-api.so");
+
+// ============================================================
+// TtsSynthWorker 实现 — 运行在独立合成线程
+// ============================================================
+TtsSynthWorker::TtsSynthWorker(QObject *parent)
+    : QObject(parent)
+    , m_sherpaHandle(nullptr)
+    , fnCreate(nullptr)
+    , fnDestroy(nullptr)
+    , fnGenerate(nullptr)
+    , fnDestroyAudio(nullptr)
+    , m_engine(nullptr)
+{
+}
+
+TtsSynthWorker::~TtsSynthWorker()
+{
+    if (m_engine && fnDestroy) {
+        fnDestroy(m_engine);
+        m_engine = nullptr;
+    }
+    if (m_sherpaHandle) {
+        dlclose(m_sherpaHandle);
+        m_sherpaHandle = nullptr;
+    }
+}
+
+bool TtsSynthWorker::resolveSymbols()
+{
+    fnCreate        = (FnCreateOfflineTts)dlsym(m_sherpaHandle, "SherpaOnnxCreateOfflineTts");
+    fnDestroy       = (FnDestroyOfflineTts)dlsym(m_sherpaHandle, "SherpaOnnxDestroyOfflineTts");
+    fnGenerate      = (FnGenerateWithConfig)dlsym(m_sherpaHandle, "SherpaOnnxOfflineTtsGenerateWithConfig");
+    fnDestroyAudio  = (FnDestroyGeneratedAudio)dlsym(m_sherpaHandle, "SherpaOnnxDestroyOfflineTtsGeneratedAudio");
+
+    if (!fnCreate || !fnDestroy || !fnGenerate || !fnDestroyAudio) {
+        qWarning() << "[TtsWorker] dlsym failed:" << dlerror();
+        return false;
+    }
+    return true;
+}
+
+bool TtsSynthWorker::initializeEngine()
+{
+    Q_ASSERT(QThread::currentThread() == thread());
+
+    static const QByteArray soPath = SHERPA_SO_PATH.toUtf8();
+    static const QByteArray sherpaLibDir = "/home/sjwu/.local/lib/python3.13/site-packages/sherpa_onnx/lib";
+
+    qDebug() << "[TtsWorker] === TTS Engine Init Start ===";
+    qDebug() << "[TtsWorker] soPath:" << soPath;
+
+    // 注入 sherpa 库目录到 LD_LIBRARY_PATH，确保 dlopen 能解析 sherpa 自带的 libonnxruntime.so
+    //（sherpa 自带 ORT 1.27，与项目 ORT 1.24.4 不同；RTLD_LOCAL 隔离全局符号）
+    QByteArray oldLdPath = qgetenv("LD_LIBRARY_PATH");
+    QByteArray newLdPath = sherpaLibDir;
+    if (!oldLdPath.isEmpty()) {
+        newLdPath += ":" + oldLdPath;
+    }
+    qputenv("LD_LIBRARY_PATH", newLdPath);
+    qDebug() << "[TtsWorker] LD_LIBRARY_PATH updated with" << sherpaLibDir;
+
+    // dlopen RTLD_LOCAL: 隔离 sherpa 自带的 ORT 1.27 符号，
+    // 避免与项目链接的 ORT 1.24.4 全局符号冲突
+    m_sherpaHandle = dlopen(soPath.constData(), RTLD_NOW | RTLD_LOCAL);
+
+    // 恢复原 LD_LIBRARY_PATH（避免影响其他组件）
+    if (oldLdPath.isEmpty()) {
+        qunsetenv("LD_LIBRARY_PATH");
+    } else {
+        qputenv("LD_LIBRARY_PATH", oldLdPath);
+    }
+
+    if (!m_sherpaHandle) {
+        qWarning() << "[TtsWorker] dlopen FAILED:" << dlerror();
+        return false;
+    }
+    qDebug() << "[TtsWorker] dlopen OK";
+
+    if (!resolveSymbols()) {
+        qWarning() << "[TtsWorker] resolveSymbols FAILED";
+        dlclose(m_sherpaHandle);
+        m_sherpaHandle = nullptr;
+        return false;
+    }
+    qDebug() << "[TtsWorker] all symbols resolved";
+
+    // 路径字符串必须用静态存储（config 持有 const char* 指针，不能指向临时）
+    // qPrintable() 返回的 char* 在语句结束时释放，导致悬垂指针
+    static const QByteArray pathAcoustic = (MODEL_DIR + "/model-steps-3.onnx").toUtf8();
+    static const QByteArray pathVocoder   = (MODEL_DIR + "/vocos-22khz-univ.onnx").toUtf8();
+    static const QByteArray pathLexicon   = (MODEL_DIR + "/lexicon.txt").toUtf8();
+    static const QByteArray pathTokens    = (MODEL_DIR + "/tokens.txt").toUtf8();
+    static const QByteArray pathDataDir   = MODEL_DIR.toUtf8();
+
+    // 构建 Matcha-TTS 配置
+    SherpaOnnxOfflineTtsConfig config;
+    memset(&config, 0, sizeof(config));
+
+    config.model.num_threads = 2;          // RPi 级 CPU，避让 UI/相机线程
+    config.model.debug = 1;                // 开 debug 让 sherpa 打印拒绝原因到 stderr
+    config.model.provider = "cpu";
+    config.model.matcha.acoustic_model = pathAcoustic.constData();
+    config.model.matcha.vocoder       = pathVocoder.constData();
+    config.model.matcha.lexicon        = pathLexicon.constData();
+    config.model.matcha.tokens         = pathTokens.constData();
+    config.model.matcha.data_dir       = nullptr;                  // 中文模型不填（espeak 路径）
+    config.model.matcha.noise_scale    = 0.667f;
+    config.model.matcha.length_scale   = 0.92f;
+    config.model.matcha.dict_dir       = pathDataDir.constData();  // 中文分词字典目录
+    config.max_num_sentences = 1;
+    config.silence_scale      = 0.3f;
+
+    qDebug() << "[TtsWorker] Creating Matcha-TTS engine (Baker)...";
+    qDebug() << "[TtsWorker] acoustic:" << pathAcoustic;
+    qDebug() << "[TtsWorker] vocoder:" << pathVocoder;
+    qDebug() << "[TtsWorker] lexicon:" << pathLexicon;
+    qDebug() << "[TtsWorker] tokens:" << pathTokens;
+    qDebug() << "[TtsWorker] dict_dir:" << pathDataDir;
+    m_engine = fnCreate(&config);
+    if (!m_engine) {
+        qWarning() << "[TtsWorker] SherpaOnnxCreateOfflineTts returned NULL";
+        dlclose(m_sherpaHandle);
+        m_sherpaHandle = nullptr;
+        return false;
+    }
+
+    qDebug() << "[TtsWorker] Matcha-TTS engine created successfully";
+    return true;
+}
+
+// 合成进度回调：返回 0 终止合成，返回 1 继续
+// arg 是指向 std::atomic<uint32_t> 的指针（代际取消标志）
+static int32_t synthProgressCallback(const float * /*samples*/, int32_t /*n*/,
+                                     float /*progress*/, void *arg)
+{
+    auto currentGen = static_cast<std::atomic<uint32_t> *>(arg)->load(std::memory_order_relaxed);
+    static uint32_t lastReportedGen = 0;
+    // 只在代际变化时打一次 log（避免刷屏）
+    if (currentGen != lastReportedGen) {
+        lastReportedGen = currentGen;
+        qDebug() << "[TtsWorker] Synth cancelled: generation changed to" << currentGen;
+    }
+    return 0; // 始终让调用方检查代际
+}
+
+void TtsSynthWorker::synthesize(const QString &text, uint32_t generation)
+{
+    Q_ASSERT(QThread::currentThread() == thread());
+
+    if (!m_engine || !fnGenerate) {
+        Q_EMIT synthError("TTS 引擎未初始化", generation);
+        return;
+    }
+
+    QByteArray utf8Text = text.toUtf8();
+    if (utf8Text.trimmed().isEmpty()) {
+        return;
+    }
+
+    qDebug() << "[TtsWorker] Synthesizing:" << text;
+
+    SherpaOnnxGenerationConfig genCfg;
+    memset(&genCfg, 0, sizeof(genCfg));
+    genCfg.sid           = 0;
+    genCfg.speed         = 1.0f;
+    genCfg.silence_scale = 0.3f;
+
+    const SherpaOnnxGeneratedAudio *audio = fnGenerate(
+        m_engine, utf8Text.constData(), &genCfg,
+        synthProgressCallback, &generation);
+
+    if (!audio || !audio->samples || audio->n <= 0) {
+        qWarning() << "[TtsWorker] Generate returned NULL or empty audio";
+        Q_EMIT synthError("语音合成失败", generation);
+        return;
+    }
+
+    // 峰值归一化 + float → int16 PCM（复用 tts_worker.py 已验证逻辑）
+    int32_t n = audio->n;
+    const float *samples = audio->samples;
+    float peak = 0.0f;
+    for (int32_t i = 0; i < n; ++i) {
+        float absVal = std::abs(samples[i]);
+        if (absVal > peak) peak = absVal;
+    }
+
+    QByteArray pcm16;
+    pcm16.resize(n * sizeof(int16_t));
+    auto *dst = reinterpret_cast<int16_t *>(pcm16.data());
+    if (peak > 0.0f) {
+        float invPeak = 32767.0f / peak;
+        for (int32_t i = 0; i < n; ++i) {
+            dst[i] = static_cast<int16_t>(std::clamp(samples[i] * invPeak, -32768.0f, 32767.0f));
+        }
+    } else {
+        memset(dst, 0, n * sizeof(int16_t));
+    }
+
+    fnDestroyAudio(audio);
+
+    qDebug() << "[TtsWorker] Synthesis done:" << n << "samples @"
+             << audio->sample_rate << "Hz, peak=" << peak;
+
+    Q_EMIT audioReady(pcm16, audio->sample_rate, generation);
+}
+
+// ============================================================
+// VoiceSpeaker 实现 — 主线程（对外接口不变）
+// ============================================================
 VoiceSpeaker::VoiceSpeaker(QObject *parent)
     : QObject(parent)
-    , m_process(nullptr)
+    , m_aplayProcess(nullptr)
+    , m_generation(0)
     , m_isSpeaking(false)
     , m_isReady(false)
-    , m_healthCheckTimer(nullptr)
 {
-    initializePiperPath();
-    m_isReady = validatePiperInstallation();
-    
-    if (m_isReady) {
-        qDebug() << "[VoiceSpeaker] Piper TTS system initialized successfully";
-        qDebug() << "[VoiceSpeaker] Model:" << m_modelPath;
-    } else {
-        qWarning() << "[VoiceSpeaker] Piper TTS system not ready";
-    }
-    
-    m_healthCheckTimer = new QTimer(this);
-    connect(m_healthCheckTimer, &QTimer::timeout, this, [this]() {
-        if (!m_isReady) {
-            m_isReady = validatePiperInstallation();
-            if (m_isReady) {
-                Q_EMIT readyChanged();
+    // 创建并启动合成工作线程
+    m_worker = new TtsSynthWorker();
+    m_worker->moveToThread(&m_synthThread);
+
+    // 主线程 → 工作线程：投递合成任务
+    connect(this, &VoiceSpeaker::requestSynthesize,
+            m_worker, &TtsSynthWorker::synthesize);
+
+    // 工作线程 → 主线程：返回合成结果
+    connect(m_worker, &TtsSynthWorker::audioReady,
+            this, &VoiceSpeaker::onAudioReady, Qt::QueuedConnection);
+    connect(m_worker, &TtsSynthWorker::synthError,
+            this, &VoiceSpeaker::onSynthError, Qt::QueuedConnection);
+
+    m_synthThread.start();
+
+    // 异步初始化引擎（在工作线程中执行，不阻塞主线程）
+    QMetaObject::invokeMethod(m_worker, [this]() {
+        bool ok = m_worker->initializeEngine();
+        QMetaObject::invokeMethod(this, [this, ok]() {
+            m_isReady = ok;
+            if (ok) {
+                qDebug() << "[VoiceSpeaker] Sherpa-onnx Matcha TTS ready";
+            } else {
+                qWarning() << "[VoiceSpeaker] Sherpa-onnx Matcha TTS init FAILED";
             }
-        }
+            Q_EMIT readyChanged();
+        }, Qt::QueuedConnection);
     });
-    // 每30秒检查一次系统就绪状态
-    m_healthCheckTimer->start(30000);
 }
 
 VoiceSpeaker::~VoiceSpeaker()
 {
     stop();
-    cleanupProcess();
-}
-
-void VoiceSpeaker::initializePiperPath()
-{
-    // 默认 piper 安装路径
-    m_piperPath = "/home/sjwu/piper/piper";
-    
-    // 模型文件路径
-    m_modelPath = "/home/sjwu/piper/zh_CN-huayan-medium.onnx";
-    m_configPath = "/home/sjwu/piper/zh_CN-huayan-medium.onnx.json";
-    
-    // 检查文件是否存在
-    QFileInfo piperFile(m_piperPath);
-    QFileInfo modelFile(m_modelPath);
-    QFileInfo configFile(m_configPath);
-    
-    if (!piperFile.exists()) {
-        qWarning() << "[VoiceSpeaker] Piper executable not found at:" << m_piperPath;
-    }
-    if (!modelFile.exists()) {
-        qWarning() << "[VoiceSpeaker] Model file not found at:" << m_modelPath;
-    }
-    if (!configFile.exists()) {
-        qWarning() << "[VoiceSpeaker] Config file not found at:" << m_configPath;
-    }
-}
-
-bool VoiceSpeaker::validatePiperInstallation()
-{
-    QFileInfo piperFile(m_piperPath);
-    QFileInfo modelFile(m_modelPath);
-    QFileInfo configFile(m_configPath);
-    
-    if (!piperFile.exists() || !modelFile.exists() || !configFile.exists()) {
-        return false;
-    }
-    
-    // 检查 piper 是否可执行
-    if (!piperFile.isExecutable()) {
-        qWarning() << "[VoiceSpeaker] Piper is not executable:" << m_piperPath;
-        return false;
-    }
-    
-    // 检查音频播放器是否可用
-    QProcess checkProcess;
-    checkProcess.start("/bin/bash", QStringList() << "-c" << "command -v aplay");
-    if (!checkProcess.waitForFinished(1000)) {
-        qWarning() << "[VoiceSpeaker] Failed to check for aplay";
-        return false;
-    }
-    if (checkProcess.exitCode() != 0) {
-        qWarning() << "[VoiceSpeaker] aplay not found. Audio playback may not work.";
-        // 不返回失败，因为仍然可以合成语音（只是无法播放）
-    }
-    
-    return true;
-}
-
-QString VoiceSpeaker::sanitizeText(const QString &text) const
-{
-    // 移除可能影响命令行的特殊字符
-    QString sanitized = text;
-    sanitized.replace("\"", "'");
-    sanitized.replace("`", "");
-    sanitized.replace("$", "");
-    sanitized.replace("\\", " ");
-    sanitized.replace("\n", ". ");
-    sanitized.replace("\r", "");
-    
-    // 限制长度，避免命令行过长
-    const int maxLength = 1000;
-    if (sanitized.length() > maxLength) {
-        sanitized = sanitized.left(maxLength) + "...";
-    }
-    
-    return sanitized.trimmed();
+    stopAplay();
+    m_synthThread.quit();
+    m_synthThread.wait(5000);
+    delete m_worker;
 }
 
 void VoiceSpeaker::speak(const QString &text)
 {
+    if (text.trimmed().isEmpty()) {
+        return;
+    }
+
+    // 取消正在进行的旧合成+播放
     if (m_isSpeaking) {
-        qDebug() << "[VoiceSpeaker] Already speaking, stopping current speech";
         stop();
-        // 给一点时间清理
         QCoreApplication::processEvents();
     }
-    
+
     if (!m_isReady) {
         qWarning() << "[VoiceSpeaker] TTS system not ready";
-        Q_EMIT errorOccurred("语音合成系统未就绪，请检查 Piper TTS 安装");
+        Q_EMIT errorOccurred("语音合成系统未就绪");
         return;
     }
-    
-    QString sanitizedText = sanitizeText(text);
-    if (sanitizedText.isEmpty()) {
-        qWarning() << "[VoiceSpeaker] Text is empty after sanitization";
-        return;
-    }
-    
-    qDebug() << "[VoiceSpeaker] Speaking text:" << sanitizedText;
-    
-    cleanupProcess();
-    m_process = new QProcess(this);
-    
-    connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-            this, &VoiceSpeaker::onProcessFinished);
-    connect(m_process, &QProcess::errorOccurred,
-            this, &VoiceSpeaker::onProcessErrorOccurred);
-    connect(m_process, &QProcess::readyReadStandardError,
-            this, &VoiceSpeaker::onProcessReadyReadStandardError);
-    
-    // 使用 bash 管道：将文本传递给 piper，然后将原始音频传递给 aplay
-    // 注意：需要对文本进行适当的转义，以安全地嵌入到 bash 命令中
-    QString escapedText = sanitizedText;
-    escapedText.replace("'", "'\"'\"'");  // 转义单引号：' -> '"'"'
-    
-    // 构建完整的 shell 命令
-    QString shellCommand = QString(
-        "echo '%1' | '%2' --model '%3' --config '%4' --output_raw 2>/dev/null | "
-        "aplay -r 22050 -f S16_LE -c 1 2>/dev/null"
-    ).arg(escapedText, m_piperPath, m_modelPath, m_configPath);
-    
-    qDebug() << "[VoiceSpeaker] Executing command:" << shellCommand;
-    
-    // 设置环境变量，确保 piper 能找到依赖库
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    env.insert("LD_LIBRARY_PATH", "/home/sjwu/piper:" + env.value("LD_LIBRARY_PATH"));
-    m_process->setProcessEnvironment(env);
-    
-    // 启动 bash 进程执行管道命令
-    m_process->start("/bin/bash", QStringList() << "-c" << shellCommand);
-    
-    if (!m_process->waitForStarted(3000)) {
-        qWarning() << "[VoiceSpeaker] Failed to start speech process";
-        Q_EMIT errorOccurred("无法启动语音播放进程");
-        cleanupProcess();
-        return;
-    }
-    
+
+    // 递增代际（使旧的 callback 检测到取消）
+    uint32_t gen = m_generation.fetch_add(1) + 1;
+
+    qDebug() << "[VoiceSpeaker] speak:" << text << "gen=" << gen;
+
     m_isSpeaking = true;
     Q_EMIT speakingChanged();
     Q_EMIT speakStarted();
-    
-    qDebug() << "[VoiceSpeaker] Speech started successfully";
-}
 
-void VoiceSpeaker::warmup()
-{
-    if (!m_isReady) {
-        qDebug() << "[VoiceSpeaker] warmup skipped, system not ready";
-        return;
-    }
-    qDebug() << "[VoiceSpeaker] warmup: 预加载 piper 模型到内存缓存（不出声）";
-    QProcess *w = new QProcess(this);
-    // 输出到 /dev/null 不出声，仅触发 piper 加载模型 + onnxruntime .so 到 OS page cache
-    QString cmd = QString(
-        "echo '。' | '%1' --model '%2' --config '%3' --output_raw > /dev/null 2>&1"
-    ).arg(m_piperPath, m_modelPath, m_configPath);
-    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
-    env.insert("LD_LIBRARY_PATH", "/home/sjwu/piper:" + env.value("LD_LIBRARY_PATH"));
-    w->setProcessEnvironment(env);
-    w->start("/bin/bash", QStringList() << "-c" << cmd);
-    // 预热进程异步，完成后自清理
-    connect(w, &QProcess::finished, this, [w]() {
-        qDebug() << "[VoiceSpeaker] warmup 完成，模型已缓存";
-        w->deleteLater();
-    });
-    connect(w, &QProcess::errorOccurred, this, [w](QProcess::ProcessError) {
-        qWarning() << "[VoiceSpeaker] warmup 进程错误";
-        w->deleteLater();
-    });
+    // 投递到合成线程
+    Q_EMIT requestSynthesize(text, gen);
 }
 
 void VoiceSpeaker::stop()
 {
-    if (m_process && m_process->state() != QProcess::NotRunning) {
-        qDebug() << "[VoiceSpeaker] Stopping speech";
-        m_process->terminate();
-        if (!m_process->waitForFinished(1000)) {
-            m_process->kill();
-        }
-    }
-    
+    qDebug() << "[VoiceSpeaker] stop requested";
+
+    // 递增代际 → 合成线程的 progress callback 会检测到变化并终止
+    m_generation.fetch_add(1);
+
+    // 立即终止播放进程
+    stopAplay();
+
     if (m_isSpeaking) {
         m_isSpeaking = false;
         Q_EMIT speakingChanged();
         Q_EMIT speakFinished();
     }
+}
+
+void VoiceSpeaker::warmup()
+{
+    // 引擎常驻后无需预热 page cache；保留接口兼容 QML 调用
+    qDebug() << "[VoiceSpeaker] warmup: engine is resident, no-op";
 }
 
 bool VoiceSpeaker::checkSystemReady()
 {
-    bool wasReady = m_isReady;
-    m_isReady = validatePiperInstallation();
-    
-    if (m_isReady != wasReady) {
-        Q_EMIT readyChanged();
-    }
-    
-    return m_isReady;
+    return m_isReady;  // isReady 由引擎异步初始化结果决定
 }
 
-void VoiceSpeaker::onProcessFinished(int exitCode, QProcess::ExitStatus exitStatus)
+// ── 播放控制（主线程） ──
+
+void VoiceSpeaker::startAplay(const QByteArray &pcm16Data)
+{
+    stopAplay();
+
+    m_aplayProcess = new QProcess(this);
+    connect(m_aplayProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, &VoiceSpeaker::onAplayFinished);
+    connect(m_aplayProcess, &QProcess::errorOccurred,
+            this, &VoiceSpeaker::onAplayErrorOccurred);
+
+    // aplay 仅播放裸 PCM stdin，命令固定不含文本（安全）
+    m_aplayProcess->start("aplay", QStringList({
+        "-r", "22050",
+        "-f", "S16_LE",
+        "-c", "1"
+    }));
+
+    if (!m_aplayProcess->waitForStarted(2000)) {
+        qWarning() << "[VoiceSpeaker] aplay failed to start";
+        Q_EMIT errorOccurred("音频播放器启动失败");
+        delete m_aplayProcess;
+        m_aplayProcess = nullptr;
+        return;
+    }
+
+    m_aplayProcess->write(pcm16Data);
+    m_aplayProcess->closeWriteChannel();
+}
+
+void VoiceSpeaker::stopAplay()
+{
+    if (m_aplayProcess && m_aplayProcess->state() != QProcess::NotRunning) {
+        m_aplayProcess->terminate();
+        if (!m_aplayProcess->waitForFinished(500)) {
+            m_aplayProcess->kill();
+        }
+    }
+}
+
+void VoiceSpeaker::onAplayFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     Q_UNUSED(exitStatus)
-    
-    qDebug() << "[VoiceSpeaker] Piper process finished with exit code:" << exitCode;
-    
+
+    if (m_isSpeaking) {
+        qDebug() << "[VoiceSpeaker] aplay finished, exitCode=" << exitCode;
+        m_isSpeaking = false;
+        Q_EMIT speakingChanged();
+        Q_EMIT speakFinished();
+    }
+}
+
+void VoiceSpeaker::onAplayErrorOccurred(QProcess::ProcessError error)
+{
+    qWarning() << "[VoiceSpeaker] aplay error:" << error;
+
     if (m_isSpeaking) {
         m_isSpeaking = false;
         Q_EMIT speakingChanged();
         Q_EMIT speakFinished();
     }
-    
-    cleanupProcess();
 }
 
-void VoiceSpeaker::onProcessErrorOccurred(QProcess::ProcessError error)
+// ── 合成回调（主线程，QueuedConnection） ──
+
+void VoiceSpeaker::onAudioReady(QByteArray pcm16Data, int sampleRate, uint32_t generation)
 {
-    QString errorMsg;
-    switch (error) {
-    case QProcess::FailedToStart:
-        errorMsg = "语音合成进程启动失败，请检查 Piper TTS 安装";
-        break;
-    case QProcess::Crashed:
-        errorMsg = "语音合成进程意外崩溃";
-        break;
-    case QProcess::Timedout:
-        errorMsg = "语音合成进程超时";
-        break;
-    case QProcess::WriteError:
-        errorMsg = "写入语音数据失败";
-        break;
-    case QProcess::ReadError:
-        errorMsg = "读取语音数据失败";
-        break;
-    default:
-        errorMsg = "未知的语音合成错误";
-        break;
+    Q_UNUSED(sampleRate)
+
+    // 代际检查：如果已有更新的 speak/stop，丢弃过期结果
+    if (generation != m_generation.load(std::memory_order_relaxed)) {
+        qDebug() << "[VoiceSpeaker] Dropping stale audio: gen" << generation
+                 << "!= current" << m_generation.load();
+        return;
     }
-    
-    qWarning() << "[VoiceSpeaker] Process error:" << errorMsg;
-    Q_EMIT errorOccurred(errorMsg);
-    
+
+    if (!m_isSpeaking) {
+        return;  // 已经被 stop 了
+    }
+
+    qDebug() << "[VoiceSpeaker] Playing audio, size=" << pcm16Data.size() << "bytes";
+    startAplay(pcm16Data);
+}
+
+void VoiceSpeaker::onSynthError(QString message, uint32_t generation)
+{
+    // 同样做代际检查
+    if (generation != m_generation.load(std::memory_order_relaxed)) {
+        return;  // 过期错误，忽略
+    }
+
+    qWarning() << "[VoiceSpeaker] Synth error:" << message;
+    Q_EMIT errorOccurred(message);
+
     if (m_isSpeaking) {
         m_isSpeaking = false;
         Q_EMIT speakingChanged();
         Q_EMIT speakFinished();
-    }
-    
-    cleanupProcess();
-}
-
-void VoiceSpeaker::onProcessReadyReadStandardError()
-{
-    if (m_process) {
-        QByteArray errorData = m_process->readAllStandardError();
-        QString errorStr = QString::fromUtf8(errorData).trimmed();
-        if (!errorStr.isEmpty()) {
-            qWarning() << "[VoiceSpeaker] Piper stderr:" << errorStr;
-            // 如果错误包含关键信息，发送信号
-            if (errorStr.contains("error", Qt::CaseInsensitive) ||
-                errorStr.contains("failed", Qt::CaseInsensitive) ||
-                errorStr.contains("not found", Qt::CaseInsensitive)) {
-                Q_EMIT errorOccurred("语音合成错误: " + errorStr);
-            }
-        }
-    }
-}
-
-void VoiceSpeaker::cleanupProcess()
-{
-    if (m_process) {
-        if (m_process->state() != QProcess::NotRunning) {
-            m_process->terminate();
-            m_process->waitForFinished(100);
-        }
-        m_process->deleteLater();
-        m_process = nullptr;
     }
 }
