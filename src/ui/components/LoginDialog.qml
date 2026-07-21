@@ -71,6 +71,12 @@ Dialog {
         target: BackendAuth
         function onLoginSuccess() {
             loginLoadingOverlay.close()
+            // 快捷登录成功后记住密码，供下次自动登录
+            if (loginMode === 1 && pendingQuickUserCode !== "") {
+                BackendAuth.rememberHistoryPassword(pendingQuickUserCode, pendingQuickPassword)
+                pendingQuickUserCode = ""
+                pendingQuickPassword = ""
+            }
             loginDialog.close()
         }
         function onLoginFailed(errorMsg) {  // 登录失败时显示错误提示
@@ -106,28 +112,26 @@ Dialog {
     function doLogin() {
         errorText.opacity = 0
 
-        // 快捷登录模式：使用选中的历史账号 + 记住的密码直接登录
+        // 快捷登录模式：下拉选择账号 + 手动输入密码（不记住密码）
         if (loginMode === 1) {
-            if (selectedHistoryIndex < 0) {
+            if (historyCombo.currentIndex < 0) {
                 errorText.text = "请选择要登录的账号"
                 errorAnim.start()
                 errorText.opacity = 1
                 return
             }
-            var item = BackendAuth.loginHistory[selectedHistoryIndex]
-            if (BackendAuth.hasRememberedPassword(item.userCode)) {
-                loginLoadingOverlay.open()
-                BackendAuth.loginByHistory(selectedHistoryIndex)
-            } else {
-                // 该账号未记住密码 → 切回账号登录并预填，提示输密码
-                loginMode = 0
-                selectedHistoryIndex = -1
-                userIn.text = item.userCode
-                pwdIn.text = ""
+            var item = BackendAuth.loginHistory[historyCombo.currentIndex]
+            if (!quickPwdIn.text.trim()) {
                 errorText.text = "请输入密码"
+                errorAnim.start()
                 errorText.opacity = 1
-                pwdIn.forceActiveFocus()
+                quickPwdIn.forceActiveFocus()
+                return
             }
+            loginLoadingOverlay.open()
+            pendingQuickUserCode = item.userCode
+            pendingQuickPassword = quickPwdIn.text
+            BackendAuth.login(item.userCode, quickPwdIn.text)
             return
         }
 
@@ -238,6 +242,9 @@ Dialog {
     property int loginMode: 0
     // 快捷登录中选中的历史记录索引（-1 表示未选）
     property int selectedHistoryIndex: -1
+    // 快捷登录待记住的账号与密码（登录成功后写入历史，供自动登录）
+    property string pendingQuickUserCode: ""
+    property string pendingQuickPassword: ""
 
     contentItem: ColumnLayout {
         spacing: 16
@@ -320,7 +327,7 @@ Dialog {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: { loginMode = 0; selectedHistoryIndex = -1 }
+                    onClicked: { loginMode = 0; selectedHistoryIndex = -1; historyCombo.currentIndex = -1; quickPwdIn.text = "" }
                 }
             }
 
@@ -339,7 +346,7 @@ Dialog {
                 }
                 MouseArea {
                     anchors.fill: parent
-                    onClicked: { loginMode = 1; selectedHistoryIndex = -1 }
+                    onClicked: { loginMode = 1; selectedHistoryIndex = -1; historyCombo.currentIndex = -1; quickPwdIn.text = "" }
                 }
             }
         }
@@ -533,9 +540,9 @@ Dialog {
                 }
             }
 
-            // ===== Page 1: 快捷登录（最近登录历史） =====
+            // ===== Page 1: 快捷登录（最近登录历史，下拉选择 + 输入密码） =====
             ColumnLayout {
-                spacing: 10
+                spacing: 12
 
                 Text {
                     visible: BackendAuth.loginHistory.length === 0
@@ -549,95 +556,226 @@ Dialog {
                     color: "#94A3B8"
                 }
 
-                ListView {
-                    id: historyList
+                // 账号下拉选择（选中后输入密码，登录成功即记住密码，下次自动登录）
+                RowLayout {
                     visible: BackendAuth.loginHistory.length > 0
                     Layout.fillWidth: true
-                    Layout.fillHeight: true
-                    model: BackendAuth.loginHistory
                     spacing: 10
-                    clip: true
-                    // 历史变化时刷新（loginHistoryChanged 触发 model 更新）
-                    delegate: Rectangle {
-                        width: historyList.width
-                        height: 80
-                        radius: 14
-                        color: (selectedHistoryIndex === index) ? "#E0E7FF" : "#F7F7F7"
-                        border.color: (selectedHistoryIndex === index) ? "#4361EE" : "#E2E8F0"
-                        border.width: (selectedHistoryIndex === index) ? 2 : 1
 
-                        RowLayout {
+                    ComboBox {
+                        id: historyCombo
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 60
+                        model: BackendAuth.loginHistory
+                        currentIndex: -1
+                        font.family: "PingFang SC"
+                        font.pixelSize: 24
+
+                        contentItem: Text {
+                            leftPadding: 16
+                            rightPadding: 8
+                            text: historyCombo.currentIndex >= 0
+                                  ? (historyCombo.model[historyCombo.currentIndex].userNm || "")
+                                    + "   " + historyCombo.model[historyCombo.currentIndex].userCode
+                                  : "请选择登录账号"
+                            font.family: "PingFang SC"
+                            font.pixelSize: 24
+                            color: historyCombo.currentIndex >= 0 ? "#1B263B" : "#94A3B8"
+                            verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+
+                        background: Rectangle {
+                            radius: 1
+                            border.color: historyCombo.activeFocus || historyCombo.pressed ? "#4361EE" : "#E2E8F0"
+                            color: "#F7F7F7"
+                        }
+
+                        indicator: Canvas {
+                            id: comboArrow
+                            x: historyCombo.width - width - 8
+                            y: (historyCombo.height - height) / 2
+                            width: 16; height: 10
+                            onPaint: {
+                                var ctx = getContext("2d")
+                                ctx.strokeStyle = "#64748B"
+                                ctx.lineWidth = 2
+                                ctx.lineJoin = "round"
+                                ctx.beginPath()
+                                ctx.moveTo(2, 2)
+                                ctx.lineTo(width / 2, height - 2)
+                                ctx.lineTo(width - 2, 2)
+                                ctx.stroke()
+                            }
+                        }
+
+                        delegate: ItemDelegate {
+                            width: historyCombo.width
+                            height: 70
+                            highlighted: historyCombo.highlightedIndex === index
+                            contentItem: RowLayout {
+                                spacing: 12
+                                anchors.leftMargin: 16
+                                anchors.rightMargin: 16
+                                Rectangle {
+                                    Layout.preferredWidth: 40
+                                    Layout.preferredHeight: 40
+                                    radius: 20
+                                    color: "#4361EE"
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: (modelData.userNm || "").charAt(0)
+                                        font.family: "PingFang SC"
+                                        font.pixelSize: 20
+                                        font.bold: true
+                                        color: "#FFFFFF"
+                                    }
+                                }
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 2
+                                    Text {
+                                        text: modelData.userNm || ""
+                                        font.family: "PingFang SC"
+                                        font.pixelSize: 22
+                                        font.bold: true
+                                        color: highlighted ? "#4361EE" : "#1B263B"
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                    Text {
+                                        text: ((modelData.custNm || "") ? (modelData.custNm + "   ") : "")
+                                              + "账号 " + modelData.userCode
+                                        font.family: "Microsoft YaHei"
+                                        font.pixelSize: 16
+                                        color: "#64748B"
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                    }
+                                }
+                            }
+                            background: Rectangle {
+                                color: highlighted ? "#E0E7FF" : "#FFFFFF"
+                            }
+                        }
+
+                        onActivated: {
+                            selectedHistoryIndex = index
+                        }
+                    }
+
+                    // 删除当前选中历史
+                    Rectangle {
+                        id: delHistBtn
+                        visible: historyCombo.currentIndex >= 0
+                        Layout.preferredWidth: 56
+                        Layout.preferredHeight: 60
+                        radius: 10
+                        color: delHistMA.pressed ? "#FEE2E2" : "#F7F7F7"
+                        border.color: "#E2E8F0"
+                        border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: "删除"
+                            font.family: "PingFang SC"
+                            font.pixelSize: 20
+                            color: "#EF4444"
+                        }
+                        MouseArea {
+                            id: delHistMA
                             anchors.fill: parent
-                            anchors.leftMargin: 16
-                            anchors.rightMargin: 16
-                            spacing: 14
+                            onClicked: {
+                                var idx = historyCombo.currentIndex
+                                BackendAuth.removeLoginHistory(idx)
+                                historyCombo.currentIndex = -1
+                                selectedHistoryIndex = -1
+                            }
+                        }
+                    }
+                }
 
-                            // 头像占位（昵称首字）
-                            Rectangle {
-                                Layout.preferredWidth: 50
-                                Layout.preferredHeight: 50
-                                radius: 25
-                                color: "#4361EE"
+                // 密码输入框（快捷登录需手动输入；登录成功后记住密码，下次自动登录）
+                TextField {
+                    id: quickPwdIn
+                    visible: BackendAuth.loginHistory.length > 0
+                    Layout.preferredWidth: 454
+                    Layout.preferredHeight: 60
+                    leftPadding: 24
+                    rightPadding: 40
+                    placeholderText: "请输入登录密码"
+                    font.family: "PingFang SC"
+                    font.pixelSize: 24
+                    color: "#1B263B"
+                    echoMode: quickShowPwd.checked ? TextInput.Normal : TextInput.Password
+                    verticalAlignment: TextInput.AlignVCenter
+                    inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhPreferLowercase
+
+                    background: Rectangle {
+                        radius: 1
+                        border.color: quickPwdIn.activeFocus ? "#4361EE" : "#E2E8F0"
+                        color: "#F7F7F7"
+                    }
+
+                    Rectangle {
+                        id: quickEyeBtn
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.rightMargin: 6
+                        width: 34; height: 34; radius: 17
+                        color: quickShowPwd.checked ? "#E0E7FF" : "transparent"
+                        Image {
+                            anchors.centerIn: parent
+                            source: quickShowPwd.checked ? "qrc:/resources/icon/eye-fill.png" : "qrc:/resources/icon/eye-close-fill.png"
+                            sourceSize: Qt.size(20, 20)
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            onClicked: quickShowPwd.toggle()
+                        }
+                    }
+                }
+
+                // 显示密码选项
+                Item {
+                    visible: BackendAuth.loginHistory.length > 0
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 36
+                    RowLayout {
+                        anchors.left: parent.left
+                        spacing: 6
+                        CheckBox {
+                            id: quickShowPwd
+                            text: ""
+                            implicitWidth: 28
+                            implicitHeight: 28
+                            indicator: Rectangle {
+                                implicitWidth: 28
+                                implicitHeight: 28
+                                x: 0; y: parent.height / 2 - height / 2
+                                radius: 4
+                                color: quickShowPwd.checked ? "#4361EE" : "#FFFFFF"
+                                border.color: quickShowPwd.checked ? "#4361EE" : "#CBD5E1"
+                                border.width: 1.5
                                 Text {
+                                    visible: quickShowPwd.checked
                                     anchors.centerIn: parent
-                                    text: (modelData.userNm || "").charAt(0)
-                                    font.family: "PingFang SC"
-                                    font.pixelSize: 24
+                                    text: "\u2713"
+                                    font.pixelSize: 18
                                     font.bold: true
                                     color: "#FFFFFF"
                                 }
                             }
-
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 4
-                                Text {
-                                    text: modelData.userNm || ""
-                                    font.family: "PingFang SC"
-                                    font.pixelSize: 24
-                                    font.bold: true
-                                    color: "#1B263B"
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                                Text {
-                                    text: ((modelData.custNm || "") ? (modelData.custNm + "   ") : "")
-                                          + "账号 ****" + String(modelData.userCode).slice(-4)
-                                    font.family: "Microsoft YaHei"
-                                    font.pixelSize: 18
-                                    color: "#64748B"
-                                    elide: Text.ElideRight
-                                    Layout.fillWidth: true
-                                }
-                            }
+                            contentItem: null
                         }
-
-                        // 整行点击（选中该账号，登录由"登录"按钮触发）
-                        MouseArea {
-                            id: historyMA
-                            anchors.fill: parent
-                            onClicked: selectedHistoryIndex = index
-                        }
-
-                        // 删除按钮（覆盖在 historyMA 之上，z 更高）
-                        Rectangle {
-                            width: 40; height: 40; radius: 20
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.rightMargin: 10
-                            color: delMA.pressed ? "#FEE2E2" : "transparent"
-                            z: 2
-                            Text {
-                                anchors.centerIn: parent
-                                text: "\u2715"
-                                font.pixelSize: 20
-                                color: "#94A3B8"
-                            }
+                        Text {
+                            text: "显示密码"
+                            font.family: "Microsoft YaHei"
+                            font.pixelSize: 24
+                            color: "#64748B"
+                            verticalAlignment: Text.AlignVCenter
                             MouseArea {
-                                id: delMA
                                 anchors.fill: parent
-                                z: 2
-                                onClicked: BackendAuth.removeLoginHistory(index)
+                                onClicked: quickShowPwd.toggle()
                             }
                         }
                     }
@@ -743,7 +881,10 @@ Dialog {
     // 打开时初始化，自动填充保存的账号密码
     onOpened: {
         errorText.opacity = 0
-        selectedHistoryIndex = -1
+        // 默认选中最近登录的账号（index 0），无需手动点击下拉选择
+        selectedHistoryIndex = (BackendAuth.loginHistory.length > 0) ? 0 : -1
+        historyCombo.currentIndex = (BackendAuth.loginHistory.length > 0) ? 0 : -1
+        quickPwdIn.text = ""
         // 有最近登录历史时默认进入快捷登录，方便直接选昵称登录
         loginMode = (BackendAuth.loginHistory.length > 0) ? 1 : 0
         // 如果有保存的登录信息，自动填充
@@ -757,6 +898,12 @@ Dialog {
             pwdIn.text = ""
             // 如果之前勾选过"记住登录"但没有有效数据（如退出时清除）
             rememberCheck.checked = BackendAuth.rememberLogin
+        }
+        // 快捷登录自动登录：若默认选中的最近账号已记住密码，直接自动登录
+        if (historyCombo.currentIndex >= 0
+                && BackendAuth.hasRememberedPassword(BackendAuth.loginHistory[historyCombo.currentIndex].userCode)) {
+            loginLoadingOverlay.open()
+            BackendAuth.loginByHistory(historyCombo.currentIndex)
         }
     }
 

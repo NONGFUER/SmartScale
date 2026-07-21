@@ -598,6 +598,152 @@ void NetworkManagerService::setWifiEnabled(bool enabled)
     proc->start(m_nmcliPath, QStringList() << "radio" << "wifi" << (enabled ? "on" : "off"));
 }
 
+// ============================================================
+// 网络模式（四选一）实现
+// ============================================================
+
+void NetworkManagerService::setNetworkMode(NetworkMode mode)
+{
+    bool wifiOn = (mode == NetworkMode::WifiOnly
+                   || mode == NetworkMode::AllWifiPriority
+                   || mode == NetworkMode::AllCellularPriority);
+    bool cellOn = (mode == NetworkMode::CellularOnly
+                   || mode == NetworkMode::AllWifiPriority
+                   || mode == NetworkMode::AllCellularPriority);
+
+    qInfo() << "[NetworkManager] 设置网络模式:" << static_cast<int>(mode)
+            << "wifiOn=" << wifiOn << "cellOn=" << cellOn;
+
+    // 1) 开关 Wi-Fi 射频 / 4G
+    setWifiEnabled(wifiOn);
+    if (cellOn) enableCellular();
+    else disableCellular();
+
+    // 2) 全开模式下设置路由优先级（优先接口走默认路由）
+    if (mode == NetworkMode::AllWifiPriority || mode == NetworkMode::AllCellularPriority) {
+        bool preferWifi = (mode == NetworkMode::AllWifiPriority);
+        // 延迟 8s 应用：等两个接口都起来后再设置 metric 并重新激活优先连接，
+        // 使低 metric 默认路由立即生效；连接配置已持久化，后续重连也会沿用。
+        QTimer::singleShot(8000, this, [this, preferWifi]() {
+            applyRoutePriority(preferWifi);
+        });
+    }
+
+    // 3) 更新当前模式（供 UI 高亮）
+    if (m_networkMode != static_cast<int>(mode)) {
+        m_networkMode = static_cast<int>(mode);
+        Q_EMIT networkModeChanged();
+    }
+}
+
+QString NetworkManagerService::findActiveWifiConnection() const
+{
+    if (m_nmcliPath.isEmpty()) return QString();
+    QString dev = discoverWifiDevice();
+    if (dev.isEmpty()) return QString();
+
+    QProcess p;
+    p.start(m_nmcliPath, QStringList() << "-t" << "-f" << "GENERAL.CONNECTION"
+                                       << "device" << "show" << dev);
+    if (!p.waitForFinished(3000)) return QString();
+
+    const auto lines = QString::fromUtf8(p.readAllStandardOutput()).split('\n', Qt::SkipEmptyParts);
+    for (const auto &line : lines) {
+        // 格式: GENERAL.CONNECTION:<connname>（未连接时为 --）
+        QString v = line.split(':', Qt::SkipEmptyParts).value(1).trimmed();
+        if (!v.isEmpty() && v != QStringLiteral("--"))
+            return v;
+    }
+    return QString();
+}
+
+QString NetworkManagerService::findCellularConnection() const
+{
+    if (m_nmcliPath.isEmpty()) return QString();
+
+    QString cellDev = m_cellularDeviceName.isEmpty()
+                      ? discoverCellularDevice()
+                      : m_cellularDeviceName;
+
+    QProcess p;
+    p.start(m_nmcliPath, QStringList() << "-t" << "-f" << "NAME,TYPE,DEVICE"
+                                       << "connection" << "show");
+    if (!p.waitForFinished(3000)) return QString();
+
+    const auto lines = QString::fromUtf8(p.readAllStandardOutput()).split('\n', Qt::SkipEmptyParts);
+    for (const auto &line : lines) {
+        auto parts = line.split(':');
+        if (parts.size() < 3) continue;
+        QString name = parts[0].trimmed();
+        QString type = parts[1].trimmed().toLower();
+        QString dev  = parts[2].trimmed();
+
+        // modem 模式：gsm/mobile/cellular 类型连接
+        if (type.contains(QStringLiteral("gsm"), Qt::CaseInsensitive) ||
+            type.contains(QStringLiteral("mobile"), Qt::CaseInsensitive) ||
+            type.contains(QStringLiteral("cellular"), Qt::CaseInsensitive)) {
+            return name;
+        }
+        // 接口模式：连接绑定到 4G 网络接口设备
+        if (!cellDev.isEmpty() && dev == cellDev) {
+            return name;
+        }
+    }
+    return QString();
+}
+
+void NetworkManagerService::setConnectionRouteMetric(const QString &conn, int metric)
+{
+    if (conn.isEmpty() || m_nmcliPath.isEmpty()) return;
+
+    QProcess p;
+    p.start(m_nmcliPath, QStringList() << "connection" << "modify" << conn
+             << "ipv4.route-metric" << QString::number(metric)
+             << "ipv6.route-metric" << QString::number(metric));
+    if (!p.waitForFinished(5000)) {
+        qWarning() << "[NetworkManager] 设置路由优先级超时:" << conn;
+        return;
+    }
+    if (p.exitCode() != 0) {
+        qWarning() << "[NetworkManager] 设置路由优先级失败:" << conn
+                   << QString::fromUtf8(p.readAllStandardError()).trimmed();
+    } else {
+        qInfo() << "[NetworkManager] 已设置连接" << conn << "路由优先级 metric=" << metric;
+    }
+}
+
+void NetworkManagerService::reactivateConnection(const QString &conn)
+{
+    if (conn.isEmpty() || m_nmcliPath.isEmpty()) return;
+
+    QProcess p;
+    p.start(m_nmcliPath, QStringList() << "connection" << "up" << conn
+             << "--wait-connect-timeout" << "20");
+    if (!p.waitForFinished(25000)) {
+        qWarning() << "[NetworkManager] 重新激活连接超时:" << conn;
+    }
+}
+
+void NetworkManagerService::applyRoutePriority(bool preferWifi)
+{
+    QString wifiConn = findActiveWifiConnection();
+    QString cellConn = findCellularConnection();
+
+    int wifiMetric = preferWifi ? 10  : 300;
+    int cellMetric = preferWifi ? 300 : 10;
+
+    if (!wifiConn.isEmpty()) setConnectionRouteMetric(wifiConn, wifiMetric);
+    if (!cellConn.isEmpty()) setConnectionRouteMetric(cellConn, cellMetric);
+
+    // 重新激活"优先"连接，使其低 metric 默认路由立即生效
+    QString preferred = preferWifi ? wifiConn : cellConn;
+    if (!preferred.isEmpty()) reactivateConnection(preferred);
+
+    qInfo() << "[NetworkManager] 应用路由优先级 preferWifi=" << preferWifi
+            << "wifiConn=" << (wifiConn.isEmpty() ? "<none>" : wifiConn)
+            << "cellConn=" << (cellConn.isEmpty() ? "<none>" : cellConn);
+}
+
 void NetworkManagerService::onWifiDisconnectFinished(int exitCode, QProcess::ExitStatus exitStatus)
 {
     Q_UNUSED(exitStatus)

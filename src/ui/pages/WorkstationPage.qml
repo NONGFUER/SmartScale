@@ -927,17 +927,17 @@ Item {
                                             if (root.aiRecognizeLocked) {
                                                 return
                                             }
-                                            // 频繁操作检测：保留 3 秒窗口内的点击时间戳
+                                            // 频繁操作检测：保留 8 秒窗口内的点击时间戳
                                             var now = Date.now()
                                             var recent = []
                                             for (var i = 0; i < root.aiRecognizeClickTimes.length; i++) {
-                                                if (now - root.aiRecognizeClickTimes[i] < 3000)
+                                                if (now - root.aiRecognizeClickTimes[i] < 8000)
                                                     recent.push(root.aiRecognizeClickTimes[i])
                                             }
                                             recent.push(now)
                                             root.aiRecognizeClickTimes = recent
-                                            // 3 秒内点击达 3 次 → 判定恶意频繁操作，锁定 20 秒
-                                            if (recent.length >= 7) {
+                                            // 8 秒内点击达 6 次 → 判定恶意频繁操作，锁定 20 秒
+                                            if (recent.length >= 6) {
                                                 root.aiRecognizeClickTimes = []
                                                 root.aiRecognizeLocked = true
                                                 root.aiRecognizeLockCountdown = 20

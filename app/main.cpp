@@ -207,13 +207,29 @@ int main(int argc, char *argv[])
     // 4G 开关重启记忆：上次关机前用户关闭了 4G，则本次启动后自动禁用以恢复状态。
     // 延迟 3 秒执行：等 NetworkManagerService 构造里的首轮 refresh 完成、
     // 4G 硬件被发现（hasCellularHardware=true）后再下发禁用，避免对不存在的接口空操作。
-    if (!appSettings->cellularEnabled()) {
+    // 注意：仅当“网络模式”记忆未启用（networkMode<0）时才生效，避免与下方网络模式恢复冲突。
+    if (appSettings->networkMode() < 0 && !appSettings->cellularEnabled()) {
         QTimer::singleShot(3000, networkManagerService, [networkManagerService]() {
             if (networkManagerService->hasCellularHardware()) {
                 qInfo() << "[Main] 恢复 4G 记忆状态: 上次为关闭，自动禁用 4G";
                 networkManagerService->disableCellular();
             } else {
                 qInfo() << "[Main] 恢复 4G 记忆状态: 未检测到 4G 硬件，跳过自动禁用";
+            }
+        });
+    }
+
+    // 网络模式重启记忆：恢复上次在设置里选择的网络模式（全开优先4G 等）。
+    // 延迟 5 秒执行：等 NetworkManagerService 首轮 refresh、4G 硬件被发现后再下发，
+    // 使 WIFI/4G 射频与路由优先级按记忆的模式恢复（setNetworkMode 内部对“全开”模式
+    // 还会再延迟 8s 应用路由 metric）。
+    if (appSettings->networkMode() >= 0) {
+        QTimer::singleShot(5000, networkManagerService, [networkManagerService, appSettings]() {
+            const int mode = appSettings->networkMode();
+            if (mode >= 0) {
+                qInfo() << "[Main] 恢复网络模式记忆:" << mode;
+                networkManagerService->setNetworkMode(
+                    static_cast<NetworkManagerService::NetworkMode>(mode));
             }
         });
     }

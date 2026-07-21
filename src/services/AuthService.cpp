@@ -362,8 +362,8 @@ void AuthService::onNetworkReply(QNetworkReply *reply)
             }
         }
 
-        // 记录最近登录历史（在线登录成功后，三元组齐全或尽力填充）
-        addLoginHistory(m_pendingUserCode, userNm, m_custNm, m_pendingPassword);
+        // 记录最近登录历史（在线登录成功后，三元组齐全或尽力填充；不存密码）
+        addLoginHistory(m_pendingUserCode, userNm, m_custNm);
 
         // 串行链：User/by-id 完成 → 触发食材列表拉取
         if (m_ingredientSvc) {
@@ -780,7 +780,7 @@ void AuthService::clearSavedLogin()
 
 // ==========================================================================
 //  最近登录历史
-//  存储: ~/.cache/smartscale/login_history.json（不含密码，最多 10 条）
+//  存储: ~/.cache/smartscale/login_history.json（含记住的密码 base64，最多 10 条）
 // ==========================================================================
 
 void AuthService::loadLoginHistory()
@@ -831,17 +831,14 @@ void AuthService::saveLoginHistory() const
 
 void AuthService::addLoginHistory(const QString &userCode,
                                   const QString &userNm,
-                                  const QString &custNm,
-                                  const QString &password)
+                                  const QString &custNm)
 {
     if (userCode.trimmed().isEmpty()) return;
 
-    // 去重：移除同 userCode 的旧记录，并保留其已存密码避免覆盖为空
-    QString existingPwd;
+    // 去重：移除同 userCode 的旧记录
     for (int i = m_loginHistory.size() - 1; i >= 0; --i) {
         QVariantMap e = m_loginHistory.at(i).toMap();
         if (e.value("userCode").toString() == userCode) {
-            existingPwd = e.value("password").toString();
             m_loginHistory.removeAt(i);
         }
     }
@@ -851,9 +848,7 @@ void AuthService::addLoginHistory(const QString &userCode,
     entry["userNm"]   = userNm.isEmpty() ? userCode : userNm;
     entry["custNm"]   = custNm;
     entry["lastTime"] = QDateTime::currentSecsSinceEpoch();
-    // 密码：优先用本次传入（base64 存储），缺省回退已有记录，保持历史密码不丢失
-    QString pwdToStore = password.isEmpty() ? existingPwd : password.toUtf8().toBase64();
-    if (!pwdToStore.isEmpty()) entry["password"] = pwdToStore;
+    // 注意：password 不在此处写入，由 rememberHistoryPassword 在快捷登录成功后单独保存
     m_loginHistory.prepend(entry);
 
     // 截断到最多 10 条
@@ -926,4 +921,32 @@ void AuthService::loginByHistory(int index)
 
     qInfo() << "[Auth] 通过历史记录一键登录:" << userCode;
     login(userCode, password);
+}
+
+void AuthService::rememberHistoryPassword(const QString &userCode, const QString &password)
+{
+    if (userCode.trimmed().isEmpty() || password.isEmpty()) return;
+    for (int i = 0; i < m_loginHistory.size(); ++i) {
+        QVariantMap e = m_loginHistory.at(i).toMap();
+        if (e.value("userCode").toString() == userCode) {
+            e["password"] = password.toUtf8().toBase64();
+            m_loginHistory.replace(i, e);
+            saveLoginHistory();
+            Q_EMIT loginHistoryChanged();
+            qInfo() << "[Auth] 已记住快捷登录密码:" << userCode;
+            return;
+        }
+    }
+    qWarning() << "[Auth] 未找到对应历史账号，无法记住密码:" << userCode;
+}
+
+int AuthService::firstRememberedHistoryIndex() const
+{
+    for (int i = 0; i < m_loginHistory.size(); ++i) {
+        QVariantMap e = m_loginHistory.at(i).toMap();
+        if (!e.value("password").toString().isEmpty()) {
+            return i;
+        }
+    }
+    return -1;
 }

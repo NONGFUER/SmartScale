@@ -11,12 +11,15 @@
  *   - cellularEnabled     : 4G 移动数据开关记忆（默认 true），重启后恢复上次状态
  *   - wifiEnabled         : WiFi 射频开关记忆（默认 true），重启后恢复上次状态
  *   - networkAutoSwitch   : 网络自动切换开关记忆（默认 true），重启后恢复上次状态
+ *   - networkMode         : 网络模式记忆（默认 -1 未设置；取值见 NetworkManagerService::NetworkMode），
+ *                            重启后恢复上次选择的模式（全开优先4G 等）
  *
  * 存储：QSettings INI 格式，UserScope，组织 "SmartScale" / 应用 "AppSettings"
  *       路径通常为 ~/.config/SmartScale/AppSettings.conf
  *
  * QML 访问：AppSettings.priceInputEnabled / AppSettings.cellularEnabled /
- *          AppSettings.wifiEnabled / AppSettings.networkAutoSwitch（读 / 写均触发持久化 + 信号）
+ *          AppSettings.wifiEnabled / AppSettings.networkAutoSwitch / AppSettings.networkMode
+ *          （读 / 写均触发持久化 + 信号）
  */
 class AppSettingsService : public QObject
 {
@@ -29,6 +32,8 @@ class AppSettingsService : public QObject
                WRITE setWifiEnabled NOTIFY wifiEnabledChanged)
     Q_PROPERTY(bool networkAutoSwitch READ networkAutoSwitch
                WRITE setNetworkAutoSwitch NOTIFY networkAutoSwitchChanged)
+    Q_PROPERTY(int networkMode READ networkMode
+               WRITE setNetworkMode NOTIFY networkModeChanged)
 
 public:
     explicit AppSettingsService(QObject *parent = nullptr);
@@ -45,11 +50,15 @@ public:
     bool networkAutoSwitch() const { return m_networkAutoSwitch; }
     void setNetworkAutoSwitch(bool enabled);
 
+    int networkMode() const { return m_networkMode; }
+    void setNetworkMode(int mode);
+
 Q_SIGNALS:
     void priceInputEnabledChanged();
     void cellularEnabledChanged();
     void wifiEnabledChanged();
     void networkAutoSwitchChanged();
+    void networkModeChanged();
 
 private:
     QSettings m_settings;   // IniFormat, UserScope, "SmartScale"/"AppSettings"
@@ -57,4 +66,5 @@ private:
     bool m_cellularEnabled;
     bool m_wifiEnabled;
     bool m_networkAutoSwitch;
+    int  m_networkMode;     // -1 表示用户尚未选择过网络模式
 };

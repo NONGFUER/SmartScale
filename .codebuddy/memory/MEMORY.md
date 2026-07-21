@@ -30,7 +30,7 @@
 - API_BASE_URL=https://api.shxgs.cn:5196（ems 域），USER_BASE_URL=https://user.shxgs.cn:5196（user 域）。createApiRequest/createUserApiRequest(apiPath,token)：json+Bearer+SSL VerifyNone+HTTP/1.1。缓存 ~/.cache/smartscale/。
 
 ## NetworkManagerService
-- src/services/，QML 名 App.Backend::NetworkManager。nmcli(Wi-Fi)+mmcli(4G)，10秒轮询。nmcli 坑：device show 只认 GENERAL.*；GENERAL.CONNECTION 是 profile 名需 connection show 反查 ssid；-t 输出取首冒号后首行；两步连接 connection add→up；扫描需 polkit 放行。
+- src/services/，QML 名 App.Backend::NetworkManager。nmcli(Wi-Fi)+mmcli(4G)，10秒轮询。nmcli 坑：device show 只认 GENERAL.*；GENERAL.CONNECTION 是 profile 名需 connection show 反查 ssid；-t 输出取首冒号后首行；两步连接 connection add→up；扫描需 polkit 放行。**四模式网络控制**：新增 NetworkMode 枚举(WifiOnly/CellularOnly/AllWifiPriority/AllCellularPriority) + Q_INVOKABLE setNetworkMode(mode) + networkMode 属性(int,-1未知)。**SettingsDialog.qml（标题「设备信息」的弹窗）** 的「功能设置」卡片内新增「网络模式」区：WIFI/4G 状态显示 + 四个 ToggleSwitch 开关行（与「价格输入」同款样式，互斥单选：仅开启WIFI/仅开启4G/全开优先WIFI/全开优先4G），**必选其一+默认+持久化**：四个开关用 JS 显式 `syncSwitches()` 同步 `checked`（用户点击会打断 QML 绑定，故不能绑 checked，否则会出现全不选/多选）；`setNetMode` 写 `AppSettings.networkMode` 持久化并调 `NetworkManager.setNetworkMode`。`netMode` 初值与 `refreshNetMode` 兜底均为 **AllCellularPriority（用户指定默认）**；`refreshNetMode` 优先级 NetworkManager.networkMode > AppSettings.networkMode > 实时状态推导。`onOpened` 时若 `AppSettings.networkMode<0`（首次）直接 `setNetMode(AllCellularPriority)` 把设备设为默认并记忆。**重启记忆**：`AppSettings` 新增 `networkMode` 属性（QSettings INI，默认-1）；`main.cpp` 开机延迟5s 调 `networkManagerService->setNetworkMode(savedMode)` 恢复（旧 cellularEnabled 记忆仅在 networkMode<0 时生效，避免冲突）。**注意：之前误改到 SystemInfoDialog（「系统调试信息」弹窗），已撤销。** 全开模式用路由 metric 实现优先级（findActiveWifiConnection/findCellularConnection 取连接名→setConnectionRouteMetric 设 ipv4/ipv6.route-metric：优先=10/非优先=300→reactivateConnection 重新激活优先连接使低 metric 默认路由生效），延迟 8s 应用等两接口起来；metric 配置持久化。
 
 ## QML 工程规范
 - 跨目录：pages/ 引 components/ 必须 `import "../components"`。
@@ -48,7 +48,7 @@
 - QML onCloudSyncSuccess：关 overlay+VoiceSpeaker.speak("已保存")+SaveSuccessDialog.openDialog()（460×380 绿勾白卡，"确认 (Ns)" 3秒倒计时自动关）。onCloudSyncFailed：toast warning "记录已保存，云端同步失败将自动重试"。
 
 ## 关键文件索引
-- 登录：AuthService.h/.cpp + LoginPage.qml + LoginDialog.qml + LogoutConfirmDialog.qml。快捷登录历史 ~/.cache/smartscale/login_history.json（userCode/userNm/custNm+base64 密码）随登录成功写入；hasRememberedPassword/loginByHistory 优先历史密码，回退单账号记住密码。
+- 登录：AuthService.h/.cpp + LoginPage.qml + LoginDialog.qml + LogoutConfirmDialog.qml。快捷登录历史 ~/.cache/smartscale/login_history.json（userCode/userNm/custNm **+ 记住的密码 base64**）随登录成功写入。**快捷登录流程**：onOpened 时默认选中最近登录账号（historyCombo.currentIndex=0，免手动点击）；下拉与弹窗项显示**完整账号名，不脱敏**；输入密码登录成功后在 onLoginSuccess 调 rememberHistoryPassword 记住密码 → 之后打开弹窗若默认选中的最近账号 hasRememberedPassword 为真则直接 loginByHistory 自动登录。hasRememberedPassword/loginByHistory/rememberHistoryPassword 为在用方法；firstRememberedHistoryIndex 已不再被 QML 调用（保留为通用辅助）。"记住登录"复选框（单账号 last_login.conf）仍独立保留（账号登录页半自动：预填账号，按登录即 autoLogin）。
 - Modbus 串口：src/hardware/WeightSensorWorker.h/.cpp（QMutexLocker RAII+连续5次错误重启）。
 - 语音：src/hardware/VoiceSpeaker（piper TTS，QML 名 VoiceSpeaker），Main.qml 开机 warmup()。
 - ONNX Runtime：3rdparty/onnxruntime-linux-aarch64-1.24.4/lib/。

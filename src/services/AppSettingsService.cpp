@@ -6,6 +6,7 @@ static const char *kKeyPriceInputEnabled = "priceInputEnabled";
 static const char *kKeyCellularEnabled   = "cellularEnabled";
 static const char *kKeyWifiEnabled       = "wifiEnabled";
 static const char *kKeyNetworkAutoSwitch = "networkAutoSwitch";
+static const char *kKeyNetworkMode       = "networkMode";
 
 // ============================================================================
 // 构造 — 从 QSettings 读取持久化配置
@@ -20,12 +21,14 @@ AppSettingsService::AppSettingsService(QObject *parent)
     m_cellularEnabled   = m_settings.value(kKeyCellularEnabled, true).toBool();  // 默认 true 保持开机自连
     m_wifiEnabled       = m_settings.value(kKeyWifiEnabled, true).toBool();       // 默认 true
     m_networkAutoSwitch = m_settings.value(kKeyNetworkAutoSwitch, true).toBool(); // 默认 true
+    m_networkMode       = m_settings.value(kKeyNetworkMode, -1).toInt();          // -1 表示尚未选择
 
     qDebug() << "[AppSettings] 加载配置:"
              << "priceInputEnabled =" << m_priceInputEnabled
              << "cellularEnabled =" << m_cellularEnabled
              << "wifiEnabled =" << m_wifiEnabled
              << "networkAutoSwitch =" << m_networkAutoSwitch
+             << "networkMode =" << m_networkMode
              << "文件:" << m_settings.fileName();
 }
 
@@ -95,4 +98,21 @@ void AppSettingsService::setNetworkAutoSwitch(bool enabled)
 
     qDebug() << "[AppSettings] networkAutoSwitch ->" << enabled;
     Q_EMIT networkAutoSwitchChanged();
+}
+
+// ============================================================================
+// networkMode setter — 写回 QSettings 并发射信号
+// ============================================================================
+
+void AppSettingsService::setNetworkMode(int mode)
+{
+    if (m_networkMode == mode)
+        return;
+
+    m_networkMode = mode;
+    m_settings.setValue(kKeyNetworkMode, mode);
+    m_settings.sync();
+
+    qDebug() << "[AppSettings] networkMode ->" << mode;
+    Q_EMIT networkModeChanged();
 }

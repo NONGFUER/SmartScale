@@ -102,16 +102,19 @@ public:
     Q_INVOKABLE void autoLogin();  // 使用保存的凭据自动登录
     Q_INVOKABLE void clearSavedLogin();  // 清除记住的登录信息
 
-    // === 最近登录历史（缓存 userCode/userNm/custNm，最多 10 条）===
+    // === 最近登录历史（缓存 userCode/userNm/custNm + 记住的密码 base64，最多 10 条）===
     QVariantList loginHistory() const { return m_loginHistory; }
     Q_INVOKABLE void addLoginHistory(const QString &userCode,
                                      const QString &userNm,
-                                     const QString &custNm,
-                                     const QString &password = QString());
+                                     const QString &custNm);
     Q_INVOKABLE void removeLoginHistory(int index);
     Q_INVOKABLE void clearLoginHistory();
     Q_INVOKABLE bool hasRememberedPassword(const QString &userCode) const;
     Q_INVOKABLE void loginByHistory(int index);
+    /** @brief 快捷登录成功后记住该账号密码（base64 存储到历史记录），供下次自动登录 */
+    Q_INVOKABLE void rememberHistoryPassword(const QString &userCode, const QString &password);
+    /** @brief 返回首个已记住密码的历史账号索引，无则返回 -1（用于自动登录） */
+    Q_INVOKABLE int firstRememberedHistoryIndex() const;
 
 Q_SIGNALS:
     void loginSuccess();
@@ -225,7 +228,7 @@ private:
     QString m_lastUserCode;        // 保存的用户名
     QString m_lastPassword;        // 保存的密码
 
-    // === 最近登录历史（最多 10 条，不含密码）===
+    // === 最近登录历史（最多 10 条，含记住的密码 base64）===
     QVariantList m_loginHistory;
 
     // === Token 刷新协调器（无感刷新核心） ===

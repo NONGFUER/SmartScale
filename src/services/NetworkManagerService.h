@@ -41,6 +41,8 @@ class NetworkManagerService : public QObject
     Q_PROPERTY(bool            hasCellularHardware READ hasCellularHardware NOTIFY cellularHardwareChanged)
     /** @brief 最后的错误信息（QML 可绑定） */
     Q_PROPERTY(QString         lastError           READ lastError           NOTIFY lastErrorChanged)
+    /** @brief 当前网络模式（NetworkMode 枚举值，-1 表示未知/未通过本接口设置） */
+    Q_PROPERTY(int             networkMode         READ networkMode         NOTIFY networkModeChanged)
 
 public:
     enum class WifiStatus {
@@ -63,6 +65,15 @@ public:
         CellError     = 6
     };
     Q_ENUM(CellularStatus)
+
+    /** @brief 网络模式（设备信息弹窗四选一控制） */
+    enum class NetworkMode {
+        WifiOnly          = 0,  // 仅开启 WIFI，关闭 4G
+        CellularOnly      = 1,  // 仅开启 4G，关闭 WIFI
+        AllWifiPriority   = 2,  // WIFI + 4G 全开，优先 WIFI（默认路由走 WIFI）
+        AllCellularPriority = 3 // WIFI + 4G 全开，优先 4G（默认路由走 4G）
+    };
+    Q_ENUM(NetworkMode)
 
     explicit NetworkManagerService(QObject *parent = nullptr);
 
@@ -96,6 +107,9 @@ public:
 
     /** @brief 开启/关闭 Wi-Fi 射频（nmcli radio wifi on/off） */
     Q_INVOKABLE void setWifiEnabled(bool enabled);
+
+    /** @brief 设置网络模式（四选一：仅WIFI/仅4G/全开优先WIFI/全开优先4G） */
+    Q_INVOKABLE void setNetworkMode(NetworkMode mode);
 
     /** @brief 刷新当前 Wi-Fi 状态 */
     Q_INVOKABLE void refreshWifiStatus();
@@ -134,6 +148,8 @@ Q_SIGNALS:
     void cellularHardwareChanged(bool hasHardware);
     /** @brief 错误信息变化（用于 QML 绑定刷新） */
     void lastErrorChanged();
+    /** @brief 网络模式变化（用于 UI 高亮当前选中按钮） */
+    void networkModeChanged();
 
 private Q_SLOTS:
     void onWifiScanFinished(int exitCode, QProcess::ExitStatus exitStatus);
@@ -205,6 +221,21 @@ private:
     /** @brief 内部设置错误信息（触发信号，供 QML 绑定） */
     void setLastError(const QString &error);
 
+    /** @brief 当前网络模式读取（供 QML 绑定高亮） */
+    int networkMode() const { return m_networkMode; }
+
+    // === 网络模式（路由优先级）辅助 ===
+    /** @brief 查找当前已连接的 Wi-Fi 连接配置名（用于设置路由 metric） */
+    QString findActiveWifiConnection() const;
+    /** @brief 查找 4G 连接配置名（modem 模式的 gsm 连接 / 接口模式的设备连接） */
+    QString findCellularConnection() const;
+    /** @brief 设置指定连接的 IPv4/IPv6 路由 metric（值越小优先级越高） */
+    void setConnectionRouteMetric(const QString &conn, int metric);
+    /** @brief 重新激活指定连接，使新的路由 metric 立即生效 */
+    void reactivateConnection(const QString &conn);
+    /** @brief 应用路由优先级：优先接口走低 metric，非优先走高 metric 并重新激活优先连接 */
+    void applyRoutePriority(bool preferWifi);
+
     /** @brief 更新 4G 硬件检测状态（仅在值变化时发射信号） */
     void updateHasCellularHardware(bool hasHardware);
 
@@ -241,6 +272,9 @@ private:
 
     QString        m_lastError;
     bool           m_pendingCellularOp = false;  // true=启用, false=禁用
+
+    /** @brief 当前网络模式（NetworkMode 枚举值，-1 未知） */
+    int            m_networkMode = -1;
 
     // 两步连接法：创建配置 → 激活 之间的中间状态
     QString        m_pendingSsid;                 // 正在连接的 SSID

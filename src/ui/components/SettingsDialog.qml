@@ -31,6 +31,58 @@ Dialog {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     title: ""
 
+    // 当前选中的网络模式（与 NetworkManager.networkMode 同步，用于高亮按钮；默认全开优先4G）
+    property int netMode: NetworkManager.AllCellularPriority
+
+    // 应用某个网络模式：更新高亮、持久化记忆、下发设备、同步四个开关
+    function setNetMode(m: int) {
+        netMode = m
+        AppSettings.networkMode = m
+        NetworkManager.setNetworkMode(m)
+        syncSwitches()
+    }
+
+    // 根据 netMode 强制同步四个开关的 checked（用户点击会打断绑定，故用 JS 显式同步，
+    // 确保四个中始终只有一个为开，杜绝“全不选/多选”）
+    function syncSwitches() {
+        swWifiOnly.checked = (netMode === NetworkManager.WifiOnly)
+        swCellOnly.checked = (netMode === NetworkManager.CellularOnly)
+        swAllWifi.checked  = (netMode === NetworkManager.AllWifiPriority)
+        swAllCell.checked  = (netMode === NetworkManager.AllCellularPriority)
+    }
+
+    // 打开时推导应高亮的模式（四个中必须选一个，默认全开优先4G）
+    // 优先级：NetworkManager.networkMode（设备已应用）> AppSettings.networkMode（持久化记忆）> 实时状态推导
+    function refreshNetMode() {
+        if (NetworkManager.networkMode >= 0) {
+            netMode = NetworkManager.networkMode
+            return
+        }
+        if (AppSettings.networkMode >= 0) {
+            netMode = AppSettings.networkMode
+            return
+        }
+        var wifiOn = (NetworkManager.wifiStatus === NetworkManager.WifiConnected
+                      || NetworkManager.wifiStatus === NetworkManager.WifiConnecting)
+        var cellOn = (NetworkManager.cellularStatus === NetworkManager.CellConnected
+                      || NetworkManager.cellularStatus === NetworkManager.CellRegistered
+                      || NetworkManager.cellularStatus === NetworkManager.CellRoaming)
+        if (wifiOn && !cellOn) netMode = NetworkManager.WifiOnly
+        else if (!wifiOn && cellOn) netMode = NetworkManager.CellularOnly
+        else netMode = NetworkManager.AllCellularPriority   // 默认：全开优先4G（两者都开或都关时）
+    }
+
+    onOpened: {
+        refreshNetMode()
+        syncSwitches()
+        // 首次打开（用户尚未选择过任何模式）：直接把设备设为默认 全开优先4G 并记忆
+        if (AppSettings.networkMode < 0) {
+            setNetMode(NetworkManager.AllCellularPriority)
+        }
+        NetworkManager.refreshWifiStatus()
+        NetworkManager.refreshCellularStatus()
+    }
+
     background: Rectangle {
         radius: 24
         color: "#FFFFFF"
@@ -168,12 +220,44 @@ Dialog {
                 // 分隔线
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
 
-                // ----- 启用4G网络 -----
+                // ----- 网络模式（四选一）-----
+                // Text {
+                //     text: "网络模式"
+                //     font.family: Theme.fontFamilyUi
+                //     font.pixelSize: 24
+                //     color: Theme.colorTextSecondary
+                //     Layout.alignment: Qt.AlignVCenter
+                // }
+
+                // // 当前网络状态
+                // RowLayout {
+                //     Layout.fillWidth: true
+                //     spacing: 24
+                //     Text {
+                //         text: "WIFI：" + ((NetworkManager.wifiStatus === NetworkManager.WifiConnected
+                //                            || NetworkManager.wifiStatus === NetworkManager.WifiConnecting)
+                //                           ? "已开启" : "已关闭")
+                //         font.family: Theme.fontFamilyUi
+                //         font.pixelSize: 22
+                //         color: "#475569"
+                //     }
+                //     Text {
+                //         text: "4G：" + ((NetworkManager.cellularStatus === NetworkManager.CellConnected
+                //                          || NetworkManager.cellularStatus === NetworkManager.CellRegistered
+                //                          || NetworkManager.cellularStatus === NetworkManager.CellRoaming)
+                //                         ? "已开启" : "已关闭")
+                //         font.family: Theme.fontFamilyUi
+                //         font.pixelSize: 22
+                //         color: "#475569"
+                //     }
+                // }
+
+                // 仅开启WIFI
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 0
                     Text {
-                        text: "启用4G网络"
+                        text: "仅开启WIFI"
                         font.family: Theme.fontFamilyUi
                         font.pixelSize: 24
                         color: Theme.colorTextSecondary
@@ -181,24 +265,20 @@ Dialog {
                     }
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
-                        id: sw4g; checked: AppSettings.cellularEnabled
-                        onToggled: {
-                            AppSettings.cellularEnabled = checked
-                            if (checked) NetworkManager.enableCellular()
-                            else NetworkManager.disableCellular()
-                        }
+                        id: swWifiOnly
+                        onToggled: if (checked) setNetMode(NetworkManager.WifiOnly); else syncSwitches()
                     }
                 }
 
                 // 分隔线
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
 
-                // ----- 启用WiFi -----
+                // 仅开启4G
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 0
                     Text {
-                        text: "启用WiFi"
+                        text: "仅开启4G"
                         font.family: Theme.fontFamilyUi
                         font.pixelSize: 24
                         color: Theme.colorTextSecondary
@@ -206,27 +286,51 @@ Dialog {
                     }
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
-                        id: swWifi; checked: AppSettings.wifiEnabled
-                        onToggled: { AppSettings.wifiEnabled = checked; NetworkManager.setWifiEnabled(checked) }
+                        id: swCellOnly
+                        onToggled: if (checked) setNetMode(NetworkManager.CellularOnly); else syncSwitches()
                     }
                 }
 
                 // 分隔线
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
 
-                // ----- 网络自动切换 -----
+                // 全开优先WIFI
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 0
                     Text {
-                        text: "网络自动切换"
+                        text: "全开优先WIFI"
                         font.family: Theme.fontFamilyUi
                         font.pixelSize: 24
                         color: Theme.colorTextSecondary
                         Layout.alignment: Qt.AlignVCenter
                     }
                     Item { Layout.fillWidth: true }
-                    ToggleSwitch { id: swAuto; checked: AppSettings.networkAutoSwitch; onToggled: AppSettings.networkAutoSwitch = checked }
+                    ToggleSwitch {
+                        id: swAllWifi
+                        onToggled: if (checked) setNetMode(NetworkManager.AllWifiPriority); else syncSwitches()
+                    }
+                }
+
+                // 分隔线
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
+
+                // 全开优先4G
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Text {
+                        text: "全开优先4G"
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: 24
+                        color: Theme.colorTextSecondary
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { Layout.fillWidth: true }
+                    ToggleSwitch {
+                        id: swAllCell
+                        onToggled: if (checked) setNetMode(NetworkManager.AllCellularPriority); else syncSwitches()
+                    }
                 }
             }
         }
