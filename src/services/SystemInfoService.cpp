@@ -15,6 +15,7 @@ SystemInfoService::SystemInfoService(QObject *parent)
     m_appVersion = QString("V%1_%2").arg(APP_VERSION_FULL).arg(APP_BUILD_DATE);
     parseLog();
     parseCpuInfo();
+    parseMemInfo();
 
     qDebug() << "[SystemInfo] 日志解析完成:"
              << "\n  开机次数:"   << m_bootCount
@@ -123,4 +124,40 @@ void SystemInfoService::parseCpuInfo()
             << "hardModel="    << m_hardModel
             << "hardRevision=" << m_hardRevision
             << "hardSerial="   << m_hardSerial;
+}
+
+// ============================================================================
+// 内存信息：解析 /proc/meminfo，判断总内存是 2GB 还是 4GB
+// ============================================================================
+void SystemInfoService::parseMemInfo()
+{
+    QFile file("/proc/meminfo");
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "[SystemInfo] 无法打开 /proc/meminfo:" << file.errorString();
+        m_memTotal = "--";
+        return;
+    }
+
+    QTextStream in(&file);
+    qint64 memTotalKb = 0;
+
+    QString line;
+    while (!(line = in.readLine()).isNull()) {
+        if (line.startsWith("MemTotal:")) {
+            // 格式: MemTotal:        8192000 kB
+            QString val = line.mid(9).trimmed().remove("kB").trimmed();
+            memTotalKb = val.toLongLong();
+            break;
+        }
+    }
+    file.close();
+
+    if (memTotalKb > 0) {
+        double totalGb = memTotalKb / 1024.0 / 1024.0;
+        // 判断: < 3GB → 2GB, >= 3GB → 4GB
+        m_memTotal = (totalGb < 3.0) ? "2GB" : "4GB";
+        qDebug() << "[SystemInfo] 内存总容量:" << totalGb << "GB →" << m_memTotal;
+    } else {
+        m_memTotal = "--";
+    }
 }

@@ -24,6 +24,7 @@ class SystemInfoService : public QObject
     Q_PROPERTY(QString hardModel        READ hardModel        CONSTANT)
     Q_PROPERTY(QString hardRevision     READ hardRevision     CONSTANT)
     Q_PROPERTY(QString hardSerial       READ hardSerial       CONSTANT)
+    Q_PROPERTY(QString memTotal         READ memTotal         CONSTANT)
 
 public:
     explicit SystemInfoService(QObject *parent = nullptr);
@@ -37,6 +38,7 @@ public:
     QString hardModel()    const { return m_hardModel; }
     QString hardRevision() const { return m_hardRevision; }
     QString hardSerial()   const { return m_hardSerial; }
+    QString memTotal()       const { return m_memTotal; }
 
 private:
     static constexpr const char *kLogFile = "/var/log/power_monitor.log";
@@ -44,6 +46,8 @@ private:
     void parseLog();
     /** @brief 读取 /proc/cpuinfo 解析树莓派 Model/Revision/Serial（开机后不变，构造时读一次） */
     void parseCpuInfo();
+    /** @brief 读取 /proc/meminfo 解析内存信息（构造时读一次） */
+    void parseMemInfo();
 
     int     m_bootCount     = 0;
     int     m_shutdownCount = 0;
@@ -54,4 +58,7 @@ private:
     QString m_hardModel;     // /proc/cpuinfo Model   → MQTT hardver
     QString m_hardRevision;  // /proc/cpuinfo Revision → MQTT revision
     QString m_hardSerial;    // /proc/cpuinfo Serial   → MQTT serial
+
+    // 内存信息（/proc/meminfo）
+    QString m_memTotal;  // "2GB" 或 "4GB"
 };

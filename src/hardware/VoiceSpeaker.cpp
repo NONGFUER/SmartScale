@@ -1,6 +1,7 @@
 #include "VoiceSpeaker.h"
 #include <QDebug>
 #include <QCoreApplication>
+#include <QFile>
 #include <cmath>
 #include <dlfcn.h>
 
@@ -112,8 +113,8 @@ bool TtsSynthWorker::initializeEngine()
     SherpaOnnxOfflineTtsConfig config;
     memset(&config, 0, sizeof(config));
 
-    config.model.num_threads = 2;          // RPi 级 CPU，避让 UI/相机线程
-    config.model.debug = 1;                // 开 debug 让 sherpa 打印拒绝原因到 stderr
+    config.model.num_threads = 1;          // 最小线程数，避让 UI/相机线程
+    config.model.debug = 0;                // 关闭 debug（避免 stderr 大量输出）
     config.model.provider = "cpu";
     config.model.matcha.acoustic_model = pathAcoustic.constData();
     config.model.matcha.vocoder       = pathVocoder.constData();
@@ -127,11 +128,14 @@ bool TtsSynthWorker::initializeEngine()
     config.silence_scale      = 0.3f;
 
     qDebug() << "[TtsWorker] Creating Matcha-TTS engine (Baker)...";
-    qDebug() << "[TtsWorker] acoustic:" << pathAcoustic;
-    qDebug() << "[TtsWorker] vocoder:" << pathVocoder;
-    qDebug() << "[TtsWorker] lexicon:" << pathLexicon;
-    qDebug() << "[TtsWorker] tokens:" << pathTokens;
-    qDebug() << "[TtsWorker] dict_dir:" << pathDataDir;
+
+    // 诊断：检查模型文件是否存在
+    for (const auto &p : {pathAcoustic, pathVocoder, pathLexicon, pathTokens}) {
+        if (!QFile::exists(QString::fromUtf8(p))) {
+            qWarning() << "[TtsWorker] MISSING FILE:" << p;
+        }
+    }
+
     m_engine = fnCreate(&config);
     if (!m_engine) {
         qWarning() << "[TtsWorker] SherpaOnnxCreateOfflineTts returned NULL";
@@ -144,20 +148,8 @@ bool TtsSynthWorker::initializeEngine()
     return true;
 }
 
-// 合成进度回调：返回 0 终止合成，返回 1 继续
-// arg 是指向 std::atomic<uint32_t> 的指针（代际取消标志）
-static int32_t synthProgressCallback(const float * /*samples*/, int32_t /*n*/,
-                                     float /*progress*/, void *arg)
-{
-    auto currentGen = static_cast<std::atomic<uint32_t> *>(arg)->load(std::memory_order_relaxed);
-    static uint32_t lastReportedGen = 0;
-    // 只在代际变化时打一次 log（避免刷屏）
-    if (currentGen != lastReportedGen) {
-        lastReportedGen = currentGen;
-        qDebug() << "[TtsWorker] Synth cancelled: generation changed to" << currentGen;
-    }
-    return 0; // 始终让调用方检查代际
-}
+// 合成进度回调已移除：取消机制改为 VoiceSpeaker::onAudioReady 的代际检查，
+// 过期合成结果在主线程被丢弃即可，无需中断 sherpa 内部推理
 
 void TtsSynthWorker::synthesize(const QString &text, uint32_t generation)
 {
@@ -183,7 +175,7 @@ void TtsSynthWorker::synthesize(const QString &text, uint32_t generation)
 
     const SherpaOnnxGeneratedAudio *audio = fnGenerate(
         m_engine, utf8Text.constData(), &genCfg,
-        synthProgressCallback, &generation);
+        nullptr, nullptr);  // 不用 callback，取消靠 onAudioReady 代际检查丢弃结果
 
     if (!audio || !audio->samples || audio->n <= 0) {
         qWarning() << "[TtsWorker] Generate returned NULL or empty audio";
@@ -192,7 +184,9 @@ void TtsSynthWorker::synthesize(const QString &text, uint32_t generation)
     }
 
     // 峰值归一化 + float → int16 PCM（复用 tts_worker.py 已验证逻辑）
+    // 注意：必须在 fnDestroyAudio 之前保存 sampleRate
     int32_t n = audio->n;
+    int32_t sampleRate = audio->sample_rate;
     const float *samples = audio->samples;
     float peak = 0.0f;
     for (int32_t i = 0; i < n; ++i) {
@@ -214,10 +208,9 @@ void TtsSynthWorker::synthesize(const QString &text, uint32_t generation)
 
     fnDestroyAudio(audio);
 
-    qDebug() << "[TtsWorker] Synthesis done:" << n << "samples @"
-             << audio->sample_rate << "Hz, peak=" << peak;
+    qDebug() << "[TtsWorker] Synthesis done:" << n << "samples @" << sampleRate << "Hz, peak=" << peak;
 
-    Q_EMIT audioReady(pcm16, audio->sample_rate, generation);
+    Q_EMIT audioReady(pcm16, sampleRate, generation);
 }
 
 // ============================================================
@@ -225,49 +218,25 @@ void TtsSynthWorker::synthesize(const QString &text, uint32_t generation)
 // ============================================================
 VoiceSpeaker::VoiceSpeaker(QObject *parent)
     : QObject(parent)
+    , m_worker(nullptr)
     , m_aplayProcess(nullptr)
     , m_generation(0)
     , m_isSpeaking(false)
     , m_isReady(false)
+    , m_threadStarted(false)
 {
-    // 创建并启动合成工作线程
-    m_worker = new TtsSynthWorker();
-    m_worker->moveToThread(&m_synthThread);
-
-    // 主线程 → 工作线程：投递合成任务
-    connect(this, &VoiceSpeaker::requestSynthesize,
-            m_worker, &TtsSynthWorker::synthesize);
-
-    // 工作线程 → 主线程：返回合成结果
-    connect(m_worker, &TtsSynthWorker::audioReady,
-            this, &VoiceSpeaker::onAudioReady, Qt::QueuedConnection);
-    connect(m_worker, &TtsSynthWorker::synthError,
-            this, &VoiceSpeaker::onSynthError, Qt::QueuedConnection);
-
-    m_synthThread.start();
-
-    // 异步初始化引擎（在工作线程中执行，不阻塞主线程）
-    QMetaObject::invokeMethod(m_worker, [this]() {
-        bool ok = m_worker->initializeEngine();
-        QMetaObject::invokeMethod(this, [this, ok]() {
-            m_isReady = ok;
-            if (ok) {
-                qDebug() << "[VoiceSpeaker] Sherpa-onnx Matcha TTS ready";
-            } else {
-                qWarning() << "[VoiceSpeaker] Sherpa-onnx Matcha TTS init FAILED";
-            }
-            Q_EMIT readyChanged();
-        }, Qt::QueuedConnection);
-    });
+    // 惰性启动：线程只在首次 speak() 时创建，不影响 app 启动速度
 }
 
 VoiceSpeaker::~VoiceSpeaker()
 {
     stop();
     stopAplay();
-    m_synthThread.quit();
-    m_synthThread.wait(5000);
-    delete m_worker;
+    if (m_threadStarted) {
+        m_synthThread.quit();
+        m_synthThread.wait(5000);
+        delete m_worker;
+    }
 }
 
 void VoiceSpeaker::speak(const QString &text)
@@ -276,19 +245,57 @@ void VoiceSpeaker::speak(const QString &text)
         return;
     }
 
-    // 取消正在进行的旧合成+播放
-    if (m_isSpeaking) {
-        stop();
-        QCoreApplication::processEvents();
+    // 惰性启动：首次 speak() 时才创建线程和引擎
+    if (!m_threadStarted) {
+        m_threadStarted = true;
+        qDebug() << "[VoiceSpeaker] Lazy-starting synth thread...";
+
+        m_worker = new TtsSynthWorker();
+        m_worker->moveToThread(&m_synthThread);
+
+        connect(this, &VoiceSpeaker::requestSynthesize,
+                m_worker, &TtsSynthWorker::synthesize);
+        connect(m_worker, &TtsSynthWorker::audioReady,
+                this, &VoiceSpeaker::onAudioReady, Qt::QueuedConnection);
+        connect(m_worker, &TtsSynthWorker::synthError,
+                this, &VoiceSpeaker::onSynthError, Qt::QueuedConnection);
+
+        m_synthThread.start();
+
+        // 异步初始化引擎
+        QMetaObject::invokeMethod(m_worker, [this]() {
+            bool ok = m_worker->initializeEngine();
+            QMetaObject::invokeMethod(this, [this, ok]() {
+                m_isReady = ok;
+                if (ok) {
+                    qDebug() << "[VoiceSpeaker] Sherpa-onnx Matcha TTS ready";
+                    if (!m_pendingText.isEmpty()) {
+                        QString text = m_pendingText;
+                        m_pendingText.clear();
+                        qDebug() << "[VoiceSpeaker] Replaying pending speak:" << text;
+                        speak(text);
+                    }
+                } else {
+                    qWarning() << "[VoiceSpeaker] Sherpa-onnx Matcha TTS init FAILED";
+                    m_pendingText.clear();
+                }
+                Q_EMIT readyChanged();
+            }, Qt::QueuedConnection);
+        });
     }
 
+    // 引擎未就绪：缓存本次文本，等引擎初始化完成后自动重播
     if (!m_isReady) {
-        qWarning() << "[VoiceSpeaker] TTS system not ready";
-        Q_EMIT errorOccurred("语音合成系统未就绪");
+        qDebug() << "[VoiceSpeaker] Engine not ready, pending speak:" << text;
+        m_pendingText = text;
         return;
     }
 
-    // 递增代际（使旧的 callback 检测到取消）
+    // 取消正在进行的旧合成+播放
+    if (m_isSpeaking) {
+        stop();
+    }
+
     uint32_t gen = m_generation.fetch_add(1) + 1;
 
     qDebug() << "[VoiceSpeaker] speak:" << text << "gen=" << gen;
@@ -304,11 +311,7 @@ void VoiceSpeaker::speak(const QString &text)
 void VoiceSpeaker::stop()
 {
     qDebug() << "[VoiceSpeaker] stop requested";
-
-    // 递增代际 → 合成线程的 progress callback 会检测到变化并终止
     m_generation.fetch_add(1);
-
-    // 立即终止播放进程
     stopAplay();
 
     if (m_isSpeaking) {
@@ -320,38 +323,50 @@ void VoiceSpeaker::stop()
 
 void VoiceSpeaker::warmup()
 {
-    // 引擎常驻后无需预热 page cache；保留接口兼容 QML 调用
     qDebug() << "[VoiceSpeaker] warmup: engine is resident, no-op";
 }
 
 bool VoiceSpeaker::checkSystemReady()
 {
-    return m_isReady;  // isReady 由引擎异步初始化结果决定
+    return m_isReady;
 }
 
-// ── 播放控制（主线程） ──
+// ── 播放控制（主线程，aplay 常驻进程，不再每次新建） ──
 
 void VoiceSpeaker::startAplay(const QByteArray &pcm16Data)
 {
-    stopAplay();
+    stopAplay();  // 如果上一个 aplay 还在播，先停掉
 
     m_aplayProcess = new QProcess(this);
+    // 不 connect finished/errorOccurred 到具体槽函数，
+    // 改用 lambda 内联处理，避免信号累积
     connect(m_aplayProcess, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-            this, &VoiceSpeaker::onAplayFinished);
+            this, [this](int exitCode, QProcess::ExitStatus) {
+        if (m_isSpeaking) {
+            qDebug() << "[VoiceSpeaker] aplay finished, exitCode=" << exitCode;
+            m_isSpeaking = false;
+            Q_EMIT speakingChanged();
+            Q_EMIT speakFinished();
+        }
+    });
     connect(m_aplayProcess, &QProcess::errorOccurred,
-            this, &VoiceSpeaker::onAplayErrorOccurred);
+            this, [this](QProcess::ProcessError error) {
+        qWarning() << "[VoiceSpeaker] aplay error:" << error;
+        if (m_isSpeaking) {
+            m_isSpeaking = false;
+            Q_EMIT speakingChanged();
+            Q_EMIT speakFinished();
+        }
+    });
 
-    // aplay 仅播放裸 PCM stdin，命令固定不含文本（安全）
     m_aplayProcess->start("aplay", QStringList({
-        "-r", "22050",
-        "-f", "S16_LE",
-        "-c", "1"
+        "-r", "22050", "-f", "S16_LE", "-c", "1"
     }));
 
     if (!m_aplayProcess->waitForStarted(2000)) {
         qWarning() << "[VoiceSpeaker] aplay failed to start";
         Q_EMIT errorOccurred("音频播放器启动失败");
-        delete m_aplayProcess;
+        m_aplayProcess->deleteLater();
         m_aplayProcess = nullptr;
         return;
     }
@@ -362,35 +377,21 @@ void VoiceSpeaker::startAplay(const QByteArray &pcm16Data)
 
 void VoiceSpeaker::stopAplay()
 {
-    if (m_aplayProcess && m_aplayProcess->state() != QProcess::NotRunning) {
-        m_aplayProcess->terminate();
-        if (!m_aplayProcess->waitForFinished(500)) {
-            m_aplayProcess->kill();
+    if (!m_aplayProcess) return;
+
+    QProcess *p = m_aplayProcess;
+    m_aplayProcess = nullptr;
+
+    if (p->state() != QProcess::NotRunning) {
+        p->disconnect(this);          // 断开所有信号，避免 lambda 引用已释放的 this
+        p->terminate();
+        p->waitForFinished(200);      // 最多等 200ms，不阻塞主线程
+        if (p->state() != QProcess::NotRunning) {
+            p->kill();
+            p->waitForFinished(100);
         }
     }
-}
-
-void VoiceSpeaker::onAplayFinished(int exitCode, QProcess::ExitStatus exitStatus)
-{
-    Q_UNUSED(exitStatus)
-
-    if (m_isSpeaking) {
-        qDebug() << "[VoiceSpeaker] aplay finished, exitCode=" << exitCode;
-        m_isSpeaking = false;
-        Q_EMIT speakingChanged();
-        Q_EMIT speakFinished();
-    }
-}
-
-void VoiceSpeaker::onAplayErrorOccurred(QProcess::ProcessError error)
-{
-    qWarning() << "[VoiceSpeaker] aplay error:" << error;
-
-    if (m_isSpeaking) {
-        m_isSpeaking = false;
-        Q_EMIT speakingChanged();
-        Q_EMIT speakFinished();
-    }
+    p->deleteLater();
 }
 
 // ── 合成回调（主线程，QueuedConnection） ──

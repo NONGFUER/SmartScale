@@ -42,13 +42,18 @@ Dialog {
         syncSwitches()
     }
 
+    // 防重入标志：程序赋值 checked 时置 true，避免 onToggled 误触发 setNetMode 循环
+    property bool syncing: false
+
     // 根据 netMode 强制同步四个开关的 checked（用户点击会打断绑定，故用 JS 显式同步，
-    // 确保四个中始终只有一个为开，杜绝“全不选/多选”）
+    // 确保四个中始终只有一个为开，杜绝"全不选/多选"）
     function syncSwitches() {
+        syncing = true
         swWifiOnly.checked = (netMode === NetworkManager.WifiOnly)
         swCellOnly.checked = (netMode === NetworkManager.CellularOnly)
         swAllWifi.checked  = (netMode === NetworkManager.AllWifiPriority)
         swAllCell.checked  = (netMode === NetworkManager.AllCellularPriority)
+        syncing = false
     }
 
     // 打开时推导应高亮的模式（四个中必须选一个，默认全开优先4G）
@@ -98,9 +103,84 @@ Dialog {
         }
     }
 
-    Flickable {
-        anchors.fill: parent
+    // ====== 固定头部：标题栏 + 分隔线（不随内容滚动）======
+    RowLayout {
+        id: headerBar
+        anchors.top: parent.top
+        anchors.left: parent.left
+        anchors.right: parent.right
         anchors.margins: 32
+        spacing: 0
+
+        // 返回按钮 — 使用 back2.png + "返回"文字（圆角胶囊 + 浅底边框）
+        Rectangle {
+            width: 116; height: 44; radius: 22
+
+            Row {
+                anchors.centerIn: parent
+                spacing: 6
+
+                Image {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 22; height: 22
+                    fillMode: Image.PreserveAspectFit
+                    source: "qrc:/resources/img/back2.png"
+                }
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "返回"
+                    font.pixelSize: 24
+                    font.bold: true
+                    font.family: Theme.fontFamilyUi
+                    color: "#4649E5"
+                }
+            }
+
+            MouseArea {
+                id: backMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: root.close()
+            }
+        }
+
+        Item { Layout.fillWidth: true }
+
+        Text {
+            text: "设备信息"
+            font.family: Theme.fontFamilyUi
+            font.pixelSize: 24
+            font.bold: true
+            color: Theme.colorTextPrimary
+        }
+
+        Item { Layout.fillWidth: true }
+        Item { width: 40 }
+    }
+
+    // 标题下分隔线
+    Rectangle {
+        id: headerDivider
+        anchors.top: headerBar.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.leftMargin: 32
+        anchors.rightMargin: 32
+        anchors.topMargin: 24
+        height: 1
+        color: "#E8ECF0"
+    }
+
+    // ====== 可滚动内容区（设备信息 + 功能设置）======
+    Flickable {
+        id: contentFlickable
+        anchors.top: headerDivider.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: footerBar.top
+        anchors.topMargin: 8
+        anchors.leftMargin: 32
+        anchors.rightMargin: 32
         contentWidth: width
         contentHeight: col.implicitHeight
         clip: true
@@ -110,68 +190,6 @@ Dialog {
             id: col
             width: parent.width
             spacing: 0
-
-        // ====== 标题栏：返回箭头（圆形背景）+ 设置（居中）======
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.bottomMargin: 24
-            spacing: 0
-
-            // 返回按钮 — 使用 back2.png + "返回"文字（圆角胶囊 + 浅底边框）
-            Rectangle {
-                width: 116; height: 44; radius: 22
-               
-
-                Row {
-                    anchors.centerIn: parent
-                    spacing: 6
-
-                    Image {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 22; height: 22
-                        fillMode: Image.PreserveAspectFit
-                        source: "qrc:/resources/img/back2.png"
-                    }
-                    Text {
-                        anchors.verticalCenter: parent.verticalCenter
-                        text: "返回"
-                        font.pixelSize: 24
-                        font.bold: true
-                        font.family: Theme.fontFamilyUi
-                        color: "#4649E5"
-                    }
-                }
-
-                MouseArea {
-                    id: backMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.close()
-                }
-            }
-
-            Item { Layout.fillWidth: true }
-
-            Text {
-                text: "设备信息"
-                font.family: Theme.fontFamilyUi
-                font.pixelSize: 24
-                font.bold: true
-                color: Theme.colorTextPrimary
-            }
-
-            Item { Layout.fillWidth: true }
-            // 右侧占位，保持标题居中
-            Item { width: 40 }
-        }
-
-        // 标题下分隔线
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.bottomMargin: 8
-            height: 1
-            color: "#E8ECF0"
-        }
 
         // ========================================
         // 设备信息列表（每项带底部分隔线）
@@ -183,6 +201,7 @@ Dialog {
         //SettingRow { label: "秤自重:"; value: "20kg"; isLast: false }
         SettingRow { label: "SIM卡号(ICCID):"; value: (CellularModem.ccid !== undefined && CellularModem.ccid.length > 0) ? CellularModem.ccid : "—"; isLast: false }
        // SettingRow { label: "IMSI:"; value: (CellularModem.imsi !== undefined && CellularModem.imsi.length > 0) ? CellularModem.imsi : "—"; isLast: true }
+        SettingRow { label: "内存容量:"; value: SystemInfo.memTotal; isLast: false }
 
         // 分隔间距
         Item { Layout.preferredHeight: 20 }
@@ -266,7 +285,11 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swWifiOnly
-                        onToggled: if (checked) setNetMode(NetworkManager.WifiOnly); else syncSwitches()
+                        onToggled: {
+                            if (syncing) return
+                            if (checked) setNetMode(NetworkManager.WifiOnly)
+                            else syncSwitches()
+                        }
                     }
                 }
 
@@ -287,7 +310,11 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swCellOnly
-                        onToggled: if (checked) setNetMode(NetworkManager.CellularOnly); else syncSwitches()
+                        onToggled: {
+                            if (syncing) return
+                            if (checked) setNetMode(NetworkManager.CellularOnly)
+                            else syncSwitches()
+                        }
                     }
                 }
 
@@ -308,7 +335,11 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swAllWifi
-                        onToggled: if (checked) setNetMode(NetworkManager.AllWifiPriority); else syncSwitches()
+                        onToggled: {
+                            if (syncing) return
+                            if (checked) setNetMode(NetworkManager.AllWifiPriority)
+                            else syncSwitches()
+                        }
                     }
                 }
 
@@ -329,76 +360,89 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swAllCell
-                        onToggled: if (checked) setNetMode(NetworkManager.AllCellularPriority); else syncSwitches()
+                        onToggled: {
+                            if (syncing) return
+                            if (checked) setNetMode(NetworkManager.AllCellularPriority)
+                            else syncSwitches()
+                        }
                     }
                 }
             }
         }
 
-        Item { Layout.preferredHeight: 24 }
-
-        // ========================================
-        // 公司信息
-        // ========================================
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 96
-            radius: 12
-            color: "#F5F7FA"
-
-            ColumnLayout {
-                anchors.centerIn: parent
-                spacing: 8
-
-                Text {
-                    text: "上海小管事机器人有限公司"
-                    font.family: Theme.fontFamilyUi
-                    font.pixelSize: 24
-                    font.bold: true
-                    color: Theme.colorTextPrimary
-                    Layout.alignment: Qt.AlignHCenter
-                }
-                Text {
-                    text: "© 2026 版权所有"
-                    font.family: Theme.fontFamilyUi
-                    font.pixelSize: 24
-                    color: Theme.colorTextSecondary
-                    Layout.alignment: Qt.AlignHCenter
-                }
-            }
-        }
-
-        Item { Layout.preferredHeight: 28 }
-
-        // ====== 底部关闭按钮 ======
-        Button {
-            id: closeBtn
-            Layout.alignment: Qt.AlignHCenter
-            text: "退出"
-            implicitWidth: 140
-            implicitHeight: 46
-
-            background: Rectangle {
-                radius: 8
-                color: closeBtn.hovered ? "#4361EE" : "#3B82F6"
-            }
-
-            contentItem: Text {
-                text: closeBtn.text
-                font.pixelSize: 24
-                font.bold: true
-                color: "#FFFFFF"
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
-
-            onClicked: root.close()
-        }
-
-        Item { Layout.preferredHeight: 8 }
-        Item { Layout.fillHeight: true }
         }  // end ColumnLayout
     }  // end Flickable
+
+    // ====== 固定底部：公司信息 + 退出按钮（不随内容滚动）======
+    Rectangle {
+        id: footerBar
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        height: footerCol.implicitHeight + 64
+        color: "transparent"
+
+        ColumnLayout {
+            id: footerCol
+            anchors.fill: parent
+            anchors.margins: 32
+            spacing: 24
+
+            // 公司信息
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 96
+                radius: 12
+                color: "#F5F7FA"
+
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    spacing: 8
+
+                    Text {
+                        text: "上海小管事机器人有限公司"
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: Theme.colorTextPrimary
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                    Text {
+                        text: "© 2026 版权所有"
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: 24
+                        color: Theme.colorTextSecondary
+                        Layout.alignment: Qt.AlignHCenter
+                    }
+                }
+            }
+
+            // 退出按钮
+            Button {
+                id: closeBtn
+                Layout.alignment: Qt.AlignHCenter
+                text: "退出"
+                implicitWidth: 140
+                implicitHeight: 46
+
+                background: Rectangle {
+                    radius: 8
+                    color: closeBtn.hovered ? "#4361EE" : "#3B82F6"
+                }
+
+                contentItem: Text {
+                    text: closeBtn.text
+                    font.pixelSize: 24
+                    font.bold: true
+                    color: "#FFFFFF"
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                onClicked: root.close()
+            }
+        }
+    }
 
     // ==========================================
     // 内联组件定义

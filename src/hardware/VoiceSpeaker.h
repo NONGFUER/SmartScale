@@ -85,8 +85,6 @@ Q_SIGNALS:
 private Q_SLOTS:
     void onAudioReady(QByteArray pcm16Data, int sampleRate, uint32_t generation);
     void onSynthError(QString message, uint32_t generation);
-    void onAplayFinished(int exitCode, QProcess::ExitStatus exitStatus);
-    void onAplayErrorOccurred(QProcess::ProcessError error);
 
 private:
     void startAplay(const QByteArray &pcm16Data);
@@ -104,6 +102,8 @@ private:
 
     bool m_isSpeaking;
     bool m_isReady;
+    bool m_threadStarted;  // 惰性线程启动标记：首次 speak() 时才创建 QThread
+    QString m_pendingText;  // 引擎未就绪时缓存的 speak 文本，就绪后自动重播
 };
 
 #endif // VOICESPEAKER_H
