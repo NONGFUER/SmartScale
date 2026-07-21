@@ -89,6 +89,7 @@ private Q_SLOTS:
 private:
     void startAplay(const QByteArray &pcm16Data);
     void stopAplay();
+    void startSynthThread();  // 构造函数中调用：后台预初始化引擎，消除首次播报延迟
 
     // 合成线程
     QThread m_synthThread;

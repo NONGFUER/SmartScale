@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 import App.Backend 1.0
 
 Rectangle {
@@ -45,7 +46,8 @@ Rectangle {
                 Rectangle {
                     width: 48; height: 48; radius: 24
                     color: "#FFFFFF"
-                    clip: true
+                    // Qt6 clip 不随 radius 裁剪，需用 MultiEffect mask 实现圆形遮罩
+                    clip: false
 
                     Image {
                         id: avatarImage
@@ -54,6 +56,33 @@ Rectangle {
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         cache: true
+                        visible: false  // 隐藏原始图，只显示 mask 后的效果
+                    }
+
+                    // 圆形 mask：把长方形图片裁剪为圆形
+                    MultiEffect {
+                        source: avatarImage
+                        anchors.fill: avatarImage
+                        maskEnabled: true
+                        maskSource: avatarMask
+                        maskSpreadAtMin: 1.0
+                        maskThresholdMin: 0.5
+                        visible: avatarImage.status === Image.Ready && BackendAuth.avatarUrl !== ""
+                    }
+
+                    // mask 模板：白色圆形（决定哪些像素可见）
+                    Item {
+                        id: avatarMask
+                        width: 48; height: 48
+                        visible: false
+                        layer.enabled: true
+                        layer.smooth: true
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 24
+                            color: "white"
+                        }
                     }
 
                     Text {

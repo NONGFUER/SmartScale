@@ -225,7 +225,9 @@ VoiceSpeaker::VoiceSpeaker(QObject *parent)
     , m_isReady(false)
     , m_threadStarted(false)
 {
-    // 惰性启动：线程只在首次 speak() 时创建，不影响 app 启动速度
+    // 后台预初始化：立即创建线程并加载引擎（异步，不阻塞 UI），
+    // 等用户第一次触发 speak() 时引擎已就绪，消除首次播报延迟
+    startSynthThread();
 }
 
 VoiceSpeaker::~VoiceSpeaker()
@@ -239,49 +241,53 @@ VoiceSpeaker::~VoiceSpeaker()
     }
 }
 
+// 启动合成线程并异步初始化引擎（在构造函数中调用，不阻塞 UI）
+void VoiceSpeaker::startSynthThread()
+{
+    if (m_threadStarted) return;
+    m_threadStarted = true;
+
+    qDebug() << "[VoiceSpeaker] Starting synth thread in background...";
+
+    m_worker = new TtsSynthWorker();
+    m_worker->moveToThread(&m_synthThread);
+
+    connect(this, &VoiceSpeaker::requestSynthesize,
+            m_worker, &TtsSynthWorker::synthesize);
+    connect(m_worker, &TtsSynthWorker::audioReady,
+            this, &VoiceSpeaker::onAudioReady, Qt::QueuedConnection);
+    connect(m_worker, &TtsSynthWorker::synthError,
+            this, &VoiceSpeaker::onSynthError, Qt::QueuedConnection);
+
+    m_synthThread.start();
+
+    // 异步初始化引擎（在工作线程中执行，不阻塞主线程）
+    QMetaObject::invokeMethod(m_worker, [this]() {
+        bool ok = m_worker->initializeEngine();
+        QMetaObject::invokeMethod(this, [this, ok]() {
+            m_isReady = ok;
+            if (ok) {
+                qDebug() << "[VoiceSpeaker] Sherpa-onnx Matcha TTS ready";
+                // 引擎就绪后自动重播缓存的 speak 请求
+                if (!m_pendingText.isEmpty()) {
+                    QString text = m_pendingText;
+                    m_pendingText.clear();
+                    qDebug() << "[VoiceSpeaker] Replaying pending speak:" << text;
+                    speak(text);
+                }
+            } else {
+                qWarning() << "[VoiceSpeaker] Sherpa-onnx Matcha TTS init FAILED";
+                m_pendingText.clear();
+            }
+            Q_EMIT readyChanged();
+        }, Qt::QueuedConnection);
+    });
+}
+
 void VoiceSpeaker::speak(const QString &text)
 {
     if (text.trimmed().isEmpty()) {
         return;
-    }
-
-    // 惰性启动：首次 speak() 时才创建线程和引擎
-    if (!m_threadStarted) {
-        m_threadStarted = true;
-        qDebug() << "[VoiceSpeaker] Lazy-starting synth thread...";
-
-        m_worker = new TtsSynthWorker();
-        m_worker->moveToThread(&m_synthThread);
-
-        connect(this, &VoiceSpeaker::requestSynthesize,
-                m_worker, &TtsSynthWorker::synthesize);
-        connect(m_worker, &TtsSynthWorker::audioReady,
-                this, &VoiceSpeaker::onAudioReady, Qt::QueuedConnection);
-        connect(m_worker, &TtsSynthWorker::synthError,
-                this, &VoiceSpeaker::onSynthError, Qt::QueuedConnection);
-
-        m_synthThread.start();
-
-        // 异步初始化引擎
-        QMetaObject::invokeMethod(m_worker, [this]() {
-            bool ok = m_worker->initializeEngine();
-            QMetaObject::invokeMethod(this, [this, ok]() {
-                m_isReady = ok;
-                if (ok) {
-                    qDebug() << "[VoiceSpeaker] Sherpa-onnx Matcha TTS ready";
-                    if (!m_pendingText.isEmpty()) {
-                        QString text = m_pendingText;
-                        m_pendingText.clear();
-                        qDebug() << "[VoiceSpeaker] Replaying pending speak:" << text;
-                        speak(text);
-                    }
-                } else {
-                    qWarning() << "[VoiceSpeaker] Sherpa-onnx Matcha TTS init FAILED";
-                    m_pendingText.clear();
-                }
-                Q_EMIT readyChanged();
-            }, Qt::QueuedConnection);
-        });
     }
 
     // 引擎未就绪：缓存本次文本，等引擎初始化完成后自动重播
