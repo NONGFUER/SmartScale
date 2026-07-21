@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
+import App.Backend 1.0
 
 /**
  * NumberPadPopup — 底部弹出的 9 宫格数字键盘
@@ -398,6 +399,7 @@ Popup {
         if (parseFloat(ns) > 9999.99)
             return                          // 上限 9999.99，超出不追加
         root.displayText = ns
+        VoiceSpeaker.speak(["零","一","二","三","四","五","六","七","八","九"][d])  // 中文数字播报
     }
 
     function _appendDot() {
@@ -405,6 +407,7 @@ Popup {
         if (s.indexOf(".") >= 0)
             return                          // 已有小数点
         root.displayText = (s.length === 0 ? "0" : s) + "."
+        VoiceSpeaker.speak("点")             // 语音播报小数点
     }
 
     function _backspace() {
