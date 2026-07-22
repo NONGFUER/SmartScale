@@ -181,6 +181,7 @@ Dialog {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
+
         ColumnLayout {
             id: col
             width: parent.width
@@ -363,6 +364,33 @@ Dialog {
 
         }  // end ColumnLayout
     }  // end Flickable
+
+    // 右侧滚动条（独立于 Flickable content，固定在可视区域右侧）
+    Rectangle {
+        id: scrollBarTrack
+        anchors.top: contentFlickable.top
+        anchors.bottom: contentFlickable.bottom
+        anchors.right: parent.right
+        anchors.rightMargin: 8
+        width: 6
+        radius: 3
+        color: "#E2E8F0"
+        opacity: contentFlickable.contentHeight > contentFlickable.height ? 0.8 : 0
+        visible: opacity > 0
+        Behavior on opacity { NumberAnimation { duration: 200 } }
+
+        Rectangle {
+            id: scrollBarHandle
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width
+            radius: parent.radius
+            color: "#C7CEDA"
+            height: Math.max(40, parent.height * (contentFlickable.height / contentFlickable.contentHeight))
+            y: contentFlickable.contentHeight <= contentFlickable.height ? 0 :
+               (contentFlickable.contentY / (contentFlickable.contentHeight - contentFlickable.height))
+               * (parent.height - height)
+        }
+    }
 
     // ====== 固定底部：公司信息 + 退出按钮（不随内容滚动）======
     Rectangle {

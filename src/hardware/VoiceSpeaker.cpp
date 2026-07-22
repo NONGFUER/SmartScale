@@ -170,7 +170,7 @@ void TtsSynthWorker::synthesize(const QString &text, uint32_t generation)
     SherpaOnnxGenerationConfig genCfg;
     memset(&genCfg, 0, sizeof(genCfg));
     genCfg.sid           = 0;
-    genCfg.speed         = 1.0f;
+    genCfg.speed         = 1.0204f;
     genCfg.silence_scale = 0.3f;
 
     const SherpaOnnxGeneratedAudio *audio = fnGenerate(

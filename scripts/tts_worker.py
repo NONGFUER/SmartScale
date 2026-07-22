@@ -14,7 +14,7 @@ tts_config = sherpa_onnx.OfflineTtsConfig(
             lexicon=os.path.join(model_dir, "lexicon.txt"),
             tokens=os.path.join(model_dir, "tokens.txt"),
             data_dir=model_dir,          # fst / dict 辅助文件目录
-            length_scale=0.92,            # 语速控制，<1 更快 >1 更慢
+            length_scale=0.98,            # 语速控制，<1 更快 >1 更慢
         ),
         provider="cpu",
         debug=False,
@@ -25,7 +25,7 @@ tts_config = sherpa_onnx.OfflineTtsConfig(
 tts = sherpa_onnx.OfflineTts(tts_config)
 
 # 准备合成文本
-text = "土豆"
+text = "！！！土豆！！！"
 
 print(f"正在合成语音: '{text}'")
 

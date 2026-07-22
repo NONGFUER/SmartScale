@@ -8,7 +8,7 @@
 // ============================================================
 // 常量定义
 // ============================================================
-static const int    kStatusPollIntervalMs = 10000;  // 状态轮询间隔
+static const int    kStatusPollIntervalMs = 3000;   // 状态轮询间隔
 static const int    kScanTimeoutMs        = 15000;   // 扫描超时
 static const int    kConnectTimeoutMs     = 30000;   // 连接超时
 
@@ -972,7 +972,13 @@ void NetworkManagerService::setWifiStatus(WifiStatus status)
 void NetworkManagerService::enableCellular()
 {
     qDebug() << "[NetworkManager] 开启 4G 移动数据...";
+    if (!m_cellularUiActive) {        // 点击即更新用户意图，UI 立即反馈
+        m_cellularUiActive = true;
+        Q_EMIT cellularUiActiveChanged();
+    }
     setCellularStatus(CellularStatus::CellSearching);
+    m_fastExpectEnable = true;
+    scheduleFastCellularRefresh();
 
     // ===== 模式1：ModemManager (mmcli) — 传统 4G 模块控制 =====
     if (hasModemManager()) {
@@ -1125,7 +1131,13 @@ void NetworkManagerService::enableCellularViaModem()
 void NetworkManagerService::disableCellular()
 {
     qDebug() << "[NetworkManager] 关闭 4G 移动数据...";
+    if (m_cellularUiActive) {         // 点击即更新用户意图，UI 立即反馈
+        m_cellularUiActive = false;
+        Q_EMIT cellularUiActiveChanged();
+    }
     setCellularStatus(CellularStatus::CellSearching);
+    m_fastExpectEnable = false;
+    scheduleFastCellularRefresh();
 
     // ===== 模式1：ModemManager (mmcli) — 传统 4G 模块控制 =====
     if (hasModemManager()) {
@@ -1359,6 +1371,135 @@ QString NetworkManagerService::discoverCellularDevice() const
 }
 
 // ============================================================
+// 4G 状态快速刷新（ip a 读接口 UP/DOWN，毫秒级）
+// ============================================================
+
+QString NetworkManagerService::findCellularInterfaceFast() const
+{
+    if (m_ipPath.isEmpty()) return QString();
+
+    static const QVector<QString> kCandidateIfaces = {
+        QStringLiteral("eth1"),
+        QStringLiteral("usb0"),
+        QStringLiteral("wwan0"),
+        QStringLiteral("ppp0")
+    };
+
+    QProcess proc;
+    proc.start(m_ipPath, QStringList() << "-o" << "link" << "show");
+    if (!proc.waitForFinished(1000)) {
+        qWarning() << "[NetworkManager] findCellularInterfaceFast: ip -o link show 超时";
+        return QString();
+    }
+
+    const QString output = QString::fromUtf8(proc.readAllStandardOutput());
+    QString fallback;
+    for (const auto &line : output.split('\n', Qt::SkipEmptyParts)) {
+        auto parts = line.split(':', Qt::SkipEmptyParts);
+        if (parts.size() < 2) continue;
+        QString iface = parts[1].trimmed();
+        if (iface == QStringLiteral("lo")) continue;
+
+        // 优先已知候选接口
+        if (kCandidateIfaces.contains(iface)) {
+            qDebug() << "[NetworkManager] findCellularInterfaceFast: 找到候选 4G 接口:" << iface;
+            return iface;
+        }
+        // fallback：USB 以太网设备
+        if (fallback.isEmpty() &&
+            (iface.startsWith(QStringLiteral("enx")) ||
+             iface.startsWith(QStringLiteral("usb")))) {
+            fallback = iface;
+        }
+    }
+    if (!fallback.isEmpty())
+        qDebug() << "[NetworkManager] findCellularInterfaceFast: 找到 USB 以太网接口:" << fallback;
+    return fallback;
+}
+
+void NetworkManagerService::refreshCellularStatusFast()
+{
+    if (m_ipPath.isEmpty()) return;
+
+    // 优先用已缓存的设备名（enable/disable 时写入），否则快速发现
+    QString iface = m_cellularDeviceName;
+    if (iface.isEmpty())
+        iface = findCellularInterfaceFast();
+    if (iface.isEmpty()) return; // 让 mmcli/nmcli 慢路径处理
+
+    // 判定数据是否激活：接口有 IPv4 地址 且 管理状态为 UP。
+    // 关 4G 后 IP 立即消失（ip link down / nmcli disconnect 均如此），比单纯看 UP 标志更可靠
+    // （UP 标志会被 LOWER_UP 载波标志干扰，导致误判为已连接）。
+    QProcess addrProc;
+    addrProc.start(m_ipPath, QStringList() << "-o" << "-4" << "addr" << "show" << iface);
+    bool hasIp = false;
+    if (addrProc.waitForFinished(500))
+        hasIp = QString::fromUtf8(addrProc.readAllStandardOutput()).contains("inet ");
+
+    QProcess linkProc;
+    linkProc.start(m_ipPath, QStringList() << "link" << "show" << iface);
+    bool adminUp = false;
+    if (linkProc.waitForFinished(500)) {
+        const QString out = QString::fromUtf8(linkProc.readAllStandardOutput());
+        // 精确匹配 "state UP"（管理态），避免被 LOWER_UP 误导
+        QRegularExpression re(R"(state\s+UP)", QRegularExpression::CaseInsensitiveOption);
+        adminUp = re.match(out).hasMatch();
+    }
+
+    bool active = hasIp && adminUp;
+
+    // 只更新简单的开关态（Searching/Connected/Disabled），不要覆盖 mmcli 的
+    // Registered/Roaming 等细粒度状态，也不要覆盖 Error。
+    CellularStatus cur = m_cellularStatus;
+    if (cur != CellularStatus::CellSearching &&
+        cur != CellularStatus::CellConnected &&
+        cur != CellularStatus::CellDisabled)
+        return;
+
+    // 方向感知：正在开启时，IP 尚未分配（DHCP/拨号中）不能误判为已关闭，保持 Searching 继续轮询；
+    // 正在关闭时，无 IP 即代表已断开，立即置 Disabled。
+    if (!active && m_fastExpectEnable) {
+        qDebug() << "[NetworkManager] refreshCellularStatusFast:" << iface
+                 << "hasIp=" << hasIp << "adminUp=" << adminUp
+                 << "（开启中，IP 未就绪，保持 Searching）";
+        return;
+    }
+
+    CellularStatus newStatus = active ? CellularStatus::CellConnected
+                                      : CellularStatus::CellDisabled;
+    if (newStatus == cur) {
+        // 状态已一致，清除方向标志，避免后续轮询反复保持 Searching
+        m_fastExpectEnable = false;
+        return;
+    }
+
+    qDebug() << "[NetworkManager] refreshCellularStatusFast:" << iface
+             << "hasIp=" << hasIp << "adminUp=" << adminUp
+             << "->" << static_cast<int>(newStatus);
+
+    runOnMainThread([this, newStatus]() {
+        CellularStatus c = m_cellularStatus;
+        if (c == CellularStatus::CellSearching ||
+            c == CellularStatus::CellConnected ||
+            c == CellularStatus::CellDisabled) {
+            if (m_cellularStatus != newStatus) {
+                m_cellularStatus = newStatus;
+                Q_EMIT cellularStatusChanged();
+            }
+            m_fastExpectEnable = false;  // 已落定，清除方向标志
+        }
+    });
+}
+
+void NetworkManagerService::scheduleFastCellularRefresh()
+{
+    // 命令发出后密集轮询，抓住接口状态变化的瞬间（DHCP/拨号可能需 1~4s）
+    for (int ms : {300, 800, 1500, 2500, 4000, 6000}) {
+        QTimer::singleShot(ms, this, &NetworkManagerService::refreshCellularStatusFast);
+    }
+}
+
+// ============================================================
 // 调制解调器发现 (mmcli 模式)
 // ============================================================
 
@@ -1416,7 +1557,8 @@ void NetworkManagerService::onCellularOpFinished(int exitCode, QProcess::ExitSta
             setCellularStatus(CellularStatus::CellDisabled);
             Q_EMIT cellularDisabled();
         }
-        refreshCellularStatus();  // 立即刷新，不等 1s 延迟
+        refreshCellularStatusFast();  // 命令一返回立即做快速状态判定（毫秒级，不等 mmcli）
+        refreshCellularStatus();      // 完整刷新（运营商/信号等），慢但权威
     } else {
         // sudo 的报错（如"a password is required"）走 stderr，合并读取 stdout+stderr 定位根因
         QString err = QString::fromUtf8(m_process->readAllStandardOutput()).trimmed();
@@ -1659,6 +1801,20 @@ void NetworkManagerService::setCellularStatus(CellularStatus status)
         if (m_cellularStatus != status) {
             m_cellularStatus = status;
             Q_EMIT cellularStatusChanged();
+        }
+        // 仅在"落定"状态同步用户意图：已连接/漫游 -> true，已禁用/错误/未知 -> false。
+        // 过渡态 CellSearching 不处理，以保留用户点击时的乐观意图（点击即置位）。
+        bool settledActive = (status == CellularStatus::CellConnected ||
+                              status == CellularStatus::CellRoaming);
+        bool settledInactive = (status == CellularStatus::CellDisabled ||
+                                status == CellularStatus::CellError ||
+                                status == CellularStatus::CellUnknown);
+        if (settledActive || settledInactive) {
+            bool want = settledActive;
+            if (m_cellularUiActive != want) {
+                m_cellularUiActive = want;
+                Q_EMIT cellularUiActiveChanged();
+            }
         }
     });
 }

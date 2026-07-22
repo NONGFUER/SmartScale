@@ -34,6 +34,8 @@ class NetworkManagerService : public QObject
 
     // ===== 4G 属性 (QML 可绑定) =====
     Q_PROPERTY(CellularStatus cellularStatus   READ cellularStatus   NOTIFY cellularStatusChanged)
+    /** @brief 用户对 4G 的意图状态（点击即置位，不等待真实命令）。UI 开关/信号图标据此即时反馈 */
+    Q_PROPERTY(bool           cellularUiActive READ cellularUiActive NOTIFY cellularUiActiveChanged)
     Q_PROPERTY(int            cellularSignal   READ cellularSignal   NOTIFY cellularStatusChanged)
     Q_PROPERTY(QString        cellularOperator READ cellularOperator NOTIFY cellularStatusChanged)
     Q_PROPERTY(QString        cellularIpAddress READ cellularIpAddr  NOTIFY cellularStatusChanged)
@@ -86,6 +88,7 @@ public:
     bool           isScanning()       const { return m_isScanning; }
 
     CellularStatus cellularStatus()   const { return m_cellularStatus; }
+    bool           cellularUiActive() const { return m_cellularUiActive; }
     int            cellularSignal()   const { return m_cellularSignal; }
     QString        cellularOperator() const { return m_cellularOperator; }
     QString        cellularIpAddr()   const { return m_cellularIpAddress; }
@@ -141,6 +144,7 @@ Q_SIGNALS:
 
     // 4G 信号
     void cellularStatusChanged();
+    void cellularUiActiveChanged();
     void cellularEnabled();
     void cellularDisabled();
     void cellularOperationFailed(const QString &errorMsg);
@@ -213,6 +217,15 @@ private:
      */
     QString discoverCellularDevice() const;
 
+    /** @brief 快速刷新 4G 状态：用 ip a 读接口 UP/DOWN，毫秒级，不等 mmcli */
+    void refreshCellularStatusFast();
+
+    /** @brief 用 ip a 快速发现 4G 网络接口（候选 eth1/usb0/wwan0/ppp0/enx*） */
+    QString findCellularInterfaceFast() const;
+
+    /** @brief 命令发出后启动短定时快速刷新（500/1500/2500ms），快速脱离 CellSearching */
+    void scheduleFastCellularRefresh();
+
     /** @brief 内部设置 Wi-Fi 状态（触发信号） */
     void setWifiStatus(WifiStatus status);
     /** @brief 内部设置 4G 状态（触发信号） */
@@ -260,6 +273,7 @@ private:
     bool           m_isScanning       = false;
 
     CellularStatus m_cellularStatus  = CellularStatus::CellUnknown;
+    bool           m_cellularUiActive = false;     // 用户对 4G 的意图（点击即置位，供 UI 即时反馈）
     int            m_cellularSignal  = 0;          // 0-100
     QString        m_cellularOperator;
     QString        m_cellularIpAddress;
@@ -272,6 +286,7 @@ private:
 
     QString        m_lastError;
     bool           m_pendingCellularOp = false;  // true=启用, false=禁用
+    bool           m_fastExpectEnable = false;   // 快速刷新方向：true=正在开启(无IP也保持Searching), false=正在关闭(无IP即Disabled)
 
     /** @brief 当前网络模式（NetworkMode 枚举值，-1 未知） */
     int            m_networkMode = -1;

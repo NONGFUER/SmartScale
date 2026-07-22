@@ -37,6 +37,11 @@ Popup {
     width: 560
     height: 420
 
+    // 乐观更新：点击后立即切换视觉反馈，待底层命令完成后由 cellularStatus 同步/收尾
+    property bool uiSimOn: NetworkManager.cellularStatus >= NetworkManager.CellSearching
+                           && NetworkManager.cellularStatus <= NetworkManager.CellRoaming
+    property bool switching: false
+
     // 外部遮罩（reparent 到 window.contentItem，z:40 低于键盘，不挡虚拟键盘）
     Rectangle {
         parent: window.contentItem
@@ -199,18 +204,18 @@ Popup {
                 Item {
                     Layout.preferredWidth: 64
                     Layout.preferredHeight: 36
-                    enabled: NetworkManager.hasCellularHardware && !isOperating()
+                    enabled: NetworkManager.hasCellularHardware && !switching
 
                     Rectangle {
                         id: switchTrack
                         anchors.fill: parent
                         radius: 18
-                        color: isSimOn() ? "#4361EE" : "#D1D5DB"
+                        color: uiSimOn ? "#4361EE" : "#D1D5DB"
 
                         Behavior on color { ColorAnimation { duration: 150 } }
 
                         Rectangle {
-                            x: isSimOn() ? parent.width - width - 3 : 3
+                            x: uiSimOn ? parent.width - width - 3 : 3
                             y: (parent.height - height) / 2
                             width: 30; height: 30
                             radius: 15
@@ -243,11 +248,16 @@ Popup {
                         enabled: parent.enabled
 
                         onClicked: {
-                            var turningOn = !isSimOn()
+                            var turningOn = !uiSimOn
                             console.log("[CellularDialog] 切换 4G 开关 ->", turningOn ? "ON" : "OFF")
 
                             // 先写持久化记忆（无论操作成败都记住用户意图，重启后按此恢复）
                             AppSettings.cellularEnabled = turningOn
+
+                            // 假的立即反馈：视觉直接切到目标态，后台真实命令慢慢跑
+                            uiSimOn = turningOn
+                            switching = true
+                            fakeSwitchTimer.restart()   // 仅短时限防连点，不再卡等真实命令
 
                             if (turningOn) {
                                 NetworkManager.enableCellular()
@@ -310,14 +320,27 @@ Popup {
         }
     }
 
+    // 短时限防连点：点击后仅 800ms 内禁用开关，后台真实命令照常异步执行，不再卡等
+    Timer {
+        id: fakeSwitchTimer
+        interval: 800
+        onTriggered: switching = false
+    }
+
     // ========================================================================
-    // 结果反馈：操作失败用全局 toast 提示（成功状态由轮询自动刷新到开关上）
+    // 结果反馈：操作完成（成功由 cellularStatus 变化同步 / 失败回滚并 toast）
     // ========================================================================
     Connections {
         target: NetworkManager
 
+        // 开关位置完全由用户意图（乐观）决定，绝不随真实状态回弹，保持点击状态。
+        // 后台真实结果只通过 toast 报错，不再改动开关视觉。
+        function onCellularStatusChanged() {
+        }
+
         function onCellularOperationFailed(errorMsg) {
             if (root.visible) {
+                switching = false
                 window.toast(errorMsg || "4G 操作失败", "error", 3000)
             }
         }
@@ -328,6 +351,7 @@ Popup {
     // ========================================================================
     onOpened: {
         console.log("[CellularDialog] 弹窗打开, 当前 4G 状态:", NetworkManager.cellularStatus)
+        uiSimOn = NetworkManager.cellularUiActive   // 以用户意图为准（与状态栏一致），恢复被点击赋值破坏的绑定
         NetworkManager.refreshCellularStatus()
     }
 
@@ -345,6 +369,10 @@ Popup {
      *   3. 状态占位文案（未启用/搜索中/未检测到模块）
      */
     function operatorText() {
+        // 假的立即反馈：开关关掉时立刻显示"未启用"，不等后台真实状态
+        if (!uiSimOn)
+            return "未启用"
+
         // AT 直查到的运营商名最权威，有就直接用
         if (CellularModem.operatorName && CellularModem.operatorName.length > 0)
             return CellularModem.operatorName
@@ -357,16 +385,5 @@ Popup {
         if (s === NetworkManager.CellSearching)
             return "搜索中..."
         return "未启用"
-    }
-
-    /** @brief SIM 卡开关是否处于"开"状态（已注册/已连接/漫游/搜索中都算开） */
-    function isSimOn() {
-        var s = NetworkManager.cellularStatus
-        return s >= NetworkManager.CellSearching && s <= NetworkManager.CellRoaming
-    }
-
-    /** @brief 是否正在执行开关切换（防止重复点击） */
-    function isOperating() {
-        return NetworkManager.cellularStatus === NetworkManager.CellSearching
     }
 }

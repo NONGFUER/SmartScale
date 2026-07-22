@@ -1055,7 +1055,7 @@ void CameraController::speakPredictedLabel(const QString &label)
     if (!m_voiceSpeaker || label == PState::NONE || label == PState::UNKNOWN) return;
 
     QString chineseName = FoodTranslator::instance()->translate(label);
-    QString speakText = QString("%1").arg(chineseName);
+    QString speakText = QString("！！！%1！！！").arg(chineseName);
     QMetaObject::invokeMethod(m_voiceSpeaker, "speak", Qt::QueuedConnection,
                               Q_ARG(QString, speakText));
 }

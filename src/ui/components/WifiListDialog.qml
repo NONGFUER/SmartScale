@@ -235,6 +235,23 @@ Popup {
                     clip: true
                     spacing: 6
 
+                    ScrollBar.vertical: ScrollBar {
+                        policy: ScrollBar.AsNeeded
+                        anchors.right: parent.right
+                        anchors.rightMargin: 2
+                        contentItem: Rectangle {
+                            implicitWidth: 6
+                            radius: 3
+                            color: "#C7CEDA"
+                        }
+                        background: Rectangle {
+                            implicitWidth: 6
+                            radius: 3
+                            color: "#E2E8F0"
+                            opacity: 0.7
+                        }
+                    }
+
                     // 空状态提示
                     Text {
                         anchors.centerIn: parent

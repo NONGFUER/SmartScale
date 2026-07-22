@@ -146,10 +146,29 @@ Rectangle {
                 }
 
                 Image {
+                    id: cellSignalImg
                     anchors.centerIn: parent
-                    source: "qrc:/resources/img/Signal" + signalLevel(NetworkManager.cellularSignal) + ".png"
+                    // 用户意图即时驱动：关 -> 立即断网标记；开 -> 按真实信号等级显示
+                    source: NetworkManager.cellularUiActive
+                            ? ("qrc:/resources/img/Signal" + signalLevel(NetworkManager.cellularSignal) + ".png")
+                            : "qrc:/resources/img/Signal0.png"
                     width: 44; height: 44
                     fillMode: Image.PreserveAspectFit
+                }
+
+                // 点击切换后闪动几下，再静止显示目标图标（断网/信号）
+                SequentialAnimation {
+                    id: cellFlashAnim
+                    loops: 3
+                    NumberAnimation { target: cellSignalImg; property: "opacity"; from: 1.0; to: 0.15; duration: 130 }
+                    NumberAnimation { target: cellSignalImg; property: "opacity"; from: 0.15; to: 1.0; duration: 130 }
+                }
+
+                Connections {
+                    target: NetworkManager
+                    function onCellularUiActiveChanged() {
+                        cellFlashAnim.restart()   // 无论开/关都闪动反馈
+                    }
                 }
 
                 MouseArea {
