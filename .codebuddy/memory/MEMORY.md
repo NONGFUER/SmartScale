@@ -53,7 +53,7 @@
 ## 语音
 - `src/hardware/VoiceSpeaker`（QML 名 `VoiceSpeaker`）：已迁移到 sherpa-onnx C API + Matcha 中文模型，进程内合成，QThread 后台合成线程，aplay 播放；对外接口（speak/stop/warmup/isReady/isSpeaking/信号）不变。用 `dlopen(RTLD_LOCAL)` 隔离 onnxruntime 符号冲突。
 - 食材语音播报格式：`CameraController::speakPredictedLabel` 把 `speakText` 设为 `！！！<食材中文名>！！！`（前后各 3 个全角感叹号，经 `FoodTranslator` 翻译后由 `m_voiceSpeaker->speak` 播报）。
-- TTS 语速：sherpa-onnx 中生成时若 `genCfg.speed > 0`，按 `length_scale = 1/speed` **覆盖**模型配置 `config.model.matcha.length_scale`（后者仅当 speed==0 生效）。当前 `synthesize()` 内 `genCfg.speed = 0.8163f`（在 1.0204 基础上调慢 20%，对应 length_scale≈1.225，比标准慢约 22%），模型 `length_scale` 配置实际被忽略。语速调参改 `genCfg.speed` 即可，`TtsSynthWorker::synthesize` 经 `requestSynthesize` 信号由 `VoiceSpeaker::speak` 触发，未被废弃。
+- TTS 语速：sherpa-onnx 中生成时若 `genCfg.speed > 0`，按 `length_scale = 1/speed` **覆盖**模型配置 `config.model.matcha.length_scale`（后者仅当 speed==0 生效）。当前 `synthesize()` 内 `genCfg.speed = 0.7347f`（在 0.8163 基础上再慢 10%，相对最初 1.0204 累计慢约 28%，对应 length_scale≈1.361），模型 `length_scale` 配置实际被忽略。语速调参改 `genCfg.speed` 即可，`TtsSynthWorker::synthesize` 经 `requestSynthesize` 信号由 `VoiceSpeaker::speak` 触发，未被废弃。
 - sherpa-onnx 采样步数：VITS 模型本无 steps 概念（流生成）；Matcha 虽是 Flow 模型有步数，但 sherpa-onnx 的 Python/C 绑定未暴露 `num_steps/steps` 字段（Matcha 配置仅 acoustic_model/vocoder/lexicon/tokens/data_dir/dict_dir/noise_scale/length_scale，VITS 仅 model/lexicon/tokens/data_dir/dict_dir/noise_scale/noise_scale_w/length_scale），步数在库内固定写死，外部无法设为 10/20。要控步数须改 sherpa-onnx C++ 源码或换官方 Matcha 推理。
 
 ## 资源编译
