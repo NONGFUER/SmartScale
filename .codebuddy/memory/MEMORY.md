@@ -25,6 +25,7 @@
 - `NetworkManagerService`（QML `App.Backend::NetworkManager`）：nmcli+mmcli，3s 轮询；4G 状态新增 `ip a` 快速路径（`refreshCellularStatusFast`），命令发出后 300/800/1500/2500/4000/6000ms 快速轮询，以「接口有 IPv4 inet 地址 且 管理态 state UP」判定数据激活（避免 LOWER_UP 误匹配），配 `m_fastExpectEnable` 方向标志（开启中无IP保持Searching、关闭中无IP立即Disabled），`onCellularOpFinished` 命令返回即先调快速刷新，解决开关状态刷新慢问题。
 - 网络模式：四模式枚举 `WifiOnly/CellularOnly/AllWifiPriority/AllCellularPriority`，默认 `AllCellularPriority`，持久化到 `AppSettings.networkMode`，开机 5s 后恢复。全开模式用 route-metric（优先=10/非优先=300）实现优先级。
 - SettingsDialog（设备信息弹窗）功能设置卡片用四个 ToggleSwitch 互斥单选，`syncSwitches()` 显式同步 `checked`；开关用 `onClicked`（不能用 `onToggled`，否则程序赋值会循环回弹）。
+- WiFi 信号显示统一：`StatusBar` 的 WiFi 图标格数（`signalLevel(currentWifiSignal())`）与 `WifiListDialog`（`modelData.signal`）用同一数据源——即 `NetworkManager.availableNetworks` 中 `ssid === NetworkManager.wifiSsid` 那一项的 `signal`；不再直接用 `NetworkManager.wifiSignal`（来自 `/proc/net/wireless` 的实时连接信号，二者来源不同会导致格数与列表数值不一致）。`currentWifiSignal()` 找不到对应 SSID 时回退到 `wifiSignal`。
 
 ## 核心服务行为
 - Token 刷新：`AuthService` 全局锁 `m_isRefreshing`+`tokenRefreshCompleted(bool,QString)`；失败>2次建议重登。已接入 WeightHistory/UserIngredient/Category/CameraController。

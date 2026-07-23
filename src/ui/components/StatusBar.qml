@@ -208,7 +208,7 @@ Rectangle {
 
                 Image {
                     anchors.centerIn: parent
-                    source: "qrc:/resources/img/Wifi" + signalLevel(NetworkManager.wifiSignal) + ".png"
+                    source: "qrc:/resources/img/Wifi" + signalLevel(currentWifiSignal()) + ".png"
                     width: 44; height: 44
                     fillMode: Image.PreserveAspectFit
                 }
@@ -355,6 +355,17 @@ Rectangle {
      * @param sig - 信号强度百分比
      * @return 等级字符串 "0" ~ "4"
      */
+    function currentWifiSignal() {
+        var ssid = NetworkManager.wifiSsid || ""
+        if (ssid === "") return NetworkManager.wifiSignal
+        var nets = NetworkManager.availableNetworks || []
+        for (var i = 0; i < nets.length; ++i) {
+            var n = nets[i]
+            if ((n.ssid || "") === ssid) return n.signal || 0
+        }
+        return NetworkManager.wifiSignal
+    }
+
     function signalLevel(sig) {
         var s = Math.max(0, Math.min(100, sig || 0))
         if (s <= 20) return "0"
