@@ -976,6 +976,7 @@ void NetworkManagerService::enableCellular()
         m_cellularUiActive = true;
         Q_EMIT cellularUiActiveChanged();
     }
+    m_cellLostStreak = 0;            // 用户主动开启，重置"未检测到设备"去抖计数
     setCellularStatus(CellularStatus::CellSearching);
     m_fastExpectEnable = true;
     scheduleFastCellularRefresh();
@@ -1135,6 +1136,7 @@ void NetworkManagerService::disableCellular()
         m_cellularUiActive = false;
         Q_EMIT cellularUiActiveChanged();
     }
+    m_cellLostStreak = 0;            // 用户主动关闭，重置去抖计数
     setCellularStatus(CellularStatus::CellSearching);
     m_fastExpectEnable = false;
     scheduleFastCellularRefresh();
@@ -1628,12 +1630,22 @@ void NetworkManagerService::refreshCellularStatus()
         qWarning() << "[NetworkManager] refreshCellularStatus: nmcli 查询超时 (device=" << cellDevice << ")";
     }
 
-    // ===== 都失败：标记为 Disabled + 无硬件 =====
-    qDebug() << "[NetworkManager] refreshCellularStatus: 未检测到任何 4G 设备（mmcli 或 网络接口）";
-    updateHasCellularHardware(false);
-    if (m_cellularStatus != CellularStatus::CellDisabled) {
-        setCellularStatus(CellularStatus::CellDisabled);
-    }
+    // ===== 都失败：本次未检测到 4G 设备 =====
+    // 偶发 1~2 次 mmcli/nmcli 查询超时或 modem 暂不可见，并不代表 4G 真断网。
+    // 用连续失败计数去抖：连续 kCellLostThreshold 次（默认 2，约 16s）才判为断网，
+    // 避免偶发查询失败让状态栏 4G 图标瞬间显示 Signal0（"显示断网但没断网"）。
+    // 注意：本函数在工作线程执行，streak 的修改统一投递主线程，避免跨线程竞态。
+    runOnMainThread([this]() {
+        ++m_cellLostStreak;
+        qDebug() << "[NetworkManager] refreshCellularStatus: 本次查询未检测到 4G 设备"
+                 << "(lostStreak=" << m_cellLostStreak << "/" << kCellLostThreshold << ")";
+        if (m_cellLostStreak >= kCellLostThreshold) {
+            updateHasCellularHardware(false);
+            if (m_cellularStatus != CellularStatus::CellDisabled) {
+                setCellularStatus(CellularStatus::CellDisabled);
+            }
+        }
+    });
 }
 
 void NetworkManagerService::updateCellularStatusFromNmcli(const QString &output, const QString &device)
@@ -1698,6 +1710,33 @@ void NetworkManagerService::updateCellularStatusFromNmcli(const QString &output,
     runOnMainThread([this, newStatus, oper, ipAddress, signalStrength]() {
         bool changed = false;
 
+        // 用户意图开启时，偶发查询把状态判为 Unknown（查询成功但状态字段无法识别，
+        // 如设备临时 unmanaged、nmcli 输出抖动）多为查询异常，不应把图标降级为断网。
+        // 仅保留上一次可信的信号等级与状态；明确 CellDisabled（真断开）仍正常写入以显示断网。
+        CellularStatus effectiveStatus = newStatus;
+        int effectiveSignal = signalStrength;
+        if (m_cellularUiActive && newStatus == CellularStatus::CellUnknown) {
+            effectiveStatus = m_cellularStatus;
+            effectiveSignal = m_cellularSignal;
+        }
+
+        // 解析到"在线/连接中"状态说明设备有响应、4G 未真断：重置去抖计数；
+        // 解析到明确"活跃态"（已连接/已注册/漫游）且在意图被误翻 false 时恢复点亮。
+        bool online = (newStatus == CellularStatus::CellConnected ||
+                       newStatus == CellularStatus::CellRegistered ||
+                       newStatus == CellularStatus::CellRoaming ||
+                       newStatus == CellularStatus::CellSearching);
+        if (online) {
+            m_cellLostStreak = 0;
+        }
+        bool active = (newStatus == CellularStatus::CellConnected ||
+                       newStatus == CellularStatus::CellRegistered ||
+                       newStatus == CellularStatus::CellRoaming);
+        if (active && !m_cellularUiActive) {
+            m_cellularUiActive = true;
+            Q_EMIT cellularUiActiveChanged();
+        }
+
         if (m_cellularOperator != oper) {
             m_cellularOperator = oper;
             changed = true;
@@ -1706,12 +1745,12 @@ void NetworkManagerService::updateCellularStatusFromNmcli(const QString &output,
             m_cellularIpAddress = ipAddress;
             changed = true;
         }
-        if (m_cellularSignal != signalStrength) {
-            m_cellularSignal = signalStrength;
+        if (m_cellularSignal != effectiveSignal) {
+            m_cellularSignal = effectiveSignal;
             changed = true;
         }
-        if (m_cellularStatus != newStatus) {
-            m_cellularStatus = newStatus;
+        if (m_cellularStatus != effectiveStatus) {
+            m_cellularStatus = effectiveStatus;
             changed = true;
         }
 
@@ -1772,6 +1811,32 @@ void NetworkManagerService::updateCellularStatusFromMmcli(const QString &output)
     runOnMainThread([this, newStatus, operatorName, ipAddress, signalStrength]() {
         bool changed = false;
 
+        // 同接口模式：用户意图开启时，偶发查询异常（accessState 解析失败 → CellUnknown）
+        // 不应把图标降级为断网，保留上一次可信状态与信号；明确 CellDisabled 仍正常写入。
+        CellularStatus effectiveStatus = newStatus;
+        int effectiveSignal = signalStrength;
+        if (m_cellularUiActive && newStatus == CellularStatus::CellUnknown) {
+            effectiveStatus = m_cellularStatus;
+            effectiveSignal = m_cellularSignal;
+        }
+
+        // 解析到"在线/连接中"状态说明设备有响应、4G 未真断：重置去抖计数；
+        // 解析到明确"活跃态"（已连接/已注册/漫游）且在意图被误翻 false 时恢复点亮。
+        bool online = (newStatus == CellularStatus::CellConnected ||
+                       newStatus == CellularStatus::CellRegistered ||
+                       newStatus == CellularStatus::CellRoaming ||
+                       newStatus == CellularStatus::CellSearching);
+        if (online) {
+            m_cellLostStreak = 0;
+        }
+        bool active = (newStatus == CellularStatus::CellConnected ||
+                       newStatus == CellularStatus::CellRegistered ||
+                       newStatus == CellularStatus::CellRoaming);
+        if (active && !m_cellularUiActive) {
+            m_cellularUiActive = true;
+            Q_EMIT cellularUiActiveChanged();
+        }
+
         if (!operatorName.isEmpty() && m_cellularOperator != operatorName) {
             m_cellularOperator = operatorName;
             changed = true;
@@ -1780,12 +1845,12 @@ void NetworkManagerService::updateCellularStatusFromMmcli(const QString &output)
             m_cellularIpAddress = ipAddress;
             changed = true;
         }
-        if (m_cellularSignal != signalStrength) {
-            m_cellularSignal = signalStrength;
+        if (m_cellularSignal != effectiveSignal) {
+            m_cellularSignal = effectiveSignal;
             changed = true;
         }
-        if (m_cellularStatus != newStatus) {
-            m_cellularStatus = newStatus;
+        if (m_cellularStatus != effectiveStatus) {
+            m_cellularStatus = effectiveStatus;
             changed = true;
         }
 

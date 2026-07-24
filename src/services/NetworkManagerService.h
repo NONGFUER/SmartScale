@@ -278,6 +278,14 @@ private:
     QString        m_cellularOperator;
     QString        m_cellularIpAddress;
 
+    /**
+     * @brief 连续"未检测到 4G 设备"的轮询次数（去抖计数）。
+     * 偶发 1~2 次 mmcli/nmcli 查询超时或 modem 暂不可见，不代表 4G 真断网；
+     * 只有连续达到 kCellLostThreshold 次才判定为断网，避免状态栏 4G 图标闪 Signal0。
+     */
+    int            m_cellLostStreak = 0;
+    static constexpr int kCellLostThreshold = 2;   // 连续 2 次（约 16s）才判断网
+
     /** @brief 检测到的 4G 网络接口设备名（如 "eth1"），用于以太网模式的 4G 模块 */
     mutable QString m_cellularDeviceName;
 
