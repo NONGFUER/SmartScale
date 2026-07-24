@@ -303,7 +303,7 @@ Item {
                                                 Text {
                                                     anchors.horizontalCenter: parent.horizontalCenter
                                                     text: "暂无称重记录"
-                                                    font.pixelSize: 18
+                                                    font.pixelSize: 24
                                                     font.bold: true
                                                     color: "#94A3B8"
                                                 }
@@ -311,8 +311,8 @@ Item {
                                                 Text {
                                                     anchors.horizontalCenter: parent.horizontalCenter
                                                     text: "开始称重后，记录将显示在这里"
-                                                    font.pixelSize: 13
-                                                    color: "#CBD5E1"
+                                                    font.pixelSize: 24
+                                                    color: "#94A3B8"
                                                 }
                                             }
                                         }
@@ -408,7 +408,7 @@ Item {
                                         Text {
                                             anchors.centerIn: parent
                                             text: "暂无图片"
-                                            font.pixelSize: 14
+                                            font.pixelSize: 24
                                             color: "#94A3B8"
                                             visible: parent._imgPath === ""
                                         }
