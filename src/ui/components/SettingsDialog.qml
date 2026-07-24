@@ -407,67 +407,94 @@ Dialog {
             anchors.margins: 32
             spacing: 24
 
-            // 公司信息（APP二维码 + 官网 + 联系电话）
+            // 公司信息（左APP二维码 + 中间官网电话 + 右公众号二维码）
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 184
+                Layout.preferredHeight: 164
                 radius: 12
                 color: "#F5F7FA"
 
                 RowLayout {
-                    anchors.centerIn: parent
-                    spacing: 32
+                    anchors.fill: parent
+                    anchors.leftMargin: 20
+                    anchors.rightMargin: 20
+                    spacing: 16
 
-                    // APP 二维码
+                    // APP 二维码（最左）
                     ColumnLayout {
-                        spacing: 6
+                        spacing: 4
                         Layout.alignment: Qt.AlignVCenter
 
                         Image {
-                            Layout.preferredWidth: 110
-                            Layout.preferredHeight: 110
+                            Layout.preferredWidth: 88
+                            Layout.preferredHeight: 88
                             Layout.alignment: Qt.AlignHCenter
                             source: "qrc:/resources/img/QRCode.png"
                             fillMode: Image.PreserveAspectFit
                         }
                         Text {
-                            text: "扫码下载APP"
+                            text: "安卓APP下载"
                             font.family: Theme.fontFamilyUi
-                            font.pixelSize: 20
+                            font.pixelSize: 18
                             color: Theme.colorTextSecondary
                             Layout.alignment: Qt.AlignHCenter
                         }
                     }
 
-                    // 公司文字信息
+                    // 公司文字信息（中间，占满剩余宽度，超出省略防溢出）
                     ColumnLayout {
-                        spacing: 6
+                        spacing: 2
+                        Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
 
                         Text {
                             text: "上海小管事机器人有限公司"
                             font.family: Theme.fontFamilyUi
-                            font.pixelSize: 24
+                            font.pixelSize: 22
                             font.bold: true
                             color: Theme.colorTextPrimary
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
                         }
                         Text {
                             text: "官网：https://www.sh-xgs.com"
                             font.family: Theme.fontFamilyUi
-                            font.pixelSize: 22
+                            font.pixelSize: 18
                             color: Theme.colorTextSecondary
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
                         }
                         Text {
                             text: "电话：400-950-8008"
                             font.family: Theme.fontFamilyUi
-                            font.pixelSize: 22
+                            font.pixelSize: 18
                             color: Theme.colorTextSecondary
+                            Layout.fillWidth: true
+                            horizontalAlignment: Text.AlignHCenter
+                            elide: Text.ElideRight
+                        }
+                    }
+
+                    // 公众号二维码（最右）
+                    ColumnLayout {
+                        spacing: 4
+                        Layout.alignment: Qt.AlignVCenter
+
+                        Image {
+                            Layout.preferredWidth: 88
+                            Layout.preferredHeight: 88
+                            Layout.alignment: Qt.AlignHCenter
+                            source: "qrc:/resources/img/gzh.jpg"
+                            fillMode: Image.PreserveAspectFit
                         }
                         Text {
-                            text: "© 2026 版权所有"
+                            text: "关注公众号"
                             font.family: Theme.fontFamilyUi
-                            font.pixelSize: 20
+                            font.pixelSize: 18
                             color: Theme.colorTextSecondary
+                            Layout.alignment: Qt.AlignHCenter
                         }
                     }
                 }
