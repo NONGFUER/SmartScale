@@ -542,11 +542,13 @@ Dialog {
 
             // ===== Page 1: 快捷登录（最近登录历史，下拉选择 + 输入密码） =====
             ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
                 spacing: 12
 
                 Text {
                     visible: BackendAuth.loginHistory.length === 0
-                    Layout.alignment: Qt.AlignHCenter
+                    Layout.fillWidth: true
                     Layout.fillHeight: true
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
