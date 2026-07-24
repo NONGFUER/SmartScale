@@ -9,6 +9,10 @@
 - 无鼠标光标：`main.cpp` 创建 QGuiApplication 后立即 `QGuiApplication::setOverrideCursor(Qt::BlankCursor)`；QML MouseArea 禁止 `cursorShape`。
 - 弹窗输入框禁止自动聚焦（LoginDialog/WifiPasswordDialog 例外打开即输入）：Dialog/Popup 内 TextField `focus:false`，`onOpened` 末尾 `Qt.callLater` 把焦点移到关闭/返回按钮 MouseArea。
 
+## 认证与密码存储
+- 两套账号体系：(1) 云端账号（userCode+密码，AuthService）：记住登录存 `~/.config/SmartScale/last_login.conf`（INI，password 仅 base64 编码=可逆明文，非加密，有泄露风险）；登录历史存 `~/.cache/smartscale/login_history.json`（同样 base64）。云端 token/refreshToken/userId/devId/userName 仅存 AuthService 内存，重启即失，靠 last_login.conf 自动重登；详细用户信息经 USER_BY_ID 接口实时拉取，缓存在 `~/.cache/smartscale/product.json`。(2) 本地离线账号：SQLite `data/smartscale.db` 的 `users` 表，`password_hash` 为 SHA256 哈希（不存明文），`UserRepo::verifyPassword` 校验。
+- 安全风险：云端密码 base64 存储非加密，建议改为不持久化或 AES 加密。
+
 ## 弹窗与浮层
 - Toast/通知根节点用 Popup/Dialog：`modal:false`+`closePolicy:Popup.NoAutoClose`+`padding:0`+透明 background+open/close+转场。
 - 弹窗遮罩：`modal:true`+显式 `Overlay.modal: Rectangle{color:"#80000000"}`（LoginDialog 例外保留 modal:false+外部遮罩）。

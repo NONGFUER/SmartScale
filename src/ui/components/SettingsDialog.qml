@@ -407,31 +407,68 @@ Dialog {
             anchors.margins: 32
             spacing: 24
 
-            // 公司信息
+            // 公司信息（APP二维码 + 官网 + 联系电话）
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 96
+                Layout.preferredHeight: 184
                 radius: 12
                 color: "#F5F7FA"
 
-                ColumnLayout {
+                RowLayout {
                     anchors.centerIn: parent
-                    spacing: 8
+                    spacing: 32
 
-                    Text {
-                        text: "上海小管事机器人有限公司"
-                        font.family: Theme.fontFamilyUi
-                        font.pixelSize: 24
-                        font.bold: true
-                        color: Theme.colorTextPrimary
-                        Layout.alignment: Qt.AlignHCenter
+                    // APP 二维码
+                    ColumnLayout {
+                        spacing: 6
+                        Layout.alignment: Qt.AlignVCenter
+
+                        Image {
+                            Layout.preferredWidth: 110
+                            Layout.preferredHeight: 110
+                            Layout.alignment: Qt.AlignHCenter
+                            source: "qrc:/resources/img/QRCode.png"
+                            fillMode: Image.PreserveAspectFit
+                        }
+                        Text {
+                            text: "扫码下载APP"
+                            font.family: Theme.fontFamilyUi
+                            font.pixelSize: 20
+                            color: Theme.colorTextSecondary
+                            Layout.alignment: Qt.AlignHCenter
+                        }
                     }
-                    Text {
-                        text: "© 2026 版权所有"
-                        font.family: Theme.fontFamilyUi
-                        font.pixelSize: 24
-                        color: Theme.colorTextSecondary
-                        Layout.alignment: Qt.AlignHCenter
+
+                    // 公司文字信息
+                    ColumnLayout {
+                        spacing: 6
+                        Layout.alignment: Qt.AlignVCenter
+
+                        Text {
+                            text: "上海小管事机器人有限公司"
+                            font.family: Theme.fontFamilyUi
+                            font.pixelSize: 24
+                            font.bold: true
+                            color: Theme.colorTextPrimary
+                        }
+                        Text {
+                            text: "官网：https://www.sh-xgs.com"
+                            font.family: Theme.fontFamilyUi
+                            font.pixelSize: 22
+                            color: Theme.colorTextSecondary
+                        }
+                        Text {
+                            text: "电话：400-950-8008"
+                            font.family: Theme.fontFamilyUi
+                            font.pixelSize: 22
+                            color: Theme.colorTextSecondary
+                        }
+                        Text {
+                            text: "© 2026 版权所有"
+                            font.family: Theme.fontFamilyUi
+                            font.pixelSize: 20
+                            color: Theme.colorTextSecondary
+                        }
                     }
                 }
             }
