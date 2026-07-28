@@ -241,9 +241,8 @@ int main(int argc, char *argv[])
     // 蜂窝模组服务 — 遍历 /dev/ttyUSB* 发送 AT 指令动态确认端口并读取 CCID(ICCID)
     CellularModemService *cellularModemService = new CellularModemService(&app);
 
-    // 更新信息服务 — 查询 update.shxgs.cn 最新版本（延迟 10s 等网络就绪后自动查一次）
+    // 更新信息服务 — 查询 update.shxgs.cn 最新版本（仅用户点击齿轮图标打开设置弹窗时按需查询）
     UpdateService *updateService = new UpdateService(&app);
-    QTimer::singleShot(10000, updateService, &UpdateService::checkUpdate);
 
     // 语音播报注入 CameraController，AI推理完成后直接播报（省掉QML往返）
     cameraController->setVoiceSpeaker(voiceSpeaker);
