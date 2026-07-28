@@ -125,7 +125,7 @@ Rectangle {
 
         // ===== 右侧：状态图标行 =====
         RowLayout {
-            spacing: 12
+            spacing: 24                          // 图标间距；触摸区外扩 -12，间隙中间相接不重叠
             Layout.alignment: Qt.AlignVCenter
 
             // ---- 4G 信号图标（始终显示；无信号/未连接时 Signal0.png 断网图标）----
@@ -174,7 +174,7 @@ Rectangle {
                 MouseArea {
                     id: cellMouse
                     anchors.fill: parent
-                    anchors.margins: -16   // 感应区外扩 16px（44→76×76），图标视觉不变
+                    anchors.margins: -12   // 感应区外扩 12px（44→68×68），间隙相接不重叠
                     hoverEnabled: true
                     onClicked: root.cellularRequested()
                 }
@@ -217,7 +217,7 @@ Rectangle {
                 MouseArea {
                     id: wifiMouse
                     anchors.fill: parent
-                    anchors.margins: -16   // 感应区外扩 16px（44→76×76），图标视觉不变
+                    anchors.margins: -12   // 感应区外扩 12px（44→68×68），间隙相接不重叠
                     hoverEnabled: true
                     onClicked: root.networkRequested()
                 }
@@ -249,6 +249,7 @@ Rectangle {
                 MouseArea {
                     id: setGearMouse
                     anchors.fill: parent
+                    anchors.margins: -12   // 感应区外扩 12px（44→68×68），与另两个图标一致
                     hoverEnabled: true
                     onClicked: root.settingsRequested()
                 }
