@@ -148,8 +148,8 @@ Rectangle {
                 Image {
                     id: cellSignalImg
                     anchors.centerIn: parent
-                    // 用户意图即时驱动：关 -> 立即断网标记；开 -> 按真实信号等级显示
-                    source: NetworkManager.cellularUiActive
+                    // 真实状态驱动：已连接/漫游 -> 按真实信号等级(AT+CSQ)显示；否则断网标记
+                    source: isCellularActive()
                             ? ("qrc:/resources/img/Signal" + signalLevel(NetworkManager.cellularSignal) + ".png")
                             : "qrc:/resources/img/Signal0.png"
                     width: 44; height: 44
@@ -164,10 +164,17 @@ Rectangle {
                     NumberAnimation { target: cellSignalImg; property: "opacity"; from: 0.15; to: 1.0; duration: 130 }
                 }
 
+                // 4G 活跃态（真实连接）跳变时闪动反馈
+                property bool cellActivePrev: false
+                Component.onCompleted: cellActivePrev = isCellularActive()
                 Connections {
                     target: NetworkManager
-                    function onCellularUiActiveChanged() {
-                        cellFlashAnim.restart()   // 无论开/关都闪动反馈
+                    function onCellularStatusChanged() {
+                        var a = isCellularActive()
+                        if (a !== cellActivePrev) {
+                            cellActivePrev = a
+                            cellFlashAnim.restart()
+                        }
                     }
                 }
 

@@ -5,17 +5,20 @@
 #include <QStringList>
 #include <QProcess>
 #include <QTimer>
-#include <QElapsedTimer>
 #include <QVariantMap>
 #include <QRegularExpression>
 #include <functional>
 
+class QNetworkInterface;
+
 /**
- * @brief 网络管理服务 — 统一管理 Wi-Fi 和 4G 网络
+ * @brief 网络管理服务 — 统一管理 Wi-Fi 和 4G 网络（状态单一数据源）
  *
  * 技术方案（Linux 嵌入式环境）：
- *   - Wi-Fi: 通过 nmcli (NetworkManager CLI) 控制
- *   - 4G:    通过 mmcli (ModemManager CLI) 控制
+ *   - 检测层（原生，零外部进程）：QNetworkInterface 判定 wlan0/eth1 联网与否 + IP；
+ *     WiFi 信号读 /proc/net/wireless；4G 信号/运营商由 CellularModemService
+ *     AT+CSQ / AT+COPS? 经 setCellularSignal/setCellularOperator 注入
+ *   - 控制层：nmcli（WiFi 扫描/连接/射频、路由 metric）+ sudo ip link set（4G up/down）
  *   - 权限:  需要 sudo 或用户在 networkmanager/plugdev 组
  *
  * QML 绑定名: App.Backend::NetworkManager
@@ -34,8 +37,6 @@ class NetworkManagerService : public QObject
 
     // ===== 4G 属性 (QML 可绑定) =====
     Q_PROPERTY(CellularStatus cellularStatus   READ cellularStatus   NOTIFY cellularStatusChanged)
-    /** @brief 用户对 4G 的意图状态（点击即置位，不等待真实命令）。UI 开关/信号图标据此即时反馈 */
-    Q_PROPERTY(bool           cellularUiActive READ cellularUiActive NOTIFY cellularUiActiveChanged)
     Q_PROPERTY(int            cellularSignal   READ cellularSignal   NOTIFY cellularStatusChanged)
     Q_PROPERTY(QString        cellularOperator READ cellularOperator NOTIFY cellularStatusChanged)
     Q_PROPERTY(QString        cellularIpAddress READ cellularIpAddr  NOTIFY cellularStatusChanged)
@@ -88,7 +89,6 @@ public:
     bool           isScanning()       const { return m_isScanning; }
 
     CellularStatus cellularStatus()   const { return m_cellularStatus; }
-    bool           cellularUiActive() const { return m_cellularUiActive; }
     int            cellularSignal()   const { return m_cellularSignal; }
     QString        cellularOperator() const { return m_cellularOperator; }
     QString        cellularIpAddr()   const { return m_cellularIpAddress; }
@@ -134,6 +134,12 @@ public:
     /** @brief 获取最后的错误信息 */
     QString lastError() const { return m_lastError; }
 
+public Q_SLOTS:
+    /** @brief 注入 4G 信号强度（CellularModemService AT+CSQ，0-100；值变化才 emit） */
+    void setCellularSignal(int percent);
+    /** @brief 注入 4G 运营商名（CellularModemService AT+COPS?，空串忽略） */
+    void setCellularOperator(const QString &name);
+
 Q_SIGNALS:
     // Wi-Fi 信号
     void wifiStatusChanged();
@@ -144,7 +150,6 @@ Q_SIGNALS:
 
     // 4G 信号
     void cellularStatusChanged();
-    void cellularUiActiveChanged();
     void cellularEnabled();
     void cellularDisabled();
     void cellularOperationFailed(const QString &errorMsg);
@@ -175,28 +180,19 @@ private:
     void runOnMainThread(Func&& func);
 
     bool hasNetworkManager() const;
-    bool hasModemManager() const;
 
-    /** @brief 动态发现 WiFi 设备名（兼容 wlan0/wlp2s0/mlan0 等不同命名） */
+    /** @brief 动态发现 WiFi 设备名（原生：遍历 QNetworkInterface，兼容 wlan*、wlp*、mlan* 命名） */
     QString discoverWifiDevice() const;
 
     /** @brief 在多个候选路径中查找第一个存在的可执行文件 */
     static QString findExecutable(const char *paths[]);
 
     void parseWifiScanOutput(const QString &output);
-    void updateCellularStatusFromMmcli(const QString &output);
-    /** @brief 从 nmcli device show 输出解析 4G 状态（以太网模式） */
-    void updateCellularStatusFromNmcli(const QString &output, const QString &device);
 
     int signalQualityToPercent(const QString &qualityStr) const;
 
     /** @brief 获取 Wi-Fi 列表（扫描完成后调用） */
     void fetchWifiList();
-
-    /** @brief 通过 mmcli 启用 4G */
-    void enableCellularViaModem();
-    /** @brief 通过 mmcli 禁用 4G */
-    void disableCellularViaModem();
 
     /** @brief 通过 nmcli 连接启用 4G（以太网模式） */
     void enableCellularViaDevice();
@@ -204,27 +200,26 @@ private:
     /** @brief 通过 nmcli 断开禁用 4G（以太网模式） */
     void disableCellularViaDevice();
 
-    /** @brief 动态发现 4G 调制解调器索引，返回字符串（如 "0"），失败返回空串 */
-    QString discoverModemIndex() const;
-
     /**
-     * @brief 发现 4G 网络接口设备名（适用于 4G 模块以以太网模式工作的场景）
+     * @brief 发现 4G 网络接口设备名（原生：遍历 QNetworkInterface）
      *
-     * 检测策略（按优先级）：
-     *   1. 遍历 nmcli device 列表，查找类型为 ethernet 且连接配置名含 gsm/mobile/cellular 关键字的设备
-     *   2. fallback：检查已知常见 4G 接口名（eth1, usb0, enx* 等）
+     * 检测策略：优先候选名（eth1/usb0/wwan0/ppp0），兜底 enx*、usb* 前缀
+     * （USB 以太网设备，4G 网棒典型命名）。lo/eth0/wifi 天然不匹配。
      * 返回设备名（如 "eth1"），失败返回空串
      */
     QString discoverCellularDevice() const;
 
-    /** @brief 快速刷新 4G 状态：用 ip a 读接口 UP/DOWN，毫秒级，不等 mmcli */
-    void refreshCellularStatusFast();
+    /** @brief 接口是否有全局 IPv4 地址（排除环回/link-local 169.254）；可选输出 IP 字符串 */
+    static bool hasGlobalIPv4(const QNetworkInterface &iface, QString *ipOut = nullptr);
 
-    /** @brief 用 ip a 快速发现 4G 网络接口（候选 eth1/usb0/wwan0/ppp0/enx*） */
-    QString findCellularInterfaceFast() const;
+    /** @brief 从 /proc/net/wireless 读取指定 WiFi 设备信号（0-100），无该行返回 0 */
+    static int readWifiSignalFromProc(const QString &wifiDevice);
 
-    /** @brief 命令发出后启动短定时快速刷新（500/1500/2500ms），快速脱离 CellSearching */
-    void scheduleFastCellularRefresh();
+    /** @brief nmcli 反查当前连接的 SSID（仅在已连接且缓存为空时调用，稳态零进程） */
+    QString fetchCurrentWifiSsid(const QString &wifiDevice) const;
+
+    /** @brief 网络状态落定后派生有效网络模式（networkMode 单一数据源的第二写者，仅变化时 emit） */
+    void deriveNetworkModeFromState();
 
     /** @brief 内部设置 Wi-Fi 状态（触发信号） */
     void setWifiStatus(WifiStatus status);
@@ -273,28 +268,20 @@ private:
     bool           m_isScanning       = false;
 
     CellularStatus m_cellularStatus  = CellularStatus::CellUnknown;
-    bool           m_cellularUiActive = false;     // 用户对 4G 的意图（点击即置位，供 UI 即时反馈）
-    int            m_cellularSignal  = 0;          // 0-100
+    int            m_cellularSignal  = 0;          // 0-100（AT+CSQ 注入，唯一数据源）
     QString        m_cellularOperator;
     QString        m_cellularIpAddress;
-
-    /**
-     * @brief 连续"未检测到 4G 设备"的轮询次数（去抖计数）。
-     * 偶发 1~2 次 mmcli/nmcli 查询超时或 modem 暂不可见，不代表 4G 真断网；
-     * 只有连续达到 kCellLostThreshold 次才判定为断网，避免状态栏 4G 图标闪 Signal0。
-     */
-    int            m_cellLostStreak = 0;
-    static constexpr int kCellLostThreshold = 2;   // 连续 2 次（约 16s）才判断网
 
     /** @brief 检测到的 4G 网络接口设备名（如 "eth1"），用于以太网模式的 4G 模块 */
     mutable QString m_cellularDeviceName;
 
-    /** @brief 是否检测到任何 4G 硬件（modem 或网络接口模式） */
+    /** @brief 是否检测到任何 4G 硬件（4G 网络接口存在即为真） */
     bool           m_hasCellularHardware = false;
 
     QString        m_lastError;
     bool           m_pendingCellularOp = false;  // true=启用, false=禁用
-    bool           m_fastExpectEnable = false;   // 快速刷新方向：true=正在开启(无IP也保持Searching), false=正在关闭(无IP即Disabled)
+    /** @brief 4G 开启挂起窗口：enable 后未拿到 IP 前保持 CellSearching（30s 超时转 Error 时清除） */
+    bool           m_cellularEnablePending = false;
 
     /** @brief 当前网络模式（NetworkMode 枚举值，-1 未知） */
     int            m_networkMode = -1;
@@ -304,18 +291,14 @@ private:
     QString        m_pendingConnectionName;       // 已创建但尚未激活的连接名称
     QString        m_pendingPassword;              // 缓存正在连接的 WiFi 密码（用于失败时自动重建）
 
-    // 用户主动断开 WiFi 后的防回退保护（防止轮询定时器读取 nmcli 缓存状态刷回 Connected）
-    QElapsedTimer  m_disconnectTime;              // 断开操作成功时记录时间点，无效表示未处于保护窗口
-
     // 异步进程（每次操作复用）
     QProcess      *m_process         = nullptr;
 
     // 工具实际路径（构造时从候选列表中解析，兼容不同发行版）
     QString        m_nmcliPath;
-    QString        m_mmcliPath;
     QString        m_sudoPath;   // sudo（4G ip link set 提权用）
     QString        m_ipPath;     // ip（iproute2，4G 接口强制 up/down）
 
-    // 状态轮询定时器（每 10 秒刷新一次状态）
+    // 状态轮询定时器（每 3 秒刷新一次状态，原生检测微秒级）
     QTimer        *m_statusPollTimer = nullptr;
 };

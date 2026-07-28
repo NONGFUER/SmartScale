@@ -379,6 +379,13 @@ int main(int argc, char *argv[])
                          cellularModemService->start();
                      });
 
+    // AT 通道 → NetworkManager：4G 信号强度(AT+CSQ)/运营商(AT+COPS?) 镜像为 NetworkManager 属性，
+    // 使状态栏/弹窗以 NetworkManager 为单一数据源（联网判定仍在 NetworkManager 内看 eth1 IPv4，二者解耦）
+    QObject::connect(cellularModemService, &CellularModemService::signalStrengthChanged,
+                     networkManagerService, &NetworkManagerService::setCellularSignal);
+    QObject::connect(cellularModemService, &CellularModemService::operatorNameChanged,
+                     networkManagerService, &NetworkManagerService::setCellularOperator);
+
     // 注入 AuthService 给 HistoryService（云同步需要 token/userId）
     historyService->setAuthService(authService);
 

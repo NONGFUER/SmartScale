@@ -38,8 +38,7 @@ Popup {
     height: 420
 
     // 乐观更新：点击后立即切换视觉反馈，待底层命令完成后由 cellularStatus 同步/收尾
-    property bool uiSimOn: NetworkManager.cellularStatus >= NetworkManager.CellSearching
-                           && NetworkManager.cellularStatus <= NetworkManager.CellRoaming
+    property bool uiSimOn: false   // 实际开关状态：onOpened / onCellularStatusChanged 按真实连接态设置
     property bool switching: false
 
     // 外部遮罩（reparent 到 window.contentItem，z:40 低于键盘，不挡虚拟键盘）
@@ -333,9 +332,11 @@ Popup {
     Connections {
         target: NetworkManager
 
-        // 开关位置完全由用户意图（乐观）决定，绝不随真实状态回弹，保持点击状态。
-        // 后台真实结果只通过 toast 报错，不再改动开关视觉。
+        // 开关以真实 4G 连接状态为准：点击时乐观置位（见 onClicked），后台真实状态回写。
+        // 启用/搜索/注册/连接/漫游（CellSearching..CellRoaming）显示开启，断网/未启用显示关闭。
         function onCellularStatusChanged() {
+            uiSimOn = NetworkManager.cellularStatus >= NetworkManager.CellSearching
+                    && NetworkManager.cellularStatus <= NetworkManager.CellRoaming
         }
 
         function onCellularOperationFailed(errorMsg) {
@@ -351,7 +352,9 @@ Popup {
     // ========================================================================
     onOpened: {
         console.log("[CellularDialog] 弹窗打开, 当前 4G 状态:", NetworkManager.cellularStatus)
-        uiSimOn = NetworkManager.cellularUiActive   // 以用户意图为准（与状态栏一致），恢复被点击赋值破坏的绑定
+        // 以真实 4G 连接状态为准（单一数据源：NetworkManager.cellularStatus）
+        uiSimOn = NetworkManager.cellularStatus >= NetworkManager.CellSearching
+                && NetworkManager.cellularStatus <= NetworkManager.CellRoaming
         NetworkManager.refreshCellularStatus()
     }
 

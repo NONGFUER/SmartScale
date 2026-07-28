@@ -31,8 +31,11 @@ Dialog {
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     title: ""
 
-    // 当前选中的网络模式（与 NetworkManager.networkMode 同步，用于高亮按钮；默认全开优先4G）
-    property int netMode: NetworkManager.AllCellularPriority
+    // 当前网络模式：NetworkManager.networkMode（C++ 单一数据源）只读绑定，用于高亮四个互斥开关。
+    // C++ 侧两个写者：setNetworkMode()（用户意图下发）与状态落定自动派生（外部变更回显）。
+    property int netMode: NetworkManager.networkMode >= 0
+                          ? NetworkManager.networkMode
+                          : NetworkManager.AllCellularPriority
 
     // 版本更新栏位显示文本（检查中... / 最新版本号 / 获取失败）
     property string updateVersionText: "—"
@@ -45,12 +48,19 @@ Dialog {
         }
     }
 
-    // 应用某个网络模式：更新高亮、持久化记忆、下发设备、同步四个开关
+    // 双向联动回显：模式变化（用户下发 / 真实状态派生）→ 同步高亮并持久化记忆
+    Connections {
+        target: NetworkManager
+        function onNetworkModeChanged() {
+            syncSwitches()
+            if (NetworkManager.networkMode >= 0)
+                AppSettings.networkMode = NetworkManager.networkMode
+        }
+    }
+
+    // 应用某个网络模式：下发设备；高亮与落盘由 C++ networkModeChanged 信号回来闭环
     function setNetMode(m: int) {
-        netMode = m
-        AppSettings.networkMode = m
         NetworkManager.setNetworkMode(m)
-        syncSwitches()
     }
 
     // 根据 netMode 强制同步四个开关的 checked（用 onClicked 替代 onToggled 后无需防重入标志，
@@ -62,29 +72,7 @@ Dialog {
         swAllCell.checked  = (netMode === NetworkManager.AllCellularPriority)
     }
 
-    // 打开时推导应高亮的模式（四个中必须选一个，默认全开优先4G）
-    // 优先级：NetworkManager.networkMode（设备已应用）> AppSettings.networkMode（持久化记忆）> 实时状态推导
-    function refreshNetMode() {
-        if (NetworkManager.networkMode >= 0) {
-            netMode = NetworkManager.networkMode
-            return
-        }
-        if (AppSettings.networkMode >= 0) {
-            netMode = AppSettings.networkMode
-            return
-        }
-        var wifiOn = (NetworkManager.wifiStatus === NetworkManager.WifiConnected
-                      || NetworkManager.wifiStatus === NetworkManager.WifiConnecting)
-        var cellOn = (NetworkManager.cellularStatus === NetworkManager.CellConnected
-                      || NetworkManager.cellularStatus === NetworkManager.CellRegistered
-                      || NetworkManager.cellularStatus === NetworkManager.CellRoaming)
-        if (wifiOn && !cellOn) netMode = NetworkManager.WifiOnly
-        else if (!wifiOn && cellOn) netMode = NetworkManager.CellularOnly
-        else netMode = NetworkManager.AllCellularPriority   // 默认：全开优先4G（两者都开或都关时）
-    }
-
     onOpened: {
-        refreshNetMode()
         syncSwitches()
         // 首次打开（用户尚未选择过任何模式）：直接把设备设为默认 全开优先4G 并记忆
         if (AppSettings.networkMode < 0) {
@@ -296,10 +284,8 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swWifiOnly
-                        onClicked: {
-                            if (!checked) { checked = true; return }  // 不允许关闭当前模式（单选）
-                            setNetMode(NetworkManager.WifiOnly)
-                        }
+                        checkable: false
+                        onClicked: setNetMode(NetworkManager.WifiOnly)
                     }
                 }
 
@@ -320,10 +306,8 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swCellOnly
-                        onClicked: {
-                            if (!checked) { checked = true; return }
-                            setNetMode(NetworkManager.CellularOnly)
-                        }
+                        checkable: false
+                        onClicked: setNetMode(NetworkManager.CellularOnly)
                     }
                 }
 
@@ -344,10 +328,8 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swAllWifi
-                        onClicked: {
-                            if (!checked) { checked = true; return }
-                            setNetMode(NetworkManager.AllWifiPriority)
-                        }
+                        checkable: false
+                        onClicked: setNetMode(NetworkManager.AllWifiPriority)
                     }
                 }
 
@@ -368,10 +350,8 @@ Dialog {
                     Item { Layout.fillWidth: true }
                     ToggleSwitch {
                         id: swAllCell
-                        onClicked: {
-                            if (!checked) { checked = true; return }
-                            setNetMode(NetworkManager.AllCellularPriority)
-                        }
+                        checkable: false
+                        onClicked: setNetMode(NetworkManager.AllCellularPriority)
                     }
                 }
             }

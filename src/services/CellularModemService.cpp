@@ -23,6 +23,9 @@ CellularModemService::CellularModemService(QObject *parent)
     m_retryTimer = new QTimer(this);
     m_retryTimer->setSingleShot(true);
     connect(m_retryTimer, &QTimer::timeout, this, &CellularModemService::onRetryTimeout);
+
+    m_csqTimer = new QTimer(this);
+    connect(m_csqTimer, &QTimer::timeout, this, &CellularModemService::sendCsq);
 }
 
 CellularModemService::~CellularModemService()
@@ -36,9 +39,10 @@ CellularModemService::~CellularModemService()
 
 void CellularModemService::start()
 {
-    // 已在进行中（探测/任一查询阶段）则忽略重复调用
+    // 已在进行中（探测/任一查询阶段）或已进入 CSQ 常驻轮询则忽略重复调用
     if (m_state == State::Probing || m_state == State::Querying
-        || m_state == State::QueryingImsi || m_state == State::QueryingOperator)
+        || m_state == State::QueryingImsi || m_state == State::QueryingOperator
+        || m_state == State::PollingCsq)
         return;
     // 已成功获取过 CCID 则无需再来一遍
     if (m_state == State::Done && !m_ccid.isEmpty())
@@ -135,6 +139,7 @@ void CellularModemService::probeNext()
     }
 
     connect(m_serial, &QSerialPort::readyRead, this, &CellularModemService::onReadyRead);
+    connect(m_serial, &QSerialPort::errorOccurred, this, &CellularModemService::onSerialError);
 
     m_state = State::Probing;
     m_buffer.clear();
@@ -257,6 +262,21 @@ void CellularModemService::onReadyRead()
                        << "），以 CCID/IMSI 收尾";
             finishWithAll();
         }
+    } else if (m_state == State::PollingCsq) {
+        // 解析 +CSQ: rssi,ber（缓冲示例 "AT+CSQ\r\r\n+CSQ: 20,99\r\n\r\nOK\r\n"）
+        QRegularExpression re("\\+CSQ:\\s*(\\d+)\\s*,\\s*(\\d+)");
+        const QRegularExpressionMatch m = re.match(QString::fromLatin1(m_buffer));
+        if (m.hasMatch()) {
+            m_csqMissed = 0;
+            m_buffer.clear();
+            const int rssi = m.captured(1).toInt();
+            if (rssi != 99) {   // 99=未知/未注册，保持上次值
+                setSignalStrength(qBound(0, rssi, 31) * 100 / 31);
+            }
+        }
+        // 缓冲防爆：异常字节流累计过大仍未匹配则丢弃
+        if (m_buffer.size() > 256)
+            m_buffer.clear();
     }
 }
 
@@ -356,9 +376,7 @@ QString CellularModemService::normalizeOperatorName(const QString &raw)
 void CellularModemService::finishWithAll()
 {
     m_queryTimer->stop();
-    m_state = State::Done;
     m_available = !m_ccid.isEmpty() || !m_imsi.isEmpty() || !m_operatorName.isEmpty();
-    cleanupSerial();
     qInfo() << "[CellularModem] 成功获取 CCID(ICCID):" << m_ccid
             << " IMSI:" << m_imsi
             << " 运营商:" << m_operatorName;
@@ -366,6 +384,65 @@ void CellularModemService::finishWithAll()
     Q_EMIT ccidChanged(m_ccid);
     Q_EMIT imsiChanged(m_imsi);
     Q_EMIT operatorNameChanged(m_operatorName);
+
+    // AT 口常驻：不关闭串口，进入 CSQ 信号轮询态（NetworkManager 的 4G 信号数据源）
+    if (m_serial && m_serial->isOpen()) {
+        m_state = State::PollingCsq;
+        m_csqMissed = 0;
+        sendCsq();                      // 立即轮询一次，不等首个周期
+        m_csqTimer->start(kCsqIntervalMs);
+    } else {
+        m_state = State::Done;
+        cleanupSerial();
+    }
+}
+
+// ============================================================================
+// AT+CSQ 信号轮询（PollingCsq 态，串口常驻）
+// ============================================================================
+
+void CellularModemService::sendCsq()
+{
+    if (m_state != State::PollingCsq || !m_serial || !m_serial->isOpen())
+        return;
+
+    // 连续无响应超限：判定串口异常，信号归零并走既有重试机重新探测（不影响联网判定）
+    if (m_csqMissed >= kCsqMaxMissed) {
+        qWarning() << "[CellularModem] AT+CSQ 连续" << m_csqMissed << "次无响应，重新探测 AT 口";
+        setSignalStrength(0);
+        m_csqTimer->stop();
+        fail(QStringLiteral("AT+CSQ 无响应"));
+        return;
+    }
+
+    m_buffer.clear();
+    ++m_csqMissed;
+    m_serial->write("AT+CSQ\r");
+    m_serial->flush();
+}
+
+void CellularModemService::setSignalStrength(int percent)
+{
+    percent = qBound(0, percent, 100);
+    if (m_signalStrength != percent) {
+        m_signalStrength = percent;
+        qDebug() << "[CellularModem] 信号强度变化:" << m_signalStrength;
+        Q_EMIT signalStrengthChanged(m_signalStrength);
+    }
+}
+
+void CellularModemService::onSerialError(QSerialPort::SerialPortError error)
+{
+    if (error == QSerialPort::NoError)
+        return;
+    // 仅 CSQ 常驻态在此收尾（停轮询、信号归零、重探测）；
+    // 探测/查询态的串口错误交由既有超时逻辑处理，避免双路径并发
+    if (m_state != State::PollingCsq)
+        return;
+    qWarning() << "[CellularModem] CSQ 轮询串口错误(" << error << ")，信号归零并重新探测";
+    setSignalStrength(0);
+    m_csqTimer->stop();
+    fail(QStringLiteral("串口错误(%1)").arg(error));
 }
 
 void CellularModemService::fail(const QString &reason)
@@ -397,8 +474,11 @@ void CellularModemService::cleanupSerial()
 {
     m_probeTimer->stop();
     m_queryTimer->stop();
+    if (m_csqTimer)
+        m_csqTimer->stop();
     if (m_serial) {
         disconnect(m_serial, &QSerialPort::readyRead, this, &CellularModemService::onReadyRead);
+        disconnect(m_serial, &QSerialPort::errorOccurred, this, &CellularModemService::onSerialError);
         if (m_serial->isOpen())
             m_serial->close();
         delete m_serial;
