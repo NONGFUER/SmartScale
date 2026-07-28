@@ -130,6 +130,7 @@ Rectangle {
 
             // ---- 4G 信号图标（始终显示；无信号/未连接时 Signal0.png 断网图标）----
             Item {
+                id: cellItem
                 width: 44; height: 44
                 visible: true
 
@@ -167,16 +168,6 @@ Rectangle {
                 // 4G 活跃态（真实连接）跳变时闪动反馈
                 property bool cellActivePrev: false
                 Component.onCompleted: cellActivePrev = isCellularActive()
-                Connections {
-                    target: NetworkManager
-                    function onCellularStatusChanged() {
-                        var a = isCellularActive()
-                        if (a !== cellActivePrev) {
-                            cellActivePrev = a
-                            cellFlashAnim.restart()
-                        }
-                    }
-                }
 
                 MouseArea {
                     id: cellMouse
@@ -184,6 +175,28 @@ Rectangle {
                     anchors.margins: -12   // 感应区外扩 12px（44→68×68），间隙相接不重叠
                     hoverEnabled: true
                     onClicked: root.cellularRequested()
+                }
+
+                Connections {
+                    target: NetworkManager
+                    function onCellularStatusChanged() {
+                        var a = isCellularActive()
+                        console.log("[StatusBar-DBG] 4G status changed:",
+                                    "status=", NetworkManager.cellularStatus,
+                                    "active=", a,
+                                    "signal=", NetworkManager.cellularSignal,
+                                    "level=", signalLevel(NetworkManager.cellularSignal))
+                        if (a !== cellItem.cellActivePrev) {
+                            cellItem.cellActivePrev = a
+                            cellFlashAnim.restart()
+                        }
+                    }
+                    function onCellularSignalChanged() {
+                        console.log("[StatusBar-DBG] 4G signal changed:",
+                                    "signal=", NetworkManager.cellularSignal,
+                                    "level=", signalLevel(NetworkManager.cellularSignal),
+                                    "active=", isCellularActive())
+                    }
                 }
             }
 
@@ -195,10 +208,12 @@ Rectangle {
                 Connections {
                     target: NetworkManager
                     function onWifiStatusChanged() {
-                        console.log("[StatusBar-DBG] onWifiStatusChanged:",
+                        console.log("[StatusBar-DBG] WiFi changed:",
                                     "status=", NetworkManager.wifiStatus,
-                                    "ssid='", NetworkManager.wifiSsid, "'",
-                                    "signal=", NetworkManager.wifiSignal)
+                                    "active=", isWifiActive(),
+                                    "wifiSignal=", NetworkManager.wifiSignal,
+                                    "currentWifiSignal=", currentWifiSignal(),
+                                    "level=", signalLevel(currentWifiSignal()))
                     }
                 }
 
@@ -216,7 +231,10 @@ Rectangle {
 
                 Image {
                     anchors.centerIn: parent
-                    source: "qrc:/resources/img/Wifi" + signalLevel(currentWifiSignal()) + ".png"
+                    // 真实状态驱动：已连接 -> 按信号等级显示；否则断网标记
+                    source: isWifiActive()
+                            ? ("qrc:/resources/img/Wifi" + signalLevel(currentWifiSignal()) + ".png")
+                            : "qrc:/resources/img/Wifi0.png"
                     width: 44; height: 44
                     fillMode: Image.PreserveAspectFit
                 }
@@ -349,10 +367,16 @@ Rectangle {
 
     // ===== 网络状态判断辅助函数 =====
 
-    /** @brief 判断 4G 是否处于激活状态（有数据连接：已连接/漫游） */
+    /** @brief 判断 4G 是否处于激活状态（有数据连接：已连接=4 漫游=5） */
     function isCellularActive() {
         var s = NetworkManager.cellularStatus
-        return s === NetworkManager.CellConnected || s === NetworkManager.CellRoaming
+        return s === 4 || s === 5
+    }
+
+    /** @brief 判断 WiFi 是否处于激活状态（已连接=4） */
+    function isWifiActive() {
+        var s = NetworkManager.wifiStatus
+        return s === 4
     }
 
     /** @brief 判断 4G 是否处于漫游状态 */
@@ -378,10 +402,9 @@ Rectangle {
 
     function signalLevel(sig) {
         var s = Math.max(0, Math.min(100, sig || 0))
-        if (s <= 20) return "0"
-        if (s <= 40) return "1"
-        if (s <= 60) return "2"
-        if (s <= 80) return "3"
+        if (s <= 25) return "1"
+        if (s <= 50) return "2"
+        if (s <= 75) return "3"
         return "4"
     }
 }

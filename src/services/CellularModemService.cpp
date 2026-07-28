@@ -270,8 +270,14 @@ void CellularModemService::onReadyRead()
             m_csqMissed = 0;
             m_buffer.clear();
             const int rssi = m.captured(1).toInt();
+            const int ber = m.captured(2).toInt();
+            qInfo() << "[CellularModem] AT+CSQ raw:" << "rssi=" << rssi << "ber=" << ber;
             if (rssi != 99) {   // 99=未知/未注册，保持上次值
-                setSignalStrength(qBound(0, rssi, 31) * 100 / 31);
+                const int percent = qBound(0, rssi, 31) * 100 / 31;
+                qInfo() << "[CellularModem] AT+CSQ -> signal:" << percent << "%";
+                setSignalStrength(percent);
+            } else {
+                qInfo() << "[CellularModem] AT+CSQ rssi=99 (未知)，保持上次值";
             }
         }
         // 缓冲防爆：异常字节流累计过大仍未匹配则丢弃

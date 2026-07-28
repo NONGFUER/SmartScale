@@ -337,6 +337,7 @@ Popup {
         function onCellularStatusChanged() {
             uiSimOn = NetworkManager.cellularStatus >= NetworkManager.CellSearching
                     && NetworkManager.cellularStatus <= NetworkManager.CellRoaming
+                    && NetworkManager.cellularStatus !== NetworkManager.CellDisabling
         }
 
         function onCellularOperationFailed(errorMsg) {
@@ -355,6 +356,7 @@ Popup {
         // 以真实 4G 连接状态为准（单一数据源：NetworkManager.cellularStatus）
         uiSimOn = NetworkManager.cellularStatus >= NetworkManager.CellSearching
                 && NetworkManager.cellularStatus <= NetworkManager.CellRoaming
+                && NetworkManager.cellularStatus !== NetworkManager.CellDisabling
         NetworkManager.refreshCellularStatus()
     }
 

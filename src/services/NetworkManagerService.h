@@ -65,7 +65,8 @@ public:
         CellRegistered = 3,
         CellConnected = 4,
         CellRoaming   = 5,
-        CellError     = 6
+        CellError     = 6,
+        CellDisabling = 7          // 正在关闭（命令执行中，QML 开关应显示"关"）
     };
     Q_ENUM(CellularStatus)
 
@@ -282,6 +283,8 @@ private:
     bool           m_pendingCellularOp = false;  // true=启用, false=禁用
     /** @brief 4G 开启挂起窗口：enable 后未拿到 IP 前保持 CellSearching（30s 超时转 Error 时清除） */
     bool           m_cellularEnablePending = false;
+    /** @brief 4G 关闭挂起窗口：disable 后命令完成前保持 CellDisabling（防轮询提前判 Disabled 回退） */
+    bool           m_cellularDisablePending = false;
 
     /** @brief 当前网络模式（NetworkMode 枚举值，-1 未知） */
     int            m_networkMode = -1;

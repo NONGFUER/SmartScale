@@ -765,6 +765,17 @@ void NetworkManagerService::onWifiDisconnectFinished(int exitCode, QProcess::Exi
 
 bool NetworkManagerService::hasGlobalIPv4(const QNetworkInterface &iface, QString *ipOut)
 {
+    // 接口 DOWN 时 IP 可能残留（ip link set down 不立即清除地址），
+    // 直接读内核 operstate 检测是否为 "down"
+    const QString operstatePath = QStringLiteral("/sys/class/net/%1/operstate")
+                                     .arg(iface.name());
+    QFile operstateFile(operstatePath);
+    if (operstateFile.open(QIODevice::ReadOnly)) {
+        const auto state = QString::fromUtf8(operstateFile.readAll()).trimmed();
+        if (state == QLatin1String("down"))
+            return false;
+    }
+
     const auto entries = iface.addressEntries();
     for (const auto &entry : entries) {
         const QHostAddress ip = entry.ip();
@@ -907,6 +918,7 @@ void NetworkManagerService::setWifiStatus(WifiStatus status)
 void NetworkManagerService::enableCellular()
 {
     qDebug() << "[NetworkManager] 开启 4G 移动数据...";
+    m_cellularDisablePending = false;         // 清除可能的关闭残留
     m_cellularEnablePending = true;    // 开启挂起窗口：未拿到 IP 前保持 CellSearching
     setCellularStatus(CellularStatus::CellSearching);
     enableCellularViaDevice();
@@ -969,7 +981,8 @@ void NetworkManagerService::disableCellular()
 {
     qDebug() << "[NetworkManager] 关闭 4G 移动数据...";
     m_cellularEnablePending = false;   // 关闭方向：无 IP 即落定 Disabled
-    setCellularStatus(CellularStatus::CellSearching);
+    m_cellularDisablePending = true;          // 开启关闭挂起窗口
+    setCellularStatus(CellularStatus::CellDisabling);   // 使用新过渡态，QML 开关立即显示关
     disableCellularViaDevice();
     // 命令后密集原生刷新，抓住 IP 消失瞬间
     for (int ms : {500, 1500, 3000}) {
@@ -1018,12 +1031,13 @@ void NetworkManagerService::disableCellularViaDevice()
     m_pendingCellularOp = false;
 
     QTimer::singleShot(15000, this, [this]() {
-        if (m_cellularStatus == CellularStatus::CellSearching) {
+        if (m_cellularStatus == CellularStatus::CellDisabling) {
             m_process->kill();
             qDebug() << "[NetworkManager] ip link set down 4G 接口超时，强制标记为禁用";
             m_cellularOperator.clear();
             m_cellularIpAddress.clear();
             m_cellularSignal = 0;
+            m_cellularDisablePending = false;      // 超时也清除挂起窗口
             setCellularStatus(CellularStatus::CellDisabled);
             Q_EMIT cellularDisabled();
         }
@@ -1069,6 +1083,7 @@ void NetworkManagerService::onCellularOpFinished(int exitCode, QProcess::ExitSta
             m_cellularOperator.clear();
             m_cellularIpAddress.clear();
             m_cellularSignal = 0;
+            m_cellularDisablePending = false;      // 命令成功完成，关闭挂起窗口
             setCellularStatus(CellularStatus::CellDisabled);
             Q_EMIT cellularDisabled();
         }
@@ -1131,8 +1146,12 @@ void NetworkManagerService::refreshCellularStatus()
     if (hasIp) {
         newStatus = CellularStatus::CellConnected;
         m_cellularEnablePending = false;   // 已落定
+        m_cellularDisablePending = false;  // 有 IP 说明关闭未成功，清除挂起窗口
     } else if (m_cellularEnablePending) {
         newStatus = CellularStatus::CellSearching;  // 开启挂起窗口：DHCP/拨号中，不误判 Disabled
+        ipAddress.clear();
+    } else if (m_cellularDisablePending) {       // 关闭挂起窗口：命令完成前保持 Disabling
+        newStatus = CellularStatus::CellDisabling;
         ipAddress.clear();
     } else {
         newStatus = CellularStatus::CellDisabled;
@@ -1155,6 +1174,8 @@ void NetworkManagerService::refreshCellularStatus()
 void NetworkManagerService::setCellularSignal(int percent)
 {
     percent = qBound(0, percent, 100);
+    qInfo() << "[NetworkManager] setCellularSignal:" << percent
+            << "(was:" << m_cellularSignal << ")";
     if (m_cellularSignal != percent) {
         m_cellularSignal = percent;
         Q_EMIT cellularStatusChanged();
