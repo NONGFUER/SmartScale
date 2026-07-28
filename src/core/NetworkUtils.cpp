@@ -87,3 +87,9 @@ QNetworkRequest NetworkUtils::createUserApiRequest(const char *apiPath,
 {
     return createApiRequest(USER_BASE_URL, apiPath, token);
 }
+
+QNetworkRequest NetworkUtils::createUpdateApiRequest(const char *apiPath,
+                                                      const QString &token)
+{
+    return createApiRequest(UPDATE_BASE_URL, apiPath, token);
+}

@@ -13,8 +13,9 @@
 namespace NetworkUtils {
 
     // === 全局常量 ===
-    inline constexpr const char *API_BASE_URL  = "https://api.shxgs.cn:5196";
-    inline constexpr const char *USER_BASE_URL = "https://user.shxgs.cn:5196";
+    inline constexpr const char *API_BASE_URL    = "https://api.shxgs.cn:5196";
+    inline constexpr const char *USER_BASE_URL   = "https://user.shxgs.cn:5196";
+    inline constexpr const char *UPDATE_BASE_URL = "https://update.shxgs.cn:5196";
 
     // === API 路径（集中管理，新增接口在此处添加）===
     namespace Api {
@@ -34,6 +35,9 @@ namespace NetworkUtils {
         inline constexpr const char *USER_INGR_PAGED        = "/api/user/UserIngr/paged";
         inline constexpr const char *USER_INGR_CREATE       = "/api/user/UserIngr/create";
         inline constexpr const char *USER_INGRCATE_ALL      = "/api/user/IngrCate/all";  // 食材品类全量（按 custId）
+
+        // === UPDATE 域接口（update.shxgs.cn:5196）===
+        inline constexpr const char *UPDATE_INFO_LATEST     = "/UpdateInfo/latest";  // 查询最新版本信息
     }
 
     /**
@@ -72,6 +76,12 @@ namespace NetworkUtils {
      */
     QNetworkRequest createUserApiRequest(const char *apiPath,
                                          const QString &token = QString());
+
+    /**
+     * @brief 创建 UPDATE 域 API 请求（使用 UPDATE_BASE_URL: update.shxgs.cn:5196）
+     */
+    QNetworkRequest createUpdateApiRequest(const char *apiPath,
+                                           const QString &token = QString());
 
 } // namespace NetworkUtils
 

@@ -229,10 +229,13 @@ void AuthService::tryFetchUserInfo()
 
     QNetworkRequest request = createApiRequest(NetworkUtils::Api::USER_BY_ID, m_token);
 
-    // 后端 [FromBody] string 期望 JSON 字符串值（带引号），与 refresh-token 同模式
-    QByteArray bodyData = "\"" + QString::number(m_userId).toUtf8() + "\"";
+    // 新传参规则：body 为 JSON 对象，pam1=custId、pam2=userId（雪花 ID 均为字符串）
+    QJsonObject bodyObj;
+    bodyObj["pam1"] = QString::number(m_custId);
+    bodyObj["pam2"] = QString::number(m_userId);
+    QByteArray bodyData = QJsonDocument(bodyObj).toJson(QJsonDocument::Compact);
 
-    qInfo() << "[Auth] 请求 User/by-id 获取用户信息（含头像）, userId=" << m_userId;
+    qInfo() << "[Auth] 请求 User/by-id 获取用户信息（含头像）, custId=" << m_custId << "userId=" << m_userId;
     qInfo() << "[HTTP] Body:" << bodyData;
 
     QElapsedTimer timer;
@@ -560,11 +563,30 @@ bool AuthService::parseAuthResponse(const QByteArray &data,
     QString expiresAtStr = userData.value("accessTokenExpiration").toString();
     qDebug() << "[Auth] data keys:" << userData.keys();
 
-    // 解析 USER 域字段
-    QJsonValue custVal = userData.value("custId");
-    m_custId = custVal.isString() ? custVal.toString().toLongLong() : custVal.toVariant().toLongLong();
+    // 解析 USER 域字段：优先取 userCust[0]（新返回结构，含客户名），缺省回退顶层 custId
+    QJsonArray userCust = userData.value("userCust").toArray();
+    if (!userCust.isEmpty()) {
+        QJsonObject cust0 = userCust.first().toObject();
+        QJsonValue idVal = cust0.value("id");
+        qint64 parsedCustId = idVal.isString() ? idVal.toString().toLongLong()
+                                               : idVal.toVariant().toLongLong();
+        if (parsedCustId > 0) {
+            m_custId = parsedCustId;
+        }
+        // 客户名登录即填充，无需等待 User/by-id
+        QString nm = cust0.value("name").toString();
+        if (!nm.isEmpty() && nm != m_custNm) {
+            m_custNm = nm;
+            Q_EMIT custNmChanged();
+            qInfo() << "[Auth] 登录响应携带客户名: custNm=" << m_custNm;
+        }
+        qDebug() << "[Auth] userCust[0] id=" << m_custId << "name=" << nm;
+    } else {
+        QJsonValue custVal = userData.value("custId");
+        m_custId = custVal.isString() ? custVal.toString().toLongLong() : custVal.toVariant().toLongLong();
+        qDebug() << "[Auth] custId raw value:" << custVal << "type:" << custVal.type() << "parsed:" << m_custId;
+    }
     m_devId  = userData.value("devId").toVariant().toLongLong();
-    qDebug() << "[Auth] custId raw value:" << custVal << "type:" << custVal.type() << "parsed:" << m_custId;
 
     // UTC → 本地时间
     outExpiresAt = QDateTime::fromString(expiresAtStr, Qt::ISODate);

@@ -87,7 +87,7 @@ public:
     QString productId() const { return m_productId; }
     /** @brief 用户头像 URL（登录后由 /api/ems/User/by-id 返回） */
     QString avatarUrl() const { return m_avatarUrl; }
-    /** @brief 客户名称（登录后由 /api/ems/User/by-id 返回） */
+    /** @brief 客户名称（登录响应 userCust[0].name 即时填充，User/by-id 返回后覆盖） */
     QString custNm() const { return m_custNm; }
 
     // === 设备序列号（由 WeightSensor 注入）===

@@ -174,6 +174,7 @@ Rectangle {
                 MouseArea {
                     id: cellMouse
                     anchors.fill: parent
+                    anchors.margins: -16   // 感应区外扩 16px（44→76×76），图标视觉不变
                     hoverEnabled: true
                     onClicked: root.cellularRequested()
                 }
@@ -216,6 +217,7 @@ Rectangle {
                 MouseArea {
                     id: wifiMouse
                     anchors.fill: parent
+                    anchors.margins: -16   // 感应区外扩 16px（44→76×76），图标视觉不变
                     hoverEnabled: true
                     onClicked: root.networkRequested()
                 }

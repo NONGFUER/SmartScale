@@ -38,6 +38,7 @@
 #include "services/NetworkManagerService.h"   // 网络管理服务 (WiFi + 4G)
 #include "services/MqttClientService.h"           // MQTT 客户端服务
 #include "services/CellularModemService.h"        // 蜂窝模组 CCID(ICCID) 获取 (AT 指令)
+#include "services/UpdateService.h"               // 更新信息查询服务
 
 // 数据层
 #include "data/DatabaseManager.h"
@@ -240,6 +241,10 @@ int main(int argc, char *argv[])
     // 蜂窝模组服务 — 遍历 /dev/ttyUSB* 发送 AT 指令动态确认端口并读取 CCID(ICCID)
     CellularModemService *cellularModemService = new CellularModemService(&app);
 
+    // 更新信息服务 — 查询 update.shxgs.cn 最新版本（延迟 10s 等网络就绪后自动查一次）
+    UpdateService *updateService = new UpdateService(&app);
+    QTimer::singleShot(10000, updateService, &UpdateService::checkUpdate);
+
     // 语音播报注入 CameraController，AI推理完成后直接播报（省掉QML往返）
     cameraController->setVoiceSpeaker(voiceSpeaker);
     // 登录用户信息注入 CameraController（水印中显示操作员）
@@ -406,6 +411,7 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "NetworkManager", networkManagerService);  // 网络管理 (WiFi + 4G)
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "MqttClient", mqttClientService);          // MQTT 设备上报 (shxgs)
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "CellularModem", cellularModemService);     // 蜂窝模组 CCID(ICCID)
+    qmlRegisterSingletonInstance("App.Backend", 1, 0, "UpdateService", updateService);            // 更新信息查询
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());
     qmlRegisterSingletonInstance<PState>("SmartScale.Tools", 1, 0, "PState", &PState::inst());
 

@@ -34,6 +34,17 @@ Dialog {
     // 当前选中的网络模式（与 NetworkManager.networkMode 同步，用于高亮按钮；默认全开优先4G）
     property int netMode: NetworkManager.AllCellularPriority
 
+    // 版本更新栏位显示文本（检查中... / 最新版本号 / 获取失败）
+    property string updateVersionText: "—"
+
+    // 查询结果回写显示文本
+    Connections {
+        target: UpdateService
+        function onCheckFinished(success: bool, message: string) {
+            updateVersionText = success ? message : "获取失败"
+        }
+    }
+
     // 应用某个网络模式：更新高亮、持久化记忆、下发设备、同步四个开关
     function setNetMode(m: int) {
         netMode = m
@@ -81,6 +92,9 @@ Dialog {
         }
         NetworkManager.refreshWifiStatus()
         NetworkManager.refreshCellularStatus()
+        // 打开弹窗即查询最新版本
+        updateVersionText = "检查中..."
+        UpdateService.checkUpdate()
     }
 
     background: Rectangle {
@@ -198,6 +212,7 @@ Dialog {
         SettingRow { label: "SIM卡号(ICCID):"; value: (CellularModem.ccid !== undefined && CellularModem.ccid.length > 0) ? CellularModem.ccid : "—"; isLast: false }
        // SettingRow { label: "IMSI:"; value: (CellularModem.imsi !== undefined && CellularModem.imsi.length > 0) ? CellularModem.imsi : "—"; isLast: true }
         SettingRow { label: "内存容量:"; value: SystemInfo.memTotal; isLast: false }
+        SettingRow { label: "版本更新:"; value: updateVersionText; isLast: false }
 
         // 分隔间距
         Item { Layout.preferredHeight: 20 }
