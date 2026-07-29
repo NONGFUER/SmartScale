@@ -7,6 +7,8 @@
 #include <QJsonObject>
 #include <QDateTime>
 #include <QDebug>
+#include <QSslError>
+#include <QList>
 
 // 请求 payload 写死（JSON 字符串 "User_Dzc"）
 static const QByteArray kUpdatePayload = R"("User_Dzc")";
@@ -15,6 +17,16 @@ UpdateService::UpdateService(QObject *parent)
     : QObject(parent)
     , m_networkMgr(new QNetworkAccessManager(this))
 {
+    // 请求超时守卫：WiFi 等无出口网络下连接会挂死（finished 永不触发），
+    // 超时后 abort 当前请求，由 finished 回调统一降级为查询失败。
+    m_timeoutTimer.setSingleShot(true);
+    connect(&m_timeoutTimer, &QTimer::timeout, this, [this]() {
+        if (m_reply) {
+            qWarning() << "[UpdateService] 查询超时（" << m_timeoutTimer.interval()
+                       << "ms），中止请求";
+            m_reply->abort();   // 触发 finished(OperationCanceledError)
+        }
+    });
 }
 
 void UpdateService::checkUpdate()
@@ -32,7 +44,26 @@ void UpdateService::checkUpdate()
     qInfo() << "[UpdateService] 正在查询最新版本信息, payload:" << kUpdatePayload;
 
     QNetworkReply *reply = m_networkMgr->post(request, kUpdatePayload);
+    m_reply = reply;
+    m_timeoutTimer.start(15000);   // 15s 未响应即超时
+
+    // SSL：VerifyNone 意图即跳过证书验证；自签名/私有CA仍可能触发 sslErrors，需 ignore 否则握手中止
+    connect(reply, &QNetworkReply::sslErrors, this,
+            [reply](const QList<QSslError> &errors) {
+                for (const QSslError &e : errors)
+                    qWarning() << "[UpdateService] SSL 错误(已忽略):" << e.errorString();
+                reply->ignoreSslErrors();
+            });
+    // 错误早报：DNS/连接/SSL 握手失败可先于 finished 暴露，便于诊断"无回应"
+    connect(reply, &QNetworkReply::errorOccurred, this,
+            [reply](QNetworkReply::NetworkError code) {
+                qWarning() << "[UpdateService] 网络错误(" << static_cast<int>(code)
+                           << "):" << reply->errorString();
+            });
+
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        m_timeoutTimer.stop();
+        m_reply = nullptr;
         reply->deleteLater();
         m_checking = false;
         Q_EMIT checkingChanged();
@@ -48,7 +79,11 @@ void UpdateService::checkUpdate()
 
         if (reply->error() != QNetworkReply::NoError) {
             qWarning() << "[UpdateService] 查询失败:" << reply->errorString();
-            Q_EMIT checkFinished(false, reply->errorString());
+            // 超时 abort 触发 OperationCanceledError，给出面向用户的超时提示
+            const QString msg = (reply->error() == QNetworkReply::OperationCanceledError)
+                ? QStringLiteral("网络请求超时，请检查网络后重试")
+                : reply->errorString();
+            Q_EMIT checkFinished(false, msg);
             return;
         }
 

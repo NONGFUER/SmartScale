@@ -31,5 +31,7 @@
         <file>resources/img/back_w.png</file>
         <!-- 自定义虚拟键盘明亮风格：Qt6.8 查找 <导入路径>/QtQuick/VirtualKeyboard/Styles/<名>/style.qml -->
         <file alias="qt-project.org/imports/QtQuick/VirtualKeyboard/Styles/light/style.qml">src/ui/vkbdstyle/light/style.qml</file>
+        <!-- OTA 刷写脚本：install() 时导出到 data/ota/ 执行（设备部署目录无 scripts/） -->
+        <file>scripts/apply_update.sh</file>
     </qresource>
 </RCC>

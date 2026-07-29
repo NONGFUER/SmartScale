@@ -2,73 +2,74 @@
 
 > 跨会话稳定约定与硬性规则。冲突时直接更新本文档。
 
-## 编译约束
+## 编译与资源
 - 禁止 AI 自行执行 `make`/`cmake --build`；用户自跑 `make -j1`，AI 改完用 `read_lints` 验证语法。
+- 资源：`qt_add_big_resources(RCC_SOURCES app.qrc)` → `target_sources`；新增图片必须编辑 `app.qrc`；改资源后清 build 重新 `cmake ..`+`make -j1`。
+- 版本号：CMakeLists.txt `project(SmartScale VERSION x.y.z)`，构建号 `cmake -DBUILD_NUMBER=N`（默认9），`version.h.in` → `configure_file` → SystemInfoService.appVersion / buildNumber。
 
 ## 运行环境
-- 无鼠标光标：`main.cpp` 创建 QGuiApplication 后立即 `QGuiApplication::setOverrideCursor(Qt::BlankCursor)`；QML MouseArea 禁止 `cursorShape`。
-- 弹窗输入框禁止自动聚焦（LoginDialog/WifiPasswordDialog 例外打开即输入）：Dialog/Popup 内 TextField `focus:false`，`onOpened` 末尾 `Qt.callLater` 把焦点移到关闭/返回按钮 MouseArea。
+- 无鼠标光标：main.cpp 创建 QGuiApplication 后 `setOverrideCursor(Qt::BlankCursor)`；QML MouseArea 禁止 `cursorShape`。
+- 弹窗输入框禁止自动聚焦（LoginDialog/WifiPasswordDialog 例外）：TextField `focus:false`，`onOpened` 末尾 `Qt.callLater` 移焦点到关闭/返回按钮。
 
 ## 认证与密码存储
-- 两套账号体系：(1) 云端账号（userCode+密码，AuthService）：记住登录存 `~/.config/SmartScale/last_login.conf`（INI，password 仅 base64 编码=可逆明文，非加密，有泄露风险）；登录历史存 `~/.cache/smartscale/login_history.json`（同样 base64）。云端 token/refreshToken/userId/devId/userName 仅存 AuthService 内存，重启即失，靠 last_login.conf 自动重登；详细用户信息经 USER_BY_ID 接口实时拉取，缓存在 `~/.cache/smartscale/product.json`。(2) 本地离线账号：SQLite `data/smartscale.db` 的 `users` 表，`password_hash` 为 SHA256 哈希（不存明文），`UserRepo::verifyPassword` 校验。
-- 安全风险：云端密码 base64 存储非加密，建议改为不持久化或 AES 加密。
+- 云端账号（AuthService）：记住登录存 `~/.config/SmartScale/last_login.conf`，历史存 `~/.cache/smartscale/login_history.json`，password 仅 base64（=明文，有泄露风险，建议改不持久化或 AES）。token/refreshToken/userId/devId 仅存内存，重启靠 last_login.conf 自动重登；用户信息经 USER_BY_ID 拉取缓存 `~/.cache/smartscale/product.json`。
+- 本地离线账号：SQLite `data/smartscale.db` `users` 表，SHA256 哈希，`UserRepo::verifyPassword` 校验。
 
 ## 弹窗与浮层
-- Toast/通知根节点用 Popup/Dialog：`modal:false`+`closePolicy:Popup.NoAutoClose`+`padding:0`+透明 background+open/close+转场。
-- 弹窗遮罩：`modal:true`+显式 `Overlay.modal: Rectangle{color:"#80000000"}`（LoginDialog 例外保留 modal:false+外部遮罩）。
-- CategoryCorrectionDialog 外部遮罩必须 reparent 到 `window.contentItem`（anchors.fill+z:40），不可改 `modal:true`（会遮 InputPanel）。
-- 返回按钮标准：back2.png+"返回" 胶囊 116×44 radius:22，图标 22×22，文字 24px bold `#4649E5`；标题 `anchors.centerIn` 绝对居中。
+- Toast/通知：Popup/Dialog 根 + `modal:false`+`closePolicy:Popup.NoAutoClose`+`padding:0`+透明 background。
+- 弹窗遮罩：`modal:true`+显式 `Overlay.modal: Rectangle{color:"#80000000"}`（LoginDialog 例外 modal:false+外部遮罩）。
+- CategoryCorrectionDialog 外部遮罩 reparent 到 `window.contentItem`（anchors.fill+z:40），不可改 modal:true（会遮 InputPanel）。
+- 返回按钮标准：back2.png+"返回" 胶囊 116×44 radius:22，图标 22×22，文字 24px bold `#4649E5`；标题 `anchors.centerIn` 居中。
 
 ## 数据与类型
 - 雪花 ID（ingrId/emsId/cateId/recoId/userId/productId/custId/devId）一律 qint64/QString，禁止 `toInt()`。
-- 价格单位统一元/kg：`amount = unitPrice × netWeight(kg)`，`addRecord` 内 `qRound(price*100)/100`。
-- 版本号：CMakeLists.txt `project(SmartScale VERSION x.y.z)`，构建号 `cmake -DBUILD_NUMBER=N`（默认9），`version.h.in` → `configure_file` → SystemInfoService.appVersion。
+- 价格单位元/kg：`amount = unitPrice × netWeight(kg)`，`addRecord` 内 `qRound(price*100)/100`。
 
 ## 网络
-- API 域：`API_BASE_URL=https://api.shxgs.cn:5196`，`USER_BASE_URL=https://user.shxgs.cn:5196`；`NetworkUtils::createApiRequest/createUserApiRequest` 统一 json+Bearer+SSL VerifyNone+HTTP/1.1。
-- `NetworkManagerService`（QML `App.Backend::NetworkManager`）**2026-07-28 原生 C++ 重构后架构**：
-  - **检测层（零外部进程）**：WiFi/4G 联网判定走 `QNetworkInterface`（接口存在+IsUp+全局 IPv4，排除 link-local/环回），WiFi 信号读 `/proc/net/wireless`；3s 轮询主线程同步直跑；SSID 仅 Connected 且缓存为空时 nmcli 反查一次。**mmcli 全家、ip a 快速路径、m_cellLostStreak 去抖、m_disconnectTime 防回退已全部删除**（cpp 1936→1265 行）。
-  - **状态语义统一真实状态**：`cellularUiActive` 意图层已全删，StatusBar 4G 图标（`isCellularActive()`=Connected/Roaming）、CellularDialog 开关、SettingsDialog 高亮全部以真实 `cellularStatus` 为唯一数据源，真断网即显 Signal0。
-  - **4G 信号源 AT+CSQ**：`CellularModemService` 新增 `State::PollingCsq`，`finishWithAll()` 后串口常驻，5s 轮询 AT+CSQ（rssi 0-31→×100/31，99 保持上次）输出 `signalStrength`；串口错误/连续 3 次无响应→信号归零+走既有重试机，与联网判定解耦（信号 0 不误判断网）。main.cpp 接线 signalStrengthChanged→`NetworkManagerService::setCellularSignal`、operatorNameChanged→`setCellularOperator`（两个 slot）。
-  - **控制层不变**：nmcli（WiFi 扫描/连接/射频、route metric）+ sudo ip link set（4G up/down）；4G 开关用 `m_cellularEnablePending` 挂起窗口（enable 后无 IP 保持 Searching，30s 超时转 Error），命令后 500/1500/3000ms 单发原生刷新。
-  - **networkMode 单一数据源（双向联动）**：C++ 两个写者——`setNetworkMode()`（用户下发）+ `deriveNetworkModeFromState()`（wifi/cellular 落定态变化时派生：wifiOn=射频开{Disconnected,Connected}、cellOn={Registered,Connected,Roaming}、双开保留 All* 偏好、双关默认 AllCellularPriority；过渡态跳过；仅变化时 emit）。SettingsDialog `netMode` 只读绑定 `NetworkManager.networkMode`，`onNetworkModeChanged→syncSwitches()+AppSettings 落盘` 闭环，`setNetMode` 只调 `setNetworkMode()`。
-- 网络模式：四模式枚举 `WifiOnly/CellularOnly/AllWifiPriority/AllCellularPriority`，默认 `AllCellularPriority`，持久化到 `AppSettings.networkMode`，开机 5s 后恢复。全开模式用 route-metric（优先=10/非优先=300）实现优先级。
-- **route-metric 修复已撤回（2026-07-24）**：之前做的 `setConnectionRouteMetric`→`device reapply`→`down+up` 兜底修复（解决"全开模式 metric 配置对但内核路由不生效"）已被用户 git 撤回，代码回到原始（仅 `connection modify` 写配置、未推送内核）。重启需重做时参考：根因是 `nmcli connection modify ipv4.route-metric` 只改持久化配置、活动连接路由不自动变，须紧跟 `device reapply <iface>`（NM 1.20+）或 `connection down+up` 兜底；原 `reactivateConnection` 用 `connection up` 在连接已 active 时是 no-op。本项目实际设备 4G=eth1 的 "有线连接 1"（NM 连接），WiFi=wlan0，识别链路正常，两全开模式本应真实生效。
-- SettingsDialog（设备信息弹窗）功能设置卡片用四个 ToggleSwitch 互斥单选，`syncSwitches()` 显式同步 `checked`；开关用 `onClicked`（不能用 `onToggled`，否则程序赋值会循环回弹）。
-- WiFi 信号显示统一：`StatusBar` 的 WiFi 图标格数（`signalLevel(currentWifiSignal())`）与 `WifiListDialog`（`modelData.signal`）用同一数据源——即 `NetworkManager.availableNetworks` 中 `ssid === NetworkManager.wifiSsid` 那一项的 `signal`；不再直接用 `NetworkManager.wifiSignal`（来自 `/proc/net/wireless` 的实时连接信号，二者来源不同会导致格数与列表数值不一致）。`currentWifiSignal()` 找不到对应 SSID 时回退到 `wifiSignal`。
-- **信号格数映射（2026-07-29）**：WiFi 和 4G 共用 `signalLevel()`，按 4 格均分（0~25%=1格, 26~50%=2格, 51~75%=3格, 76~100%=4格满格）。`Signal0`/`Wifi0` 仅用于未连接状态（`isCellularActive()=false`/`isWifiActive()=false`），有网最低 1 格。QML 中 C++ 枚举比较必须用数值（`s===4`），不能用枚举名（`===NetworkManager.WifiConnected`），否则 int/enum 类型不匹配致判断失败。
-- **m_cellularSignal 单一写者约束**：`NetworkManagerService::m_cellularSignal` 只能由 `setCellularSignal()`（AT+CSQ 注入）修改，原生状态刷新（`refreshCellularStatus`/`disableCellular` 等）绝不可归零，否则 3s 轮询会覆盖 AT+CSQ 真实值。
+- API 域：`API_BASE_URL=https://api.shxgs.cn:5196`，`USER_BASE_URL=https://user.shxgs.cn:5196`；`NetworkUtils::createApiRequest/createUserApiRequest` 统一 json+Bearer+SSL VerifyNone+HTTP/1.1。**注意：VerifyNone 仅跳过证书验证，自签名/私有CA仍会触发 `sslErrors`；所有调用点必须 connect `reply->sslErrors` 并 `ignoreSslErrors()`，否则握手静默中止表现为"请求无回应"。UpdateService/OtaService 已接。** 另外 Qt6 网络错误信号是 `errorOccurred`（非 Qt5 的 `error`），诊断可连它早报。
+- `NetworkManagerService`（QML `App.Backend::NetworkManager`）2026-07-28 原生重构：
+  - 检测层零外部进程：WiFi/4G 判定走 `QNetworkInterface`（IsUp+全局 IPv4），WiFi 信号读 `/proc/net/wireless`，3s 轮询；SSID 仅 Connected 且缓存空时 nmcli 反查一次。mmcli/ip a 快速路径/去抖/防回退已全删。
+  - 状态语义统一真实状态：`cellularUiActive` 已删，UI 全部以真实 `cellularStatus` 为唯一数据源。
+  - 4G 信号源 AT+CSQ：`CellularModemService::State::PollingCsq` 串口常驻 5s 轮询（rssi 0-31→×100/31，99 保持上次）；错误/3 次无响应→信号归零+重试，与联网判定解耦。main.cpp 接线 signalStrengthChanged→`setCellularSignal`、operatorNameChanged→`setCellularOperator`。
+  - 控制层：nmcli + sudo ip link set；4G 开关用 `m_cellularEnablePending` 挂起窗口（30s 超时转 Error），命令后 500/1500/3000ms 单发刷新。
+  - networkMode 双写者：`setNetworkMode()`（用户）+ `deriveNetworkModeFromState()`（落定态派生，过渡态跳过）。SettingsDialog `netMode` 只读绑定，`setNetMode` 只调 `setNetworkMode()`。
+- 网络模式四枚举 `WifiOnly/CellularOnly/AllWifiPriority/AllCellularPriority`，默认 AllCellularPriority，持久化 `AppSettings.networkMode`，开机 5s 后恢复；全开模式 route-metric（优先=10/非优先=300）。
+- route-metric 修复已撤回（2026-07-24）：`connection modify` 只改持久化配置不推送内核，重做时需紧跟 `device reapply <iface>`（NM 1.20+）或 down+up；`connection up` 在已 active 时是 no-op。设备 4G=eth1 "有线连接 1"，WiFi=wlan0。
+- SettingsDialog 四个 ToggleSwitch 互斥单选，`syncSwitches()` 同步 `checked`；开关用 `onClicked`（禁 `onToggled` 防循环回弹）。
+- WiFi 信号显示统一：`StatusBar` 与 `WifiListDialog` 同用 `availableNetworks` 中 `ssid===wifiSsid` 项的 `signal`（`currentWifiSignal()`，找不到回退 `wifiSignal`）。
+- 信号格数映射（2026-07-29）：WiFi/4G 共用 `signalLevel()` 4 格均分（0-25%=1格…76-100%=4格），`Signal0`/`Wifi0` 仅未连接时用，有网最低 1 格。QML 中 C++ 枚举比较必须用数值（`s===4`），禁枚举名（int/enum 不匹配）。
+- **m_cellularSignal 单一写者**：只能由 `setCellularSignal()`（AT+CSQ）修改，原生刷新绝不可归零，否则 3s 轮询覆盖真实值。
 
 ## 核心服务行为
 - Token 刷新：`AuthService` 全局锁 `m_isRefreshing`+`tokenRefreshCompleted(bool,QString)`；失败>2次建议重登。已接入 WeightHistory/UserIngredient/Category/CameraController。
-- 保存流程：`WeightHistoryService.addRecord` DB 写入即上传并立即 `cloudSyncSuccess(newId)` 关 overlay；失败 toast "记录已保存，云端同步失败将自动重试"。
-- 系统信息：`SystemInfoService` 读取 `/proc/meminfo` 暴露 `memTotal`（<3GB 显示 "2GB"，否则 "4GB"）。
+- 保存流程：`WeightHistoryService.addRecord` DB 写入即上传并立即 `cloudSyncSuccess(newId)`；失败 toast "记录已保存，云端同步失败将自动重试"。
+- `SystemInfoService` 读 `/proc/meminfo` 暴露 `memTotal`（<3GB 显示 "2GB"，否则 "4GB"）。
 
 ## QML 工程规范
-- 跨目录引用：`pages/` 引 `components/` 用 `import "../components"`。
-- Singleton：纯 QML `pragma Singleton`+CMake `QT_QML_SINGLETON_TYPE`；C++ 用 `qmlRegisterSingletonInstance`。
-- `AppSettings`（QML 名）：QSettings INI 持久化，`priceInputEnabled` 默认 false，`networkMode` 默认 -1。
-- 主题常量集中在 `src/ui/Theme.qml`，禁止硬编码。
-- 图片圆角：Qt6 `clip` 不随 radius，用 `MultiEffect` `maskEnabled+maskSource`。
+- `pages/` 引 `components/` 用 `import "../components"`。
+- Singleton：纯 QML `pragma Singleton`+CMake `QT_QML_SINGLETON_TYPE`；C++ `qmlRegisterSingletonInstance`。
+- `AppSettings`：QSettings INI，`priceInputEnabled` 默认 false，`networkMode` 默认 -1。
+- 主题常量集中 `src/ui/Theme.qml`，禁止硬编码；全局字体 PingFang SC（仅 Regular）main.cpp 内嵌注册。
+- 图片圆角用 `MultiEffect` `maskEnabled+maskSource`（Qt6 clip 不随 radius）。
 - MultiEffect 阴影标准：`shadowColor "#002A75"`，`shadowOpacity 0.1`，`shadowBlur 1.0`，offset 0。
-- 错误提示脱敏：`window.alert()` 智能脱敏 URL 和技术错误；C++ emit 错误禁含技术细节。
-- 全局字体 PingFang SC（仅 Regular），main.cpp 内嵌注册。
+- 错误提示脱敏：`window.alert()` 脱敏 URL/技术错误；C++ emit 错误禁含技术细节。
 
 ## 虚拟键盘
-- Qt6 官方 `QtQuick.VirtualKeyboard`，`Main.qml` `locale="zh_CN"`；中英切换用键盘自带 ChangeLanguageKey。
-- 环境变量：`QT_IM_MODULE=qtvirtualkeyboard`，`QT_VIRTUALKEYBOARD_STYLE=light`。
-- 键盘悬浮覆盖：主布局与弹窗一律 `y:(parent.height-height)/2` 居中，不做避让；`mainLayout.anchors.bottom: parent.bottom`。
-- 键盘必须在 Overlay 层：`keyboardContainer.parent: Overlay.overlay` + `z: 99999`。
-- 自定义 light 样式源文件 `src/ui/vkbdstyle/light/style.qml`，同时拷贝到系统 Qt 路径免重编译生效。
-- 样式入口文件名必须 `style.qml`；`keyboardDesignWidth/Height` 必须显式设（2560×800）。
-- 键盘大小：`Main.qml InputPanel.scale = 0.62`；背景色 `#E9EEF4`。
+- Qt6 `QtQuick.VirtualKeyboard`，`locale="zh_CN"`；`QT_IM_MODULE=qtvirtualkeyboard`，`QT_VIRTUALKEYBOARD_STYLE=light`。
+- 键盘悬浮覆盖：主布局与弹窗 `y:(parent.height-height)/2` 居中不避让；`keyboardContainer.parent: Overlay.overlay`+`z:99999`。
+- 自定义 light 样式 `src/ui/vkbdstyle/light/style.qml`（入口文件名必须 style.qml，`keyboardDesignWidth/Height` 显式 2560×800），同时拷贝到系统 Qt 路径免重编译。
+- `Main.qml InputPanel.scale=0.62`，背景 `#E9EEF4`。
 
 ## 语音
-- `src/hardware/VoiceSpeaker`（QML 名 `VoiceSpeaker`）：已迁移到 sherpa-onnx C API + Matcha 中文模型，进程内合成，QThread 后台合成线程，aplay 播放；对外接口（speak/stop/warmup/isReady/isSpeaking/信号）不变。用 `dlopen(RTLD_LOCAL)` 隔离 onnxruntime 符号冲突。
-- 食材语音播报格式：`CameraController::speakPredictedLabel` 把 `speakText` 设为 `！！！<食材中文名>！！！`（前后各 3 个全角感叹号，经 `FoodTranslator` 翻译后由 `m_voiceSpeaker->speak` 播报）。
-- TTS 语速：sherpa-onnx 中生成时若 `genCfg.speed > 0`，按 `length_scale = 1/speed` **覆盖**模型配置 `config.model.matcha.length_scale`（后者仅当 speed==0 生效）。当前 `synthesize()` 内 `genCfg.speed = 0.898f`（在 0.8163 基础上提快 10%，即 ×1.1；相对最初 1.0204 累计慢约 12%，对应 length_scale≈1.114），模型 `length_scale` 配置实际被忽略。语速调参改 `genCfg.speed` 即可，`TtsSynthWorker::synthesize` 经 `requestSynthesize` 信号由 `VoiceSpeaker::speak` 触发，未被废弃。
-- sherpa-onnx 采样步数：VITS 模型本无 steps 概念（流生成）；Matcha 虽是 Flow 模型有步数，但 sherpa-onnx 的 Python/C 绑定未暴露 `num_steps/steps` 字段（Matcha 配置仅 acoustic_model/vocoder/lexicon/tokens/data_dir/dict_dir/noise_scale/length_scale，VITS 仅 model/lexicon/tokens/data_dir/dict_dir/noise_scale/noise_scale_w/length_scale），步数在库内固定写死，外部无法设为 10/20。要控步数须改 sherpa-onnx C++ 源码或换官方 Matcha 推理。
+- `VoiceSpeaker`（src/hardware/）：sherpa-onnx C API + Matcha 中文模型，进程内合成 + QThread 后台线程 + aplay 播放；对外接口（speak/stop/warmup/isReady/isSpeaking/信号）不变。`dlopen(RTLD_LOCAL)` 隔离 onnxruntime 符号冲突。
+- 食材播报：`CameraController::speakPredictedLabel` 设 `speakText` 为 `！！！<中文名>！！！`（FoodTranslator 翻译后 speak）。
+- TTS 语速：`genCfg.speed>0` 时按 `length_scale=1/speed` 覆盖模型配置（speed==0 时模型 length_scale 才生效）。当前 `genCfg.speed=0.898f`，调语速改它即可。
+- sherpa-onnx 采样步数：Python/C 绑定未暴露 num_steps（库内写死），要控步数须改 sherpa-onnx 源码或换官方 Matcha 推理。
 
-## 资源编译
-- `qt_add_big_resources(RCC_SOURCES app.qrc)` → `target_sources(appSmartScale PRIVATE ${RCC_SOURCES})`。
-- 新增图片必须编辑 `app.qrc`；改资源后清 build 重新 `cmake ..`+`make -j1`。
+## OTA 远程升级
+- `OtaService`（QML `App.Backend::OtaService`）：状态机 Idle/Checking/HasUpdate/Downloading/Verifying/ReadyToInstall/Installing/Success/Failed/RolledBack；组合复用 `UpdateService`（纯查询，接口勿动）。Q_INVOKABLE：checkUpdate/startDownload/cancelDownload/install/resetState；信号：checkFinished(success,hasUpdate,version)、upgradeResult(success,version,rolledBack)。
+- **版本比较用 QVersionNumber（远端 version 去 V 前缀 vs APP_VERSION_FULL），禁止 verCode vs BUILD_NUMBER 直接比**。
+- 下载：QNAM 流式写 `data/ota/update.part`+增量 SHA256 对照 `UpdateService.hash`，进度 500ms 节流，Failed 态可重试。**取消下载回 HasUpdate（非 Idle）**——startDownload 守卫仅放行 HasUpdate/Failed，回 Idle 会导致再次下载被静默拒绝。
+- 刷写：`scripts/apply_update.sh`（app.qrc 注册，install() 导出 data/ota/ 执行，QProcess::startDetached）。流程：sudo -n 预检→解压→manifest 校验→探测 systemd service（第3参数/env SMARTSCALE_SERVICE 覆盖）→停应用（**须轮询等待进程真正退出，最多15s再 SIGKILL，否则旧进程残留持有 /dev/ttyAMA0 的 flock 锁，新进程报 Permission error while locking the device**）→备份 .bak.<ts>（留2份）→替换→拉起→60s 等进程+30s 稳定观察→result.success / 失败回滚 result.rolledback。退出码 0/1参数包备份/2解压校验/3权限/4拉起失败/5存活失败。
+- 首启自检：构造时读 `data/ota/result.*|pending.json`，延迟 3s emit upgradeResult → Main.qml alert 后 resetState()。
+- UI：SettingsDialog 版本更新行 + `OtaUpdateDialog.qml`（NoAutoClose，进度条/取消/立即重启安装/重新下载）。

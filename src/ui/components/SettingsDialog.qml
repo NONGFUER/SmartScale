@@ -37,14 +37,15 @@ Dialog {
                           ? NetworkManager.networkMode
                           : NetworkManager.AllCellularPriority
 
-    // 版本更新栏位显示文本（检查中... / 最新版本号 / 获取失败）
+    // 版本更新栏位显示文本（检查中... / 已是最新 / 发现新版本 Vx.x / 获取失败）
     property string updateVersionText: "—"
 
-    // 查询结果回写显示文本
+    // 查询结果回写显示文本（OtaService 驱动：版本比较在 C++ 完成）
     Connections {
-        target: UpdateService
-        function onCheckFinished(success: bool, message: string) {
-            updateVersionText = success ? message : "获取失败"
+        target: OtaService
+        function onCheckFinished(success: bool, hasUpdate: bool, version: string) {
+            updateVersionText = success ? (hasUpdate ? "发现新版本 " + version : "已是最新版本")
+                                        : "获取失败"
         }
     }
 
@@ -80,9 +81,14 @@ Dialog {
         }
         NetworkManager.refreshWifiStatus()
         NetworkManager.refreshCellularStatus()
-        // 打开弹窗即查询最新版本
-        updateVersionText = "检查中..."
-        UpdateService.checkUpdate()
+        // 仅在非进行中态发起版本查询：进行中态（Checking/下载/校验/安装）由 OtaService
+        // 真实状态驱动显示，不乐观写“检查中...”也不重复触发，避免状态卡死/文本错乱
+        const busy = (OtaService.state === OtaService.Checking
+                    || OtaService.state === OtaService.Downloading
+                    || OtaService.state === OtaService.Verifying
+                    || OtaService.state === OtaService.Installing)
+        if (!busy)
+            OtaService.checkUpdate()
     }
 
     background: Rectangle {
@@ -200,7 +206,95 @@ Dialog {
         SettingRow { label: "SIM卡号(ICCID):"; value: (CellularModem.ccid !== undefined && CellularModem.ccid.length > 0) ? CellularModem.ccid : "—"; isLast: false }
        // SettingRow { label: "IMSI:"; value: (CellularModem.imsi !== undefined && CellularModem.imsi.length > 0) ? CellularModem.imsi : "—"; isLast: true }
         SettingRow { label: "内存容量:"; value: SystemInfo.memTotal; isLast: false }
-        SettingRow { label: "版本更新:"; value: updateVersionText; isLast: false }
+        // ----- 版本更新（含 OTA 操作按钮：立即下载/查看进度/重新下载）-----
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 0
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 52
+                Layout.topMargin: 4
+                Layout.bottomMargin: 4
+
+                Text {
+                    text: "版本更新:"
+                    font.family: Theme.fontFamilyUi
+                    font.pixelSize: 24
+                    color: "#5A6577"
+                    Layout.alignment: Qt.AlignVCenter
+                }
+
+                Item { Layout.fillWidth: true }
+
+                // 状态文本（下载/校验/待安装时覆盖显示进度；Checking 直接由状态驱动，避免文本卡死）
+                Text {
+                    font.family: Theme.fontFamilyUi
+                    font.pixelSize: 24
+                    color: OtaService.updateAvailable ? Theme.colorAccent : "#1A1A2E"
+                    Layout.alignment: Qt.AlignVCenter
+                    text: {
+                        switch (OtaService.state) {
+                        case OtaService.Checking:       return "检查中..."
+                        case OtaService.Downloading:    return "下载中 " + OtaService.percent + "%"
+                        case OtaService.Verifying:      return "校验中..."
+                        case OtaService.ReadyToInstall: return "待安装"
+                        case OtaService.Installing:     return "安装中..."
+                        default:                        return updateVersionText
+                        }
+                    }
+                }
+
+                // OTA 操作按钮（有可用更新时出现）
+                Rectangle {
+                    visible: OtaService.updateAvailable
+                    width: 132; height: 40; radius: 20
+                    color: Theme.colorAccent
+                    Layout.leftMargin: 12
+                    Layout.alignment: Qt.AlignVCenter
+
+                    Text {
+                        anchors.centerIn: parent
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: 20
+                        font.bold: true
+                        color: "#FFFFFF"
+                        text: {
+                            switch (OtaService.state) {
+                            case OtaService.Downloading:
+                            case OtaService.Verifying:
+                            case OtaService.ReadyToInstall: return "查看进度"
+                            case OtaService.Failed:         return "重新下载"
+                            default:                        return "立即下载"
+                            }
+                        }
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: {
+                            switch (OtaService.state) {
+                            case OtaService.Downloading:
+                            case OtaService.Verifying:
+                            case OtaService.ReadyToInstall:
+                                otaDialog.open()          // 仅查看进度
+                                break
+                            default:                       // HasUpdate / Failed → 打开弹窗并开始下载
+                                otaDialog.open()
+                                OtaService.startDownload()
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 底部分隔线
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: "#EEF0F4"
+            }
+        }
 
         // 分隔间距
         Item { Layout.preferredHeight: 20 }
@@ -520,6 +614,11 @@ Dialog {
                 onClicked: root.close()
             }
         }
+    }
+
+    // OTA 升级进度弹窗（状态由 OtaService.state 驱动）
+    OtaUpdateDialog {
+        id: otaDialog
     }
 
     // ==========================================

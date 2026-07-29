@@ -442,6 +442,22 @@ ApplicationWindow {
         id: settingsDialog
     }
 
+    // --- OtaService: 升级结果首启补报（刷写后重启，结果只能在此刻展示）---
+    Connections {
+        target: OtaService
+        function onUpgradeResult(success, version, rolledBack) {
+            console.log("[Main] OTA 升级结果: success=" + success + " version=" + version + " rolledBack=" + rolledBack)
+            if (success) {
+                //window.alert("系统已升级至 " + version, "success", "升级成功")
+            } else if (rolledBack) {
+               // window.alert("升级失败，已自动恢复至旧版本", "warning", "系统升级")
+            } else {
+               // window.alert("升级未完成，请重试", "warning", "系统升级")
+            }
+            OtaService.resetState()
+        }
+    }
+
     // 暴露给子页面调用
     function toast(message, type, duration) {
         globalToast.show(message, type, duration)

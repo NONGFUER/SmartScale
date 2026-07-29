@@ -2,8 +2,10 @@
 
 #include <QObject>
 #include <QString>
+#include <QTimer>
 
 class QNetworkAccessManager;
+class QNetworkReply;
 
 /**
  * @brief 更新信息服务 — 查询 update.shxgs.cn 上的最新版本信息
@@ -61,6 +63,8 @@ Q_SIGNALS:
 
 private:
     QNetworkAccessManager *m_networkMgr;
+    QNetworkReply         *m_reply = nullptr;   // 当前查询请求（超时 abort 用）
+    QTimer                 m_timeoutTimer;       // 请求超时守卫（WiFi 等无出口网络会挂死）
     bool    m_checking = false;
 
     // === 最近一次查询结果 ===

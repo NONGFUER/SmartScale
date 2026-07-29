@@ -85,6 +85,7 @@ qt_add_qml_module(appSmartScale
         src/ui/components/SaveSuccessDialog.qml         # 保存成功全屏遮罩弹窗
         src/ui/components/DuplicateWeightDialog.qml     # 重复称重提醒弹窗
         src/ui/components/NumberPadPopup.qml            # 底部9宫格数字键盘（单价输入用）
+        src/ui/components/OtaUpdateDialog.qml           # OTA 升级进度弹窗（下载进度/确认安装/结果）
 
     # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
@@ -113,6 +114,7 @@ qt_add_qml_module(appSmartScale
         SOURCES src/services/MqttClientService.h src/services/MqttClientService.cpp           # MQTT 客户端服务
         SOURCES src/services/CellularModemService.h src/services/CellularModemService.cpp     # 蜂窝模组 CCID(ICCID) 获取 (AT 指令)
         SOURCES src/services/UpdateService.h src/services/UpdateService.cpp                   # 更新信息查询服务
+        SOURCES src/services/OtaService.h src/services/OtaService.cpp                         # OTA 远程升级服务（状态机+下载+校验+刷写）
 
         # --- 数据层: Models ---
         SOURCES src/data/models/WeightRecord.h src/data/models/WeightRecord.cpp

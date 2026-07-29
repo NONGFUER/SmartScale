@@ -1,5 +1,6 @@
 #include <QGuiApplication>
 #include <QCursor>
+#include <QNetworkProxy>
 #include <QQmlApplicationEngine>
 #include <Qt>
 #include <QQmlContext>
@@ -39,6 +40,7 @@
 #include "services/MqttClientService.h"           // MQTT 客户端服务
 #include "services/CellularModemService.h"        // 蜂窝模组 CCID(ICCID) 获取 (AT 指令)
 #include "services/UpdateService.h"               // 更新信息查询服务
+#include "services/OtaService.h"                  // OTA 远程升级服务
 
 // 数据层
 #include "data/DatabaseManager.h"
@@ -99,6 +101,12 @@ int main(int argc, char *argv[])
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");
 
     QGuiApplication app(argc, argv);
+
+    // 强制直连：设备直接访问自有 API/更新服务器，不走代理。
+    // 否则 Qt 的 QNetworkAccessManager 会按 Linux/NetworkManager 自动探测代理，
+    // 一旦 WiFi 连接的 SSID 下发了 WPAD/PAC 或手动代理（不可达），请求会挂死——
+    // 而 curl 默认忽略系统代理走直连，从而出现"curl 能通、App 卡在检查中"的差异。
+    QNetworkProxy::setApplicationProxy(QNetworkProxy::NoProxy);
 
     // 注册内嵌 PingFang SC 字体（Linux 主板无此字体，必须打包 + 运行时注册）
     {
@@ -243,6 +251,9 @@ int main(int argc, char *argv[])
 
     // 更新信息服务 — 查询 update.shxgs.cn 最新版本（仅用户点击齿轮图标打开设置弹窗时按需查询）
     UpdateService *updateService = new UpdateService(&app);
+
+    // OTA 远程升级服务 — 状态机编排 检查→下载→校验→刷写（构造时做首启自检补报升级结果）
+    OtaService *otaService = new OtaService(updateService, &app);
 
     // 语音播报注入 CameraController，AI推理完成后直接播报（省掉QML往返）
     cameraController->setVoiceSpeaker(voiceSpeaker);
@@ -418,6 +429,8 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "MqttClient", mqttClientService);          // MQTT 设备上报 (shxgs)
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "CellularModem", cellularModemService);     // 蜂窝模组 CCID(ICCID)
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "UpdateService", updateService);            // 更新信息查询
+    qmlRegisterSingletonInstance("App.Backend", 1, 0, "OtaService", otaService);                  // OTA 远程升级
+    qmlRegisterSingletonInstance("App.Backend", 1, 0, "OtaService", otaService);                  // OTA 远程升级
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());
     qmlRegisterSingletonInstance<PState>("SmartScale.Tools", 1, 0, "PState", &PState::inst());
 

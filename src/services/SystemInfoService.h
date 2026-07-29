@@ -21,6 +21,7 @@ class SystemInfoService : public QObject
     Q_PROPERTY(QString lastShutdownTime READ lastShutdownTime CONSTANT)
     Q_PROPERTY(QString currentBootTime  READ currentBootTime  CONSTANT)
     Q_PROPERTY(QString appVersion       READ appVersion       CONSTANT)
+    Q_PROPERTY(int    buildNumber       READ buildNumber       CONSTANT)
     Q_PROPERTY(QString hardModel        READ hardModel        CONSTANT)
     Q_PROPERTY(QString hardRevision     READ hardRevision     CONSTANT)
     Q_PROPERTY(QString hardSerial       READ hardSerial       CONSTANT)
@@ -35,6 +36,7 @@ public:
     QString lastShutdownTime() const { return m_lastShutdownTime; }
     QString currentBootTime()  const { return m_currentBootTime; }
     QString appVersion()       const { return m_appVersion; }
+    int    buildNumber()       const { return m_buildNumber; }
     QString hardModel()    const { return m_hardModel; }
     QString hardRevision() const { return m_hardRevision; }
     QString hardSerial()   const { return m_hardSerial; }
@@ -55,6 +57,7 @@ private:
     QString m_lastShutdownTime;
     QString m_currentBootTime;
     QString m_appVersion;
+    int     m_buildNumber   = 0;   // 构建号（APP_BUILD_NUMBER 宏）
     QString m_hardModel;     // /proc/cpuinfo Model   → MQTT hardver
     QString m_hardRevision;  // /proc/cpuinfo Revision → MQTT revision
     QString m_hardSerial;    // /proc/cpuinfo Serial   → MQTT serial
