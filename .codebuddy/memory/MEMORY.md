@@ -36,6 +36,8 @@
 - **route-metric 修复已撤回（2026-07-24）**：之前做的 `setConnectionRouteMetric`→`device reapply`→`down+up` 兜底修复（解决"全开模式 metric 配置对但内核路由不生效"）已被用户 git 撤回，代码回到原始（仅 `connection modify` 写配置、未推送内核）。重启需重做时参考：根因是 `nmcli connection modify ipv4.route-metric` 只改持久化配置、活动连接路由不自动变，须紧跟 `device reapply <iface>`（NM 1.20+）或 `connection down+up` 兜底；原 `reactivateConnection` 用 `connection up` 在连接已 active 时是 no-op。本项目实际设备 4G=eth1 的 "有线连接 1"（NM 连接），WiFi=wlan0，识别链路正常，两全开模式本应真实生效。
 - SettingsDialog（设备信息弹窗）功能设置卡片用四个 ToggleSwitch 互斥单选，`syncSwitches()` 显式同步 `checked`；开关用 `onClicked`（不能用 `onToggled`，否则程序赋值会循环回弹）。
 - WiFi 信号显示统一：`StatusBar` 的 WiFi 图标格数（`signalLevel(currentWifiSignal())`）与 `WifiListDialog`（`modelData.signal`）用同一数据源——即 `NetworkManager.availableNetworks` 中 `ssid === NetworkManager.wifiSsid` 那一项的 `signal`；不再直接用 `NetworkManager.wifiSignal`（来自 `/proc/net/wireless` 的实时连接信号，二者来源不同会导致格数与列表数值不一致）。`currentWifiSignal()` 找不到对应 SSID 时回退到 `wifiSignal`。
+- **信号格数映射（2026-07-29）**：WiFi 和 4G 共用 `signalLevel()`，按 4 格均分（0~25%=1格, 26~50%=2格, 51~75%=3格, 76~100%=4格满格）。`Signal0`/`Wifi0` 仅用于未连接状态（`isCellularActive()=false`/`isWifiActive()=false`），有网最低 1 格。QML 中 C++ 枚举比较必须用数值（`s===4`），不能用枚举名（`===NetworkManager.WifiConnected`），否则 int/enum 类型不匹配致判断失败。
+- **m_cellularSignal 单一写者约束**：`NetworkManagerService::m_cellularSignal` 只能由 `setCellularSignal()`（AT+CSQ 注入）修改，原生状态刷新（`refreshCellularStatus`/`disableCellular` 等）绝不可归零，否则 3s 轮询会覆盖 AT+CSQ 真实值。
 
 ## 核心服务行为
 - Token 刷新：`AuthService` 全局锁 `m_isRefreshing`+`tokenRefreshCompleted(bool,QString)`；失败>2次建议重登。已接入 WeightHistory/UserIngredient/Category/CameraController。

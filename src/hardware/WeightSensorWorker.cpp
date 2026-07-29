@@ -642,8 +642,6 @@ int WeightSensorWorker::modbusReadWeight(int32_t *weight_g, uint16_t *status, in
     uint8_t tx[8];
     buildReadFrame(REG_DATA_ADDR, REG_DATA_COUNT, tx);
 
-    qDebug().nospace() << "[Modbus] TX READ_WEIGHT: " << toHexString(tx, 8);
-
     if (!sendFrame(tx, 8)) return -1;
 
     QByteArray rxBuf = readFrame(FRAME_LEN);

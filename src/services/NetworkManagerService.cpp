@@ -1002,7 +1002,7 @@ void NetworkManagerService::disableCellularViaDevice()
         qDebug() << "[NetworkManager] 未检测到 4G 接口设备，直接标记为禁用";
         m_cellularOperator.clear();
         m_cellularIpAddress.clear();
-        m_cellularSignal = 0;
+        // m_cellularSignal 由 CellularModemService AT+CSQ 单独管理，不在此归零
         setCellularStatus(CellularStatus::CellDisabled);
         Q_EMIT cellularDisabled();
         return;
@@ -1036,7 +1036,7 @@ void NetworkManagerService::disableCellularViaDevice()
             qDebug() << "[NetworkManager] ip link set down 4G 接口超时，强制标记为禁用";
             m_cellularOperator.clear();
             m_cellularIpAddress.clear();
-            m_cellularSignal = 0;
+            // m_cellularSignal 由 CellularModemService AT+CSQ 单独管理
             m_cellularDisablePending = false;      // 超时也清除挂起窗口
             setCellularStatus(CellularStatus::CellDisabled);
             Q_EMIT cellularDisabled();
@@ -1082,7 +1082,7 @@ void NetworkManagerService::onCellularOpFinished(int exitCode, QProcess::ExitSta
             qDebug() << "[NetworkManager] 4G 已禁用";
             m_cellularOperator.clear();
             m_cellularIpAddress.clear();
-            m_cellularSignal = 0;
+            // m_cellularSignal 由 CellularModemService AT+CSQ 单独管理
             m_cellularDisablePending = false;      // 命令成功完成，关闭挂起窗口
             setCellularStatus(CellularStatus::CellDisabled);
             Q_EMIT cellularDisabled();
@@ -1127,7 +1127,6 @@ void NetworkManagerService::refreshCellularStatus()
         if (m_cellularStatus != CellularStatus::CellDisabled) { m_cellularStatus = CellularStatus::CellDisabled; changed = true; }
         if (!m_cellularIpAddress.isEmpty()) { m_cellularIpAddress.clear(); changed = true; }
         if (!m_cellularOperator.isEmpty())  { m_cellularOperator.clear();  changed = true; }
-        if (m_cellularSignal != 0)          { m_cellularSignal = 0;        changed = true; }
         if (changed) {
             qDebug() << "[NetworkManager] 4G 状态(原生): 未检测到接口 -> Disabled/无硬件";
             Q_EMIT cellularStatusChanged();

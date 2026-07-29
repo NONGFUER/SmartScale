@@ -186,6 +186,13 @@ Rectangle {
                                     "active=", a,
                                     "signal=", NetworkManager.cellularSignal,
                                     "level=", signalLevel(NetworkManager.cellularSignal))
+                        // 延迟再读一次，验证 QML 绑定是否拿到了最新值
+                        Qt.callLater(function() {
+                            console.log("[StatusBar-DBG] 4G delayed check:",
+                                        "signal=", NetworkManager.cellularSignal,
+                                        "level=", signalLevel(NetworkManager.cellularSignal),
+                                        "imgSource=", cellSignalImg.source.toString())
+                        })
                         if (a !== cellItem.cellActivePrev) {
                             cellItem.cellActivePrev = a
                             cellFlashAnim.restart()
