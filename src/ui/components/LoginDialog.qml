@@ -7,11 +7,14 @@ import App.Backend 1.0
 Dialog {
     id: loginDialog
     width: 600
-    height: 560
+    // 错误提示显示时对话框动态加高，避免挤压内容
+    height: errorText.opacity > 0 ? 600 : 560
     leftPadding: 73
     rightPadding: 73
     topPadding: 30
     bottomPadding: 30
+
+    Behavior on height { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
     // 位置由 Main.qml 统一控制（含键盘避让）
     // 非模态 + 外部遮罩（避免 Qt 内部 modal 层遮挡虚拟键盘）
     modal: false
@@ -785,10 +788,12 @@ Dialog {
             }
         }
 
-        // 错误提示（用 Item 容器包裹，避免在 ColumnLayout 中直接用 anchors）
+        // 错误提示（动态高度：隐藏时 0、显示时占位，配合 dialog 高度动画同步增长，不挤压其他控件）
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: errorText.visible ? errorText.implicitHeight : 0
+
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
             Text {
                 id: errorText
