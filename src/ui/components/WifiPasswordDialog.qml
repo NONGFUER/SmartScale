@@ -23,7 +23,9 @@ Popup {
 
     function openFor(ssid) {
         targetSsid = ssid
-        passwordField.text = ""
+        // 断线重连时自动填充本地缓存的密码（无缓存则为空）
+        var cached = NetworkManager.getCachedWifiPassword(ssid)
+        passwordField.text = (cached && cached.length > 0) ? cached : ""
         showError = false
         errorMsg = ""
         root.open()

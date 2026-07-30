@@ -7,6 +7,8 @@
 #include <QTimer>
 #include <QVariantMap>
 #include <QRegularExpression>
+#include <QSettings>
+#include <QDir>
 #include <functional>
 
 class QNetworkInterface;
@@ -117,6 +119,12 @@ public:
 
     /** @brief 刷新当前 Wi-Fi 状态 */
     Q_INVOKABLE void refreshWifiStatus();
+
+    // ===== Wi-Fi 密码本地缓存（断线重连自动填充）=====
+    /** @brief 获取本地缓存的 Wi-Fi 密码（用于断线重连自动填充），无缓存则返回空串 */
+    Q_INVOKABLE QString getCachedWifiPassword(const QString &ssid) const;
+    /** @brief 缓存 Wi-Fi 密码到本地（成功连接后调用；password 为空表示清除该 SSID 缓存） */
+    Q_INVOKABLE void cacheWifiPassword(const QString &ssid, const QString &password);
 
     // ===== 4G 操作 =====
     /** @brief 开启 4G 移动数据 */
@@ -257,6 +265,12 @@ private:
     /** @brief 查找指定 SSID 的现有 nmcli 连接名，返回连接名（空串表示不存在） */
     QString findExistingConnection(const QString &ssid) const;
 
+    /** @brief 查找指定 SSID 的所有 wifi 连接名（用于去重清理） */
+    QStringList findAllConnectionsForSsid(const QString &ssid) const;
+
+    /** @brief 批量删除指定的 nmcli 连接配置（一次调用删多个） */
+    void deleteConnectionsByName(const QStringList &names);
+
     /** @brief 删除指定的 nmcli 连接配置 */
     void deleteConnection(const QString &connName);
 
@@ -296,6 +310,9 @@ private:
 
     // 异步进程（每次操作复用）
     QProcess      *m_process         = nullptr;
+
+    /** @brief Wi-Fi 密码本地缓存（INI：~/.config/SmartScale/wifi_passwords.conf，键 wifi/<ssid>） */
+    QSettings     *m_wifiPskCache    = nullptr;
 
     // 工具实际路径（构造时从候选列表中解析，兼容不同发行版）
     QString        m_nmcliPath;
