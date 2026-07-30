@@ -1303,18 +1303,18 @@ Item {
                 root.currentIngrId = ""
                 root.currentAiDetected = false
             } else {
-                // AI 返回 emsCd，查 ingredients 缓存取 ingrId (上传用)
-                var aiItem = UserIngredientService.findByEmsCd(predictedLabel)
+                // AI 返回 ingrCd，查 ingredients 缓存取 ingrId (上传用)
+                var aiItem = UserIngredientService.findByIngrCd(predictedLabel)
                 if (aiItem && aiItem["id"]) {
                     root.currentIngrId = aiItem["id"]
                     // 品类由 AI 识别接口直接得出，标记 aiDetected=true
                     root.currentAiDetected = true
-                    console.log("[WSP] 食材反查成功, emsCd=", predictedLabel,
+                    console.log("[WSP] 食材反查成功, ingrCd=", predictedLabel,
                                 "ingrId=", root.currentIngrId,
                                 "ingrNm=", aiItem["cn"] ? aiItem["cn"] : "",
                                 "aiDetected=true")
                 } else {
-                    console.warn("[WSP] 食材库未匹配到 emsCd=", predictedLabel, "currentIngrId 置空")
+                    console.warn("[WSP] 食材库未匹配到 ingrCd=", predictedLabel, "currentIngrId 置空")
                     root.currentIngrId = ""
                     root.currentAiDetected = false
                 }
@@ -1503,8 +1503,8 @@ Item {
             if (ingrId) {
                 root.currentIngrId = ingrId
             } else {
-                // 纠错模式无 ingrId，按 emsCd/ingrCd 反查
-                var item = UserIngredientService.findByEmsCd(newPred)
+                // 纠错模式无 ingrId，按 ingrCd 反查
+                var item = UserIngredientService.findByIngrCd(newPred)
                 root.currentIngrId = (item && item["id"]) ? item["id"] : ""
             }
         }

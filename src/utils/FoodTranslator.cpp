@@ -39,7 +39,7 @@ QString FoodTranslator::translate(const QString &englishName) const
 }
 
 // ============================================================
-//  从 API 数据更新内存字典 (ingrCd/emsCd → ingrNm)
+//  从 API 数据更新内存字典 (ingrCd → ingrNm)
 //  缓存文件由 UserIngredientService 负责写入，翻译器只读不写
 // ============================================================
 void FoodTranslator::updateFromApi(const QVariantList &items)
@@ -54,14 +54,10 @@ void FoodTranslator::updateFromApi(const QVariantList &items)
     for (const QVariant &v : items) {
         QVariantMap map = v.toMap();
         QString en = map.value("en").toString().trimmed().toLower();
-        QString emsCd = map.value("emsCd").toString().trimmed().toLower();
         QString cn = map.value("cn").toString().trimmed();
 
         if (!en.isEmpty() && !cn.isEmpty()) {
             m_dict.insert(en, cn);
-        }
-        if (!emsCd.isEmpty() && !cn.isEmpty() && emsCd != en) {
-            m_dict.insert(emsCd, cn);
         }
     }
 
@@ -109,13 +105,10 @@ void FoodTranslator::loadFromCache()
         for (const QJsonValue &iv : items) {
             QJsonObject obj = iv.toObject();
             QString en = obj.value("ingrCd").toString().trimmed().toLower();
-            QString emsCd = obj.value("emsCd").toString().trimmed().toLower();
             QString cn = obj.value("ingrNm").toString().trimmed();
 
             if (!en.isEmpty() && !cn.isEmpty())
                 m_dict.insert(en, cn);
-            if (!emsCd.isEmpty() && !cn.isEmpty() && emsCd != en)
-                m_dict.insert(emsCd, cn);
         }
     }
 

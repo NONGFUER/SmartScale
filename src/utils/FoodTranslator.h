@@ -22,7 +22,7 @@ public:
     // 翻译器是否已加载有效数据（登录后从 API 获取）
     bool isReady() const { return m_ready; }
 
-    /** @brief 从 UserIngredientService 的 API 数据更新内存字典（ingrCd/emsCd → ingrNm），不再写缓存 */
+    /** @brief 从 UserIngredientService 的 API 数据更新内存字典（ingrCd → ingrNm），不再写缓存 */
     void updateFromApi(const QVariantList &items);
 
 Q_SIGNALS:

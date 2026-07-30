@@ -43,6 +43,7 @@
 ## 核心服务行为
 - Token 刷新：`AuthService` 全局锁 `m_isRefreshing`+`tokenRefreshCompleted(bool,QString)`；失败>2次建议重登。已接入 WeightHistory/UserIngredient/Category/CameraController。
 - 保存流程：`WeightHistoryService.addRecord` DB 写入即上传并立即 `cloudSyncSuccess(newId)`；失败 toast "记录已保存，云端同步失败将自动重试"。
+- **AI 识别反查链路基于 ingrCd（emsCd 已废弃，2026-07-30）**：后端 `/api/user/UserIngr/paged` 已取消 emsCd 字段，AI 返回的 code 即 ingrCd。`UserIngredientService::findByIngrCd`（原 findByEmsCd）按 item["en"]（ingrCd）匹配；m_emsMap 已删除；FoodTranslator 字典仅 ingrCd→ingrNm；getIngrId 无 emsCd 兜底。改动文件：UserIngredientService.h/cpp、FoodTranslator.h/cpp、WorkstationPage.qml、CategoryCorrectionDialog.qml。
 - `SystemInfoService` 读 `/proc/meminfo` 暴露 `memTotal`（<3GB 显示 "2GB"，否则 "4GB"）。
 
 ## QML 工程规范

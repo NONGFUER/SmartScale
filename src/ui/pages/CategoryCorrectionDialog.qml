@@ -103,14 +103,14 @@ Dialog {
             return dialogRoot.searchResults
 
         // 推荐模式：把候选 {code,name} 适配为 FoodCard 期望的 {cn,en,id,img,imgLocal}
-        // 优先通过 emsCd 反查完整食材信息（含图片），反查不到则用候选基本信息（无图，卡片显示占位文字）
+        // 优先通过 ingrCd 反查完整食材信息（含图片），反查不到则用候选基本信息（无图，卡片显示占位文字）
         if (dialogRoot.selectedTopIndex === -999) {
             var recs = dialogRoot.recommendCandidates
             var adapted = []
             for (var i = 0; i < recs.length; i++) {
                 var r = recs[i]
                 var code = r.code || ""
-                var full = UserIngredientService.findByEmsCd(code)
+                var full = UserIngredientService.findByIngrCd(code)
                 if (full && full["id"]) {
                     adapted.push(full)
                 } else {

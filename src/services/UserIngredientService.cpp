@@ -228,7 +228,6 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         item["cateId"] = newCateId;
         item["cateNm"] = newCateNm;
         item["emsId"]  = "0";
-        item["emsCd"]  = "";
         item["enable"] = enable;
         m_items.append(item);
 
@@ -276,7 +275,6 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
     m_items.clear();
     m_ingrMap.clear();
     m_ingrNameMap.clear();
-    m_emsMap.clear();
 
     for (const QJsonValue &val : items) {
         QJsonObject obj = val.toObject();
@@ -288,7 +286,6 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         QString cateId  = obj.value("cateId").toVariant().toString();
         QString cateNm  = obj.value("cateNm").toString();
         QString emsId   = obj.value("emsId").toVariant().toString();
-        QString emsCd   = obj.value("emsCd").toString().toLower();
         // enable: 后端为 boolean，统一转成 "true"/"false" 字符串便于 QML 比较
         bool enableBool = obj.value("enable").toBool(false);
         QString enable  = enableBool ? QStringLiteral("true") : QStringLiteral("false");
@@ -303,7 +300,6 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         item["cateId"] = cateId;
         item["cateNm"] = cateNm;
         item["emsId"]  = emsId;
-        item["emsCd"]  = emsCd;
         item["enable"] = enable;
         item["img"]    = imgUrl;
         // 本地缓存路径：若上一次已下载且文件仍在，则复用，避免重复下载
@@ -316,9 +312,6 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         }
         if (!ingrId.isEmpty() && !ingrNm.isEmpty()) {
             m_ingrNameMap[ingrNm] = ingrId;
-        }
-        if (!ingrId.isEmpty() && !emsCd.isEmpty()) {
-            m_emsMap[emsCd] = ingrId;
         }
     }
 
@@ -339,7 +332,7 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
     // 下载食材图片到本地缓存（异步，完成后刷新 UI 并落盘）
     downloadIngredientImages();
 
-    // 更新翻译器内存字典 (ingrCd/emsCd → ingrNm)，翻译器不再自行写缓存
+    // 更新翻译器内存字典 (ingrCd → ingrNm)，翻译器不再自行写缓存
     FoodTranslator::instance()->updateFromApi(m_items);
 
     Q_EMIT fetchSuccess();
@@ -350,19 +343,16 @@ QString UserIngredientService::getIngrId(const QString &ingrCd) const
     // 先按英文编码查
     QString id = m_ingrMap.value(ingrCd.toLower());
     if (!id.isEmpty()) return id;
-    // 再按电子秤编码查
-    id = m_emsMap.value(ingrCd.toLower());
-    if (!id.isEmpty()) return id;
     // fallback: 按中文名查
     return m_ingrNameMap.value(ingrCd, QStringLiteral("0"));
 }
 
-QVariantMap UserIngredientService::findByEmsCd(const QString &emsCd) const
+QVariantMap UserIngredientService::findByIngrCd(const QString &ingrCd) const
 {
-    QString key = emsCd.trimmed().toLower();
+    QString key = ingrCd.trimmed().toLower();
     for (const QVariant &v : m_items) {
         QVariantMap m = v.toMap();
-        if (m.value("emsCd").toString().toLower() == key)
+        if (m.value("en").toString().toLower() == key)
             return m;
     }
     return QVariantMap();
@@ -605,7 +595,6 @@ void UserIngredientService::loadFromCache()
     m_items.clear();
     m_ingrMap.clear();
     m_ingrNameMap.clear();
-    m_emsMap.clear();
 
     for (const QJsonValue &cv : cats) {
         QJsonObject cat = cv.toObject();
@@ -619,7 +608,6 @@ void UserIngredientService::loadFromCache()
             item["cateId"] = obj.value("cateId").toVariant().toString();
             item["cateNm"] = obj.value("cateNm").toString();
             item["emsId"]  = obj.value("emsId").toVariant().toString();
-            item["emsCd"]  = obj.value("emsCd").toString().toLower();
             item["enable"] = obj.value("enable").toString();
             item["img"]    = obj.value("img").toString();
             item["imgLocal"] = obj.value("imgLocal").toString();
@@ -631,8 +619,6 @@ void UserIngredientService::loadFromCache()
                     m_ingrMap[item["en"].toString()] = ingrId;
                 if (!item["cn"].toString().isEmpty())
                     m_ingrNameMap[item["cn"].toString()] = ingrId;
-                if (!item["emsCd"].toString().isEmpty())
-                    m_emsMap[item["emsCd"].toString()] = ingrId;
             }
         }
     }
@@ -670,7 +656,6 @@ void UserIngredientService::saveToCache()
             itemObj["cateId"] = m.value("cateId").toString();
             itemObj["cateNm"] = m.value("cateNm").toString();
             itemObj["emsId"]  = m.value("emsId").toString();
-            itemObj["emsCd"]  = m.value("emsCd").toString();
             itemObj["enable"] = m.value("enable").toString();
             itemObj["img"]    = m.value("img").toString();
             itemObj["imgLocal"] = m.value("imgLocal").toString();

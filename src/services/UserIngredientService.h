@@ -17,12 +17,12 @@ class QNetworkRequest;
  *
  * 缓存结构 (含分类和食材):
  *   { "version":1, "categories":[ { "cateId":"1", "cateNm":"叶菜类",
- *       "items":[ {ingrId,ingrCd,ingrNm,emsId,emsCd,enable}, ... ] } ] }
+ *       "items":[ {ingrId,ingrCd,ingrNm,emsId,enable}, ... ] } ] }
  *
  * QML 用法:
  *   UserIngredientService.fetchIngredients()        // 拉取并缓存
  *   UserIngredientService.categories                 // 按分类分组，渲染选择弹窗
- *   UserIngredientService.findByEmsCd("bocai")      // AI 场景: emsCd → {ingrId,ingrNm,...}
+ *   UserIngredientService.findByIngrCd("bocai")     // AI 场景: ingrCd → {ingrId,ingrNm,...}
  */
 class UserIngredientService : public QObject
 {
@@ -46,8 +46,8 @@ public:
     /** @brief 根据 ingrCd 获取 ingrId，未找到返回 "0" (兼容旧调用) */
     Q_INVOKABLE QString getIngrId(const QString &ingrCd) const;
 
-    /** @brief AI 场景: 按电子秤编码 emsCd 查找食材，返回 {ingrId,ingrNm,emsId,...} */
-    Q_INVOKABLE QVariantMap findByEmsCd(const QString &emsCd) const;
+    /** @brief AI 场景: 按食材编码 ingrCd 查找食材，返回 {ingrId,ingrNm,emsId,...} */
+    Q_INVOKABLE QVariantMap findByIngrCd(const QString &ingrCd) const;
 
     /** @brief 创建新食材（ingrCd 用随机编码），成功后自动刷新本地列表 */
     Q_INVOKABLE void createIngredient(const QString &ingrNm, const QString &cateId, const QString &cateNm);
@@ -96,11 +96,10 @@ private:
     QNetworkAccessManager *m_networkMgr = nullptr;
     bool m_loading = false;
 
-    QVariantList m_items;                     // [{en,cn,id,cateId,cateNm,emsId,emsCd,enable}, ...]
+    QVariantList m_items;                     // [{en,cn,id,cateId,cateNm,emsId,enable}, ...]
     QVariantList m_categories;                // [{cateId,cateNm,items:[...]}, ...]
     QMap<QString, QString> m_ingrMap;         // ingrCd → ingrId
     QMap<QString, QString> m_ingrNameMap;     // ingrNm(中文) → ingrId
-    QMap<QString, QString> m_emsMap;          // emsCd → ingrId
 
     // === Token 刷新协调 ===
     QQueue<PendingRequest> m_pendingRequests;
