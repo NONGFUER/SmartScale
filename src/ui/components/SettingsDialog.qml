@@ -37,15 +37,25 @@ Dialog {
                           ? NetworkManager.networkMode
                           : NetworkManager.AllCellularPriority
 
-    // 版本更新栏位显示文本（检查中... / 已是最新 / 发现新版本 Vx.x / 获取失败）
+    // 版本更新栏位显示文本（发现新版本 vX / 云端版本 vX）
     property string updateVersionText: "—"
 
-    // 查询结果回写显示文本（OtaService 驱动：版本比较在 C++ 完成）
+    // 查询结果回写（OtaService 驱动：版本比较在 C++ 完成）。
+    // 有更新（云端 > 本地）→ “发现新版本 vX”并出现下载按钮；
+    // 云端版本 ≤ 本地（含本地更新/回滚场景）→ 直接显示云端版本号 vX，不再显示“已是最新版本”；
+    // 查询失败静默处理，保留上一次结果、不展示任何加载/错误态，
+    // 彻底消除“检查中”等不确定过渡态给人造成的网络异常误解。
     Connections {
         target: OtaService
         function onCheckFinished(success: bool, hasUpdate: bool, version: string) {
-            updateVersionText = success ? (hasUpdate ? "发现新版本 " + version : "已是最新版本")
-                                        : "获取失败"
+            if (success && version.length > 0) {
+                const v = version.replace(/^V/i, "")   // 去服务端 V 前缀，统一小写 v 展示
+                if (hasUpdate)
+                    updateVersionText = "发现新版本 v" + v
+                else
+                    updateVersionText = "v" + v   // 云端版本 ≤ 本地：直接展示云端版本号
+            }
+            // 查询失败：静默处理，保留上一次结果（不回退已有的“发现新版本”）
         }
     }
 
@@ -62,6 +72,16 @@ Dialog {
     // 应用某个网络模式：下发设备；高亮与落盘由 C++ networkModeChanged 信号回来闭环
     function setNetMode(m: int) {
         NetworkManager.setNetworkMode(m)
+    }
+
+    // 是否处于升级流程中（下载/校验/安装/待安装）：此时由 OtaUpdateDialog 承载进度，
+    // 不重复发起版本查询，避免检测结果被覆盖。
+    function otaInProgress() {
+        const s = OtaService.state
+        return s === OtaService.Downloading
+            || s === OtaService.Verifying
+            || s === OtaService.Installing
+            || s === OtaService.ReadyToInstall
     }
 
     // 根据 netMode 强制同步四个开关的 checked（用 onClicked 替代 onToggled 后无需防重入标志，
@@ -81,13 +101,9 @@ Dialog {
         }
         NetworkManager.refreshWifiStatus()
         NetworkManager.refreshCellularStatus()
-        // 仅在非进行中态发起版本查询：进行中态（Checking/下载/校验/安装）由 OtaService
-        // 真实状态驱动显示，不乐观写“检查中...”也不重复触发，避免状态卡死/文本错乱
-        const busy = (OtaService.state === OtaService.Checking
-                    || OtaService.state === OtaService.Downloading
-                    || OtaService.state === OtaService.Verifying
-                    || OtaService.state === OtaService.Installing)
-        if (!busy)
+        // 仅在未处于升级流程时发起版本查询；升级流程中由 OtaUpdateDialog 驱动，
+        // 不重复触发，避免检测结果被覆盖。
+        if (!root.otaInProgress())
             OtaService.checkUpdate()
     }
 
@@ -227,25 +243,18 @@ Dialog {
 
                 Item { Layout.fillWidth: true }
 
-                // 状态文本（下载/校验/待安装时覆盖显示进度；Checking 直接由状态驱动，避免文本卡死）
+                // 状态文本：仅反映检测二元结果（有新版本 / 无新版本）。
+                // 下载/校验/安装进度由独立弹窗 OtaUpdateDialog 承载，本行不再显示任何过渡态，
+                // 因此界面不会停留于“检查中”等不确定加载态。
                 Text {
                     font.family: Theme.fontFamilyUi
                     font.pixelSize: 24
                     color: OtaService.updateAvailable ? Theme.colorAccent : "#1A1A2E"
                     Layout.alignment: Qt.AlignVCenter
-                    text: {
-                        switch (OtaService.state) {
-                        case OtaService.Checking:       return "检查中..."
-                        case OtaService.Downloading:    return "下载中 " + OtaService.percent + "%"
-                        case OtaService.Verifying:      return "校验中..."
-                        case OtaService.ReadyToInstall: return "待安装"
-                        case OtaService.Installing:     return "安装中..."
-                        default:                        return updateVersionText
-                        }
-                    }
+                    text: updateVersionText
                 }
 
-                // OTA 操作按钮（有可用更新时出现）
+                // OTA 操作按钮：检测到新版本即出现（下载与进度均由 OtaUpdateDialog 承载）
                 Rectangle {
                     visible: OtaService.updateAvailable
                     width: 132; height: 40; radius: 20
@@ -259,30 +268,15 @@ Dialog {
                         font.pixelSize: 20
                         font.bold: true
                         color: "#FFFFFF"
-                        text: {
-                            switch (OtaService.state) {
-                            case OtaService.Downloading:
-                            case OtaService.Verifying:
-                            case OtaService.ReadyToInstall: return "查看进度"
-                            case OtaService.Failed:         return "重新下载"
-                            default:                        return "立即下载"
-                            }
-                        }
+                        text: "立即下载"
                     }
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
-                            switch (OtaService.state) {
-                            case OtaService.Downloading:
-                            case OtaService.Verifying:
-                            case OtaService.ReadyToInstall:
-                                otaDialog.open()          // 仅查看进度
-                                break
-                            default:                       // HasUpdate / Failed → 打开弹窗并开始下载
-                                otaDialog.open()
-                                OtaService.startDownload()
-                                break
-                            }
+                            // 打开升级弹窗；startDownload 内部自守卫——
+                            // 仅 HasUpdate/Failed 态真正开始下载，其余态（下载中）仅展示进度
+                            otaDialog.open()
+                            OtaService.startDownload()
                         }
                     }
                 }
