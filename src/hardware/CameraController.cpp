@@ -883,6 +883,19 @@ void CameraController::postAiRecognize(const QImage &image, const QString &saveP
     // ② 构建 multipart body
     QHttpMultiPart *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
 
+    // 业务字段：CustId / UserId（雪花 ID，int64）
+    QHttpPart custIdPart;
+    custIdPart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                         QVariant("form-data; name=\"CustId\""));
+    custIdPart.setBody(QByteArray::number(m_authService ? m_authService->custId() : 0));
+    multiPart->append(custIdPart);
+
+    QHttpPart userIdPart;
+    userIdPart.setHeader(QNetworkRequest::ContentDispositionHeader,
+                         QVariant("form-data; name=\"UserId\""));
+    userIdPart.setBody(QByteArray::number(m_authService ? m_authService->userId() : -1));
+    multiPart->append(userIdPart);
+
     QHttpPart imagePart;
     imagePart.setHeader(QNetworkRequest::ContentDispositionHeader,
                         QVariant("form-data; name=\"File\"; filename=\"capture.jpg\""));
