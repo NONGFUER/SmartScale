@@ -273,10 +273,8 @@ Dialog {
                     MouseArea {
                         anchors.fill: parent
                         onClicked: {
-                            // 打开升级弹窗；startDownload 内部自守卫——
-                            // 仅 HasUpdate/Failed 态真正开始下载，其余态（下载中）仅展示进度
-                            otaDialog.open()
-                            OtaService.startDownload()
+                            // 先弹出下载确认框，确认后再打开升级弹窗并触发下载
+                            otaConfirmDialog.openDialog(updateVersionText)
                         }
                     }
                 }
@@ -613,6 +611,17 @@ Dialog {
     // OTA 升级进度弹窗（状态由 OtaService.state 驱动）
     OtaUpdateDialog {
         id: otaDialog
+    }
+
+    // OTA 下载更新确认弹窗（点击“立即下载”后先确认，风格同 SaveConfirmDialog）
+    OtaDownloadConfirmDialog {
+        id: otaConfirmDialog
+        onDownloadConfirmed: {
+            // 确认后打开升级弹窗；startDownload 内部自守卫——
+            // 仅 HasUpdate/Failed 态真正开始下载，其余态（下载中）仅展示进度
+            otaDialog.open()
+            OtaService.startDownload()
+        }
     }
 
     // ==========================================
