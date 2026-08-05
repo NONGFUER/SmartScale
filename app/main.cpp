@@ -430,7 +430,6 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "CellularModem", cellularModemService);     // 蜂窝模组 CCID(ICCID)
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "UpdateService", updateService);            // 更新信息查询
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "OtaService", otaService);                  // OTA 远程升级
-    qmlRegisterSingletonInstance("App.Backend", 1, 0, "OtaService", otaService);                  // OTA 远程升级
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());
     qmlRegisterSingletonInstance<PState>("SmartScale.Tools", 1, 0, "PState", &PState::inst());
 
