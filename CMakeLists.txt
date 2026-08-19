@@ -9,9 +9,13 @@ set(QT_QML_GENERATE_QMLLS_INI ON)
 # ============================================================
 # 版本号配置 (手动模式)
 #   编译时: cmake .. -DBUILD_NUMBER=10
+#   手动指定日期: cmake .. -DBUILD_DATE=20260101 (不指定则取当天)
 # ============================================================
 set(BUILD_NUMBER "9" CACHE STRING "Build number (手动递增)")
-string(TIMESTAMP APP_BUILD_DATE "%Y%m%d")
+if(NOT DEFINED BUILD_DATE)
+    string(TIMESTAMP BUILD_DATE "%Y%m%d")
+endif()
+set(APP_BUILD_DATE "${BUILD_DATE}")
 set(APP_VERSION_FULL "${PROJECT_VERSION}.${BUILD_NUMBER}")
 
 configure_file(
