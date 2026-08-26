@@ -4,6 +4,10 @@
 #include <QSslSocket>
 #include <QDebug>
 
+// 传输超时（毫秒）：防止网络不可达时请求永久挂起导致 UI 一直转圈。
+// 设为 15s，覆盖 DNS 解析 / TCP 握手 / 服务器无响应等挂起场景。
+inline constexpr int kRequestTimeoutMs = 15000;
+
 QNetworkRequest NetworkUtils::createApiRequest(const char *apiPath,
                                                 const QString &token)
 {
@@ -32,6 +36,10 @@ QNetworkRequest NetworkUtils::createApiRequest(const QString &baseUrl,
 
     // 强制使用 HTTP/1.1，避免 HTTP/2 导致 "Host requires authentication" 错误
     request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+
+    // 传输超时：网络不可达 / 握手无响应时，超时后 reply 触发 finished 并带 TimeoutError，
+    // 调用方据此关闭转圈并提示"网络连接失败"。
+    request.setTransferTimeout(kRequestTimeoutMs);
 
     // 打印请求报文
     qInfo() << "[HTTP] === 请求报文 ===";
@@ -70,6 +78,9 @@ QNetworkRequest NetworkUtils::createMultipartApiRequest(const char *apiPath,
 
     // 强制 HTTP/1.1
     request.setAttribute(QNetworkRequest::Http2AllowedAttribute, false);
+
+    // 传输超时（与 createApiRequest 保持一致）
+    request.setTransferTimeout(kRequestTimeoutMs);
 
     qInfo() << "[HTTP] === Multipart POST ===";
     qInfo() << "[HTTP] URL:" << url.toString();

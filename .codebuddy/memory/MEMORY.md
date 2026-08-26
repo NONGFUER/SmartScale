@@ -27,6 +27,7 @@
 
 ## 网络
 - API 域：`API_BASE_URL=https://api.shxgs.cn:5196`，`USER_BASE_URL=https://user.shxgs.cn:5196`；`NetworkUtils::createApiRequest/createUserApiRequest` 统一 json+Bearer+SSL VerifyNone+HTTP/1.1。**注意：VerifyNone 仅跳过证书验证，自签名/私有CA仍会触发 `sslErrors`；所有调用点必须 connect `reply->sslErrors` 并 `ignoreSslErrors()`，否则握手静默中止表现为"请求无回应"。UpdateService/OtaService 已接。** 另外 Qt6 网络错误信号是 `errorOccurred`（非 Qt5 的 `error`），诊断可连它早报。
+- **请求传输超时（2026-08-22 修复登录转圈）**：`NetworkUtils::createApiRequest`/`createMultipartApiRequest` 已统一 `request.setTransferTimeout(15000)`（15s）。修复登录/刷新等请求在网络不可达（DNS 卡住/TCP 黑洞/握手无响应）时永久挂起、UI 一直转圈的问题。超时后 reply 触发 finished+TimeoutError，AuthService::onNetworkReply 走网络错误分支 emit loginFailed，LoginDialog 脱敏为"网络连接失败，请稍后重试"并关闭遮罩。新增网络调用若不走 NetworkUtils，需自行加超时。
 - `NetworkManagerService`（QML `App.Backend::NetworkManager`）2026-07-28 原生重构：
   - 检测层零外部进程：WiFi/4G 判定走 `QNetworkInterface`（IsUp+全局 IPv4），WiFi 信号读 `/proc/net/wireless`，3s 轮询；SSID 仅 Connected 且缓存空时 nmcli 反查一次。mmcli/ip a 快速路径/去抖/防回退已全删。
   - 状态语义统一真实状态：`cellularUiActive` 已删，UI 全部以真实 `cellularStatus` 为唯一数据源。
