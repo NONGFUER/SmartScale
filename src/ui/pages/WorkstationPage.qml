@@ -1294,32 +1294,8 @@ Item {
         target: CameraController
         function onAiRecognitionCompleted(predictedLabel, imagePath, inferenceTimeMs) {
             console.log(">> QML收到AI分类结果:", predictedLabel)
-            root.currentPrediction = predictedLabel
             root.currentImagePath = imagePath
 
-            // 识别失败（unknown/idle 等无效结果）：清空残留 ingrId，避免脏数据被保存误用
-            if (!PState.isValid(predictedLabel)) {
-                console.warn("[WSP] AI 识别结果无效，清空 currentIngrId, label=", predictedLabel)
-                root.currentIngrId = ""
-                root.currentAiDetected = false
-            } else {
-                // AI 返回 ingrCd，查 ingredients 缓存取 ingrId (上传用)
-                var aiItem = UserIngredientService.findByIngrCd(predictedLabel)
-                if (aiItem && aiItem["id"]) {
-                    root.currentIngrId = aiItem["id"]
-                    // 品类由 AI 识别接口直接得出，标记 aiDetected=true
-                    root.currentAiDetected = true
-                    console.log("[WSP] 食材反查成功, ingrCd=", predictedLabel,
-                                "ingrId=", root.currentIngrId,
-                                "ingrNm=", aiItem["cn"] ? aiItem["cn"] : "",
-                                "aiDetected=true")
-                } else {
-                    console.warn("[WSP] 食材库未匹配到 ingrCd=", predictedLabel, "currentIngrId 置空")
-                    root.currentIngrId = ""
-                    root.currentAiDetected = false
-                }
-            }
-            
             if (inferenceTimeMs !== undefined) {
                 root.lastInferenceTime = inferenceTimeMs + " ms"
             } else {
@@ -1328,24 +1304,62 @@ Item {
             // 注意：手动保存的 addRecord 已在 onPhotoSaved 中立即执行
             // 此处仅更新 UI 品类显示，不再绑定保存/上传逻辑
 
-            // 手动"识别"按钮触发的流程完成：恢复按钮状态并反馈结果
-            if (root.aiRecognizing) {
+            // 手动"识别"按钮触发的流程完成：先恢复按钮/遮罩状态
+            var wasManualRecognize = root.aiRecognizing
+            if (wasManualRecognize) {
                 root.aiRecognizing = false
                 aiRecognizeTimeout.stop()
                 aiLoadingOverlay.close()
                 // 恢复非 AI-only 模式（下次保存时需要画水印）
                 CameraController.aiOnlyMode = false
+            }
 
-                var chineseLabel = Translator.translate(predictedLabel)
-                if (PState.isValid(predictedLabel)) {
-                    window.toast("识别完成：" + chineseLabel, "success", 2000)
-                } else {
+            // 识别失败（unknown/idle 等无效结果）：清空残留 ingrId，避免脏数据被保存误用
+            if (!PState.isValid(predictedLabel)) {
+                console.warn("[WSP] AI 识别结果无效，清空 currentIngrId, label=", predictedLabel)
+                root.currentPrediction = predictedLabel
+                root.currentIngrId = ""
+                root.currentAiDetected = false
+                if (wasManualRecognize) {
                     // 区分错误类型弹 alert（网络错误 vs 业务错误）
                     var errMsg = CameraController.lastAiError || "未能识别出食材"
                     var isNetworkErr = errMsg.indexOf("网络") >= 0 || errMsg.indexOf("HTTP") >= 0 || errMsg.indexOf("未登录") >= 0
                     window.alert(errMsg, isNetworkErr ? "error" : "warning", "AI识别失败")
                 }
+                return
             }
+
+            // 识别成功：多个候选时弹出选择窗（3 秒倒计时自动选第 1 个），单候选直接应用
+            if (root.aiCandidates && root.aiCandidates.length > 1) {
+                console.log("[WSP] 多候选识别结果，弹出选择窗, candidates=", root.aiCandidates.length)
+                aiResultSelectDialog.openDialog(root.aiCandidates)
+            } else {
+                root.applyAiSelection(predictedLabel)
+                if (wasManualRecognize) {
+                    window.toast("识别完成：" + Translator.translate(predictedLabel), "success", 2000)
+                }
+            }
+        }
+    }
+
+    // 应用选中的识别结果（ingrCd）：反查 ingrId 并更新品类显示
+    // 供"单候选默认"与"多候选弹窗选择/超时自动选第一个"共用
+    function applyAiSelection(ingrCd) {
+        root.currentPrediction = ingrCd
+        // AI 返回 ingrCd，查 ingredients 缓存取 ingrId (上传用)
+        var aiItem = UserIngredientService.findByIngrCd(ingrCd)
+        if (aiItem && aiItem["id"]) {
+            root.currentIngrId = aiItem["id"]
+            // 品类由 AI 识别接口直接得出，标记 aiDetected=true
+            root.currentAiDetected = true
+            console.log("[WSP] 食材反查成功, ingrCd=", ingrCd,
+                        "ingrId=", root.currentIngrId,
+                        "ingrNm=", aiItem["cn"] ? aiItem["cn"] : "",
+                        "aiDetected=true")
+        } else {
+            console.warn("[WSP] 食材库未匹配到 ingrCd=", ingrCd, "currentIngrId 置空")
+            root.currentIngrId = ""
+            root.currentAiDetected = false
         }
     }
 
@@ -1579,6 +1593,24 @@ Item {
     SaveLoadingOverlay {
         id: aiLoadingOverlay
         loadingText: "识别中..."
+    }
+
+    // AI 识别多结果选择弹窗（识别完成且有多个候选时弹出，3 秒倒计时自动选第 1 个）
+    AiResultSelectDialog {
+        id: aiResultSelectDialog
+        onResultSelected: function(code, name) {
+            console.log("[WSP] 用户/自动选中识别结果 code=", code, "name=", name)
+            root.applyAiSelection(code)
+            // 选择确认后再播报（多候选时 C++ 已推迟播报）
+            CameraController.speakAiResult(code, name)
+            window.toast("识别完成：" + Translator.translate(code), "success", 2000)
+        }
+        onCancelled: {
+            console.log("[WSP] 用户取消识别结果选择，清空识别状态")
+            root.currentPrediction = PState.IDLE
+            root.currentIngrId = ""
+            root.currentAiDetected = false
+        }
     }
 
     // 智能识别频繁操作锁定提醒遮罩（触发锁定时弹出，3 秒自动消失）

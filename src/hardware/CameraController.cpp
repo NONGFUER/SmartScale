@@ -988,6 +988,7 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
     //   中间格式: { "data": { "code": "tudou", "name": "土豆" } }      → 单对象
     //   旧格式: { "data": "POTATO" }                                   → 纯字符串
     QString label;
+    QString aiName;                     // AI 返回的中文名（反查不到时播报兜底）
     QJsonValue dataVal = obj.value("data");
     m_aiCandidateList.clear();          // 每次先清空
 
@@ -1007,6 +1008,9 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
         label = !m_aiCandidateList.isEmpty()
             ? m_aiCandidateList.first().toMap()["code"].toString()
             : PState::NONE;
+        aiName = !m_aiCandidateList.isEmpty()
+            ? m_aiCandidateList.first().toMap()["name"].toString()
+            : QString();
         qInfo() << "[在线AI] 新格式数组响应, candidates=" << m_aiCandidateList.size()
                 << " label=" << label;
         Q_EMIT aiCandidateListChanged();
@@ -1015,8 +1019,8 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
         // 兼容中间格式单对象
         QJsonObject dataObj = dataVal.toObject();
         label = dataObj.value("code").toString();
-        QString name = dataObj.value("name").toString();
-        qInfo() << "[在线AI] 单对象响应, code=" << label << "name=" << name;
+        aiName = dataObj.value("name").toString();
+        qInfo() << "[在线AI] 单对象响应, code=" << label << "name=" << aiName;
         Q_EMIT aiCandidateListChanged();
 
     } else {
@@ -1044,7 +1048,13 @@ void CameraController::handleAiRecognizeResponse(QNetworkReply *reply)
     qInfo() << "[在线AI] 识别结果:" << label << "耗时:" << elapsed << "ms";
 
     // ---- 语音播报 ----
-    speakPredictedLabel(label);
+    // 多候选（>1）时 QML 会弹选择窗，播报推迟到用户选择/超时后由 QML 调 speakAiResult；
+    // 单候选/旧格式无选择过程，此处直接播报
+    if (m_aiCandidateList.size() <= 1) {
+        speakPredictedLabel(label, aiName);
+    } else {
+        qInfo() << "[在线AI] 多候选待选择，播报推迟到选择完成后";
+    }
 
     // ---- 发射结果通知 QML 更新界面（图片已提前保存完毕）----
     emitAiResult(label, savePath, elapsed);
@@ -1063,11 +1073,23 @@ void CameraController::setAiError(const QString &error)
     }
 }
 
-void CameraController::speakPredictedLabel(const QString &label)
+void CameraController::speakAiResult(const QString &code, const QString &name)
+{
+    // 多候选选择窗确认后由 QML 调用，复用播报+兜底逻辑
+    speakPredictedLabel(code, name);
+}
+
+void CameraController::speakPredictedLabel(const QString &label, const QString &fallbackName)
 {
     if (!m_voiceSpeaker || label == PState::NONE || label == PState::UNKNOWN) return;
 
     QString chineseName = FoodTranslator::instance()->translate(label);
+    // 翻译器未命中（返回原 code，食材不在本地缓存）时，用 AI 返回的中文名兜底
+    if (chineseName.trimmed().compare(label.trimmed(), Qt::CaseInsensitive) == 0
+        && !fallbackName.trimmed().isEmpty()) {
+        chineseName = fallbackName.trimmed();
+        qInfo() << "[在线AI] 翻译未命中" << label << "，播报改用 AI 返回名称:" << chineseName;
+    }
     QString speakText = QString("！！！%1！！！").arg(chineseName);
     QMetaObject::invokeMethod(m_voiceSpeaker, "speak", Qt::QueuedConnection,
                               Q_ARG(QString, speakText));

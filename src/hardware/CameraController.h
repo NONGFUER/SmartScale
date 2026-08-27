@@ -34,6 +34,8 @@ public:
     Q_INVOKABLE void setSubVideoSink(QVideoSink *sink);
     Q_INVOKABLE void captureVegetable(double currentWeight, const QString &watermarkLabel = QString());
     Q_INVOKABLE void recognizeLastCapture();                  // 独立 AI 入口，不阻塞拍照/保存
+    // 多候选选择窗确认后由 QML 调用播报（code 翻译不到时用 name 兜底）
+    Q_INVOKABLE void speakAiResult(const QString &code, const QString &name);
 
     // AI-only 模式：仅拍照裁剪用于识别，不画水印不落盘（避免产生无用图片）
     Q_PROPERTY(bool aiOnlyMode READ aiOnlyMode WRITE setAiOnlyMode NOTIFY aiOnlyModeChanged)
@@ -81,7 +83,7 @@ private:
     Q_INVOKABLE void postAiRecognize(const QImage &image, const QString &savePath);
     void handleAiRecognizeResponse(QNetworkReply *reply);   // 纯业务逻辑
     void emitAiResult(const QString &label, const QString &path, qint64 ms);  // 发射结果信号
-    void speakPredictedLabel(const QString &label);         // 语音播报
+    void speakPredictedLabel(const QString &label, const QString &fallbackName = QString());  // 语音播报（反查不到时用 fallbackName 兜底）
     // === 公共工具方法（消除构造函数/重启函数重复代码）===
     QCameraDevice findUsbCamera();                          // 获取默认摄像头设备
     void setupCameraFormat(QCameraDevice &device);          // 设置最佳分辨率格式
@@ -98,8 +100,8 @@ private:
     QProcess *m_subProcess;
 
     QByteArray m_subBuffer;
-    int m_mainWidth = 3840;//  1920 3840
-    int m_mainHeight =2160;//  1080 2160
+    int m_mainWidth = 1920;//  1920 3840
+    int m_mainHeight =1080;//  1080 2160
     int m_subWidth = 1280;
     int m_subHeight = 720;
     int m_subFrameSize = 0;
