@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QThread>
 #include <QTimer>
+#include <QVector>
 
 class WeightSensorWorker;
 
@@ -113,6 +114,15 @@ private:
     //       加迟滞后，需越过死区才跳变，UI 稳定。
     double m_displayWeight = 0.0;
     static constexpr double HYSTERESIS_THRESHOLD = 0.007;
+
+    // ==================== 滑动窗口滤波 ====================
+    // 抖动抑制：缓存最近 N 个原始采样做滑动平均，
+    // 窗口时长 = FILTER_WINDOW_SIZE × 轮询间隔(200ms)。
+    // 阶跃检测：新采样与窗口均值偏差 > JUMP_THRESHOLD 时清空窗口重新累积，
+    // 保证取放物品即时响应（大窗口不拖慢阶跃），慢速加料仍平滑。
+    QVector<double>  m_filterWindow;
+    static constexpr int    FILTER_WINDOW_SIZE = 8;      // 8 × 200ms ≈ 1.6s
+    static constexpr double JUMP_THRESHOLD_KG  = 0.05;   // 50g 阶跃阈值(>噪声 <取放)
 
     // ==================== 缓冲池 (生产者-消费者) ====================
     WeightSample   m_buffer;                    // 最新数据缓存（覆盖写）

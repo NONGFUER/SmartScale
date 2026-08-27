@@ -151,6 +151,19 @@ void WeightSensor::onWeightDataReady(int32_t weight_g, uint16_t statusWord, int3
     m_buffer.statusWord = statusWord;
     m_buffer.adcRaw     = adcRaw;
     m_bufferHasData = true;
+
+    // 滑动窗口：缓存最近 N 个原始采样 (每 200ms 轮询一帧)
+    // 阶跃检测：与窗口均值偏差超阈值视为取放物品，清窗从新值重新累积
+    if (!m_filterWindow.isEmpty()) {
+        double mean = 0.0;
+        for (double w : m_filterWindow) mean += w;
+        mean /= m_filterWindow.size();
+        if (std::abs(m_buffer.weightKg - mean) > JUMP_THRESHOLD_KG)
+            m_filterWindow.clear();
+    }
+    m_filterWindow.append(m_buffer.weightKg);
+    if (m_filterWindow.size() > FILTER_WINDOW_SIZE)
+        m_filterWindow.removeFirst();
 }
 
 // ============================================================================
@@ -207,7 +220,11 @@ void WeightSensor::consumeBuffer()
     if (!m_bufferHasData) return;
     m_bufferHasData = false;
 
-    double rawWeightKg = m_buffer.weightKg;
+    // 滑动窗口平均：抑制空秤时 1 秒内的抖动 (窗口内必有 ≥1 个样本)
+    double sum = 0.0;
+    for (double w : m_filterWindow) sum += w;
+    double rawWeightKg = sum / m_filterWindow.size();
+
     uint16_t statusWord = m_buffer.statusWord;
     int32_t adcRaw = m_buffer.adcRaw;
 
