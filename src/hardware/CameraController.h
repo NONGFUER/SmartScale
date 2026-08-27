@@ -72,6 +72,7 @@ private Q_SLOTS:
     void onCameraStatusChanged(int status);
     void onCameraErrorOccurred(int error, const QString &errorString);
     void onMainVideoFrameChanged();
+    void grabAiCaptureFrame();                          // AI 高清帧就绪后抓帧（随后自动切回预览分辨率）
     void onWatchdogTimeout();
     void restartMainCamera();
     void onNetworkReply(QNetworkReply *reply);          // 统一网络回复分发入口
@@ -86,7 +87,12 @@ private:
     void speakPredictedLabel(const QString &label, const QString &fallbackName = QString());  // 语音播报（反查不到时用 fallbackName 兜底）
     // === 公共工具方法（消除构造函数/重启函数重复代码）===
     QCameraDevice findUsbCamera();                          // 获取默认摄像头设备
-    void setupCameraFormat(QCameraDevice &device);          // 设置最佳分辨率格式
+    void setupCameraFormat(const QCameraDevice &device);          // 设置最佳分辨率格式（预览默认 1080p）
+    void setupCameraFormat(const QCameraDevice &device, int targetW, int targetH);  // 指定目标分辨率
+    // === AI 高清抓帧（仅识别时临时切 4K，拍完切回，预览/水印不受影响）===
+    void switchMainFormatForAiCapture();                    // 切 4K 并等目标帧
+    void applyAiCaptureFormat(int attempt);                 // 等 stop 落定后下发 4K 格式（含一次重试）
+    void switchMainFormatBack();                            // 切回预览分辨率
 
     QPointer<QVideoSink> m_mainSink;
     QPointer<QVideoSink> m_subSink;
@@ -100,8 +106,14 @@ private:
     QProcess *m_subProcess;
 
     QByteArray m_subBuffer;
-    int m_mainWidth = 1920;//  1920 3840
-    int m_mainHeight =1080;//  1080 2160
+    int m_mainWidth = 1920;//  预览/水印合成固定 1080p，勿改
+    int m_mainHeight =1080;//
+    // AI 识别抓帧临时切换的目标分辨率（4K 下按原比例裁剪得 1080x1080 喂接口）
+    static constexpr int AI_CAPTURE_WIDTH  = 3840;
+    static constexpr int AI_CAPTURE_HEIGHT = 2160;
+    std::atomic<bool> m_aiCaptureHiRes{false};   // captureVegetable(aiOnlyMode) 打的 4K 抓帧标记
+    std::atomic<bool> m_waitingAiFrame{false};   // 正在等待 4K 目标帧
+    QSize m_aiTargetSize;                        // 实际生效的 AI 抓帧分辨率（设备不支持 4K 时回退）
     int m_subWidth = 1280;
     int m_subHeight = 720;
     int m_subFrameSize = 0;

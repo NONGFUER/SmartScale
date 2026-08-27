@@ -837,6 +837,49 @@ Item {
                                 spacing: 16
                                 Layout.alignment: Qt.AlignHCenter
 
+                                 // ----- 按钮：选择食材 -----
+                                Rectangle {
+                                    id: selectFoodBtn
+                                    width: 283
+                                    height: 99
+                                    radius: 20
+                                    clip: true
+                                    color: "transparent"
+
+                                    Image {
+                                        anchors.fill: parent
+                                        source: "qrc:/resources/img/ingr.png"
+                                        fillMode: Image.PreserveAspectCrop
+                                        asynchronous: true
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 114
+                                        text: "选择食材"
+                                        font.pixelSize: 30
+                                        font.bold: true
+                                        font.family: "PingFang SC"
+                                        color: "#166534"
+                                    }
+
+                                    MouseArea {
+                                        id: selectFoodMA
+                                        anchors.fill: parent
+                                        onClicked: {
+                                            if (!BackendAuth.currentUser) {
+                                                loginRequiredOverlay.open()
+                                                return
+                                            }
+                                            console.log("[WSP] 点击选择食材按钮，打开品类选择弹窗")
+                                            CategoryService.fetchIngrCategories()
+                                            root.categorySelectMode = true
+                                            correctionDialog.recommendCandidates = root.aiCandidates
+                                            correctionDialog.open()
+                                        }
+                                    }
+                                }
                                 // ----- 按钮：AI辅助识别 -----
                                 Rectangle {
                                     id: recognizeBtn
@@ -971,49 +1014,7 @@ Item {
                                     }
                                 }
 
-                                // ----- 按钮：选择食材 -----
-                                Rectangle {
-                                    id: selectFoodBtn
-                                    width: 283
-                                    height: 99
-                                    radius: 20
-                                    clip: true
-                                    color: "transparent"
-
-                                    Image {
-                                        anchors.fill: parent
-                                        source: "qrc:/resources/img/ingr.png"
-                                        fillMode: Image.PreserveAspectCrop
-                                        asynchronous: true
-                                    }
-
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        anchors.left: parent.left
-                                        anchors.leftMargin: 114
-                                        text: "选择食材"
-                                        font.pixelSize: 30
-                                        font.bold: true
-                                        font.family: "PingFang SC"
-                                        color: "#166534"
-                                    }
-
-                                    MouseArea {
-                                        id: selectFoodMA
-                                        anchors.fill: parent
-                                        onClicked: {
-                                            if (!BackendAuth.currentUser) {
-                                                loginRequiredOverlay.open()
-                                                return
-                                            }
-                                            console.log("[WSP] 点击选择食材按钮，打开品类选择弹窗")
-                                            CategoryService.fetchIngrCategories()
-                                            root.categorySelectMode = true
-                                            correctionDialog.recommendCandidates = root.aiCandidates
-                                            correctionDialog.open()
-                                        }
-                                    }
-                                }
+                               
                             }
 
                             // 称重卡片区域（含浮标标签）

@@ -199,7 +199,7 @@ Dialog {
         }
 
         Text {
-            text: "请选择正确的食材"
+            text: "根据AI识别的匹配度由高到低列出如下结果，请选择"
             font.pixelSize: 20
             font.family: Theme.fontFamilyUi
             color: "#64748B"
@@ -220,8 +220,9 @@ Dialog {
                 width: listView.width
                 height: 72
                 radius: 14
-                color: itemMA.containsMouse ? "#EEF2FF" : "#F8FAFC"
-                border.color: itemMA.containsMouse ? "#4361EE" : "#E5E7EB"
+                // 背景与历史记录选中项同色（#E0E7FF），原 #F8FAFC 太浅区分度差
+                color: itemMA.containsMouse ? "#C7D2FE" : "#E0E7FF"
+                border.color: itemMA.containsMouse ? "#4361EE" : "#A5B4FC"
                 border.width: 1
 
                 Behavior on color { ColorAnimation { duration: 120 } }
