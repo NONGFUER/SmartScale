@@ -37,12 +37,7 @@ QCameraDevice CameraController::findUsbCamera()
     return {};
 }
 
-void CameraController::setupCameraFormat(const QCameraDevice &device)
-{
-    setupCameraFormat(device, m_mainWidth, m_mainHeight);
-}
-
-void CameraController::setupCameraFormat(const QCameraDevice &device, int targetW, int targetH)
+void CameraController::setupCameraFormat(QCameraDevice &device)
 {
     static constexpr int TARGET_FPS = 30;
     auto formats = device.videoFormats();
@@ -50,7 +45,7 @@ void CameraController::setupCameraFormat(const QCameraDevice &device, int target
     // 策略1: 精确匹配分辨率 + 低帧率
     QCameraFormat best;
     for (const auto &f : formats) {
-        if (f.resolution().width() == targetW && f.resolution().height() == targetH) {
+        if (f.resolution().width() == m_mainWidth && f.resolution().height() == m_mainHeight) {
             if (f.maxFrameRate() <= TARGET_FPS + 1) { best = f; break; }
             if (best.isNull() || f.maxFrameRate() < best.maxFrameRate()) best = f;
         }
@@ -61,8 +56,8 @@ void CameraController::setupCameraFormat(const QCameraDevice &device, int target
         int bestDiff = INT_MAX;
         for (const auto &f : formats) {
             int diff = std::abs(f.resolution().width() * f.resolution().height()
-                                - targetW * targetH);
-            if (diff < bestDiff && f.resolution().width() <= targetW) {
+                                - m_mainWidth * m_mainHeight);
+            if (diff < bestDiff && f.resolution().width() <= m_mainWidth) {
                 bestDiff = diff;
                 best = f;
             }
@@ -177,15 +172,6 @@ void CameraController::captureVegetable(double currentWeight, const QString &wat
         QMutexLocker locker(&m_captureMetaMutex);
         m_watermarkLabel = watermarkLabel;
     }
-    // AI-only 模式（手动"智能识别"）：标记主摄抓帧前临时切 4K，拍完自动切回预览分辨率。
-    // 保存流程（带水印落盘）不走此分支，保持 1080p 原链路不变。
-    if (m_aiOnlyMode) {
-        if (m_waitingAiFrame.load()) {
-            qWarning() << "[Camera] 上一次 AI 高清抓帧未完成，跳过本次请求";
-            return;
-        }
-        m_aiCaptureHiRes.store(true);
-    }
     m_captureRequestedSub.store(true);
     qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ②captureVegetable 设副摄抓拍标志";
 }
@@ -224,95 +210,8 @@ void CameraController::handleMainCameraCapture()
 void CameraController::onSubCaptureReady()
 {
     qInfo().noquote() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ④onSubCaptureReady 触发主摄截图";
-    // AI 识别抓帧：先切 4K，等目标分辨率帧就绪后再抓（grabAiCaptureFrame 内自动切回）
-    if (m_aiCaptureHiRes.exchange(false)) {
-        switchMainFormatForAiCapture();
-        return;
-    }
     m_captureRequestedMain.store(true);
     QMetaObject::invokeMethod(this, "handleMainCameraCapture", Qt::QueuedConnection);
-}
-
-// -----------------------------------------------------
-// AI 高清抓帧：临时把主摄切到 4K，抓到目标分辨率帧后切回预览分辨率
-// 预览流/水印合成/落盘均为 1080p，仅喂 AI 的裁剪图（原比例，4K 下为 1080x1080）受益
-// -----------------------------------------------------
-void CameraController::switchMainFormatForAiCapture()
-{
-    if (!m_mainCamera) {
-        qWarning() << "[Camera] 主摄不可用，AI 抓帧退化为当前分辨率";
-        grabAiCaptureFrame();
-        return;
-    }
-    applyAiCaptureFormat(0);
-}
-
-// stop() 是异步的：格式设置必须等摄像头真正停稳后再下发，否则 setCameraFormat 被忽略
-// （此前读回仍是 1080p → sink 残留旧帧尺寸"匹配" → 抓成 1080p → 裁剪 540x540）
-void CameraController::applyAiCaptureFormat(int attempt)
-{
-    QCameraDevice dev = m_mainCamera->cameraDevice();
-    m_mainCamera->stop();
-    // 等 stop 落定（V4L2 模式切换通常 <300ms），再设格式并重启
-    QTimer::singleShot(300, this, [this, dev, attempt]() {
-        if (!m_mainCamera) return;
-        setupCameraFormat(dev, AI_CAPTURE_WIDTH, AI_CAPTURE_HEIGHT);
-        m_mainCamera->start();
-
-        // 读回校验：没切到 4K 不能拿 1080p 帧冒充
-        QSize applied = m_mainCamera->cameraFormat().resolution();
-        if (applied.width() != AI_CAPTURE_WIDTH || applied.height() != AI_CAPTURE_HEIGHT) {
-            if (attempt < 1) {
-                qWarning() << "[Camera] AI 抓帧: 4K 格式未生效（实际"
-                           << applied.width() << "x" << applied.height() << "），500ms 后重试";
-                QTimer::singleShot(500, this, [this, attempt]() { applyAiCaptureFormat(attempt + 1); });
-            } else {
-                qWarning() << "[Camera] AI 抓帧: 4K 格式重试仍未生效，放弃本次高清抓帧";
-                setAiError(QStringLiteral("摄像头高清模式未就绪，请重试"));
-                switchMainFormatBack();
-            }
-            return;
-        }
-
-        m_aiTargetSize = applied;
-        m_waitingAiFrame.store(true);
-        qInfo() << "[Camera] AI 抓帧: 主摄切换至" << m_aiTargetSize.width() << "x" << m_aiTargetSize.height();
-
-        // 超时兜底：5s 没等到 4K 新帧（模式协商+首帧解码较慢），放弃并报错（不抓残留旧帧冒充）
-        QTimer::singleShot(5000, this, [this]() {
-            if (m_waitingAiFrame.exchange(false)) {
-                qWarning() << "[Camera] AI 抓帧: 等待 4K 帧超时，放弃本次抓帧";
-                setAiError(QStringLiteral("摄像头高清模式未就绪，请重试"));
-                switchMainFormatBack();
-            }
-        });
-    });
-}
-
-void CameraController::grabAiCaptureFrame()
-{
-    // 尺寸守卫：sink 可能还残留切换前的 1080p 旧帧，尺寸不符坚决不抓
-    if (!m_mainSink || !m_mainSink->videoFrame().isValid()
-        || m_mainSink->videoFrame().size() != m_aiTargetSize) {
-        qWarning() << "[Camera] AI 抓帧: 当前帧非目标分辨率，继续等待";
-        m_waitingAiFrame.store(true);   // 重新挂起等待（超时兜底会终止）
-        return;
-    }
-    m_captureRequestedMain.store(true);
-    handleMainCameraCapture();
-    switchMainFormatBack();
-}
-
-void CameraController::switchMainFormatBack()
-{
-    if (!m_mainCamera) return;
-    QSize cur = m_mainCamera->cameraFormat().resolution();
-    if (cur.width() == m_mainWidth && cur.height() == m_mainHeight) return;  // 已在预览分辨率
-    QCameraDevice dev = m_mainCamera->cameraDevice();
-    m_mainCamera->stop();
-    setupCameraFormat(dev);
-    m_mainCamera->start();
-    qInfo() << "[Camera] AI 抓帧完成，主摄切回预览分辨率" << m_mainWidth << "x" << m_mainHeight;
 }
 
 // -----------------------------------------------------
@@ -445,8 +344,6 @@ void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
     // 3 裁剪供 AI 识别（yt0/yt1 调试图已移除以节省 JPG 编码耗时）
     QImage pureImageForAI = watermarkedImg.copy(cropRect);
     pureImageForAI.save("/home/sjwu/Pictures/cp0.jpg", "JPG", 90);
-    qInfo() << "[Camera] 裁剪图 cp0.jpg 尺寸:" << pureImageForAI.width() << "x" << pureImageForAI.height()
-            << "（源帧" << watermarkedImg.width() << "x" << watermarkedImg.height() << "）";
 
     if (cameraIndex != 0) {
         // 副摄像头图像 → 缓存为员工照片（线程安全）
@@ -855,15 +752,6 @@ void CameraController::onCameraErrorOccurred(int error, const QString &errorStri
 void CameraController::onMainVideoFrameChanged()
 {
     m_lastFrameTimeMs = QDateTime::currentMSecsSinceEpoch();
-
-    // AI 高清抓帧：等待切换到目标分辨率后的新帧就绪
-    if (m_waitingAiFrame.load() && m_mainSink) {
-        QVideoFrame f = m_mainSink->videoFrame();
-        if (f.isValid() && f.size() == m_aiTargetSize) {
-            m_waitingAiFrame.store(false);
-            QMetaObject::invokeMethod(this, "grabAiCaptureFrame", Qt::QueuedConnection);
-        }
-    }
 }
 
 void CameraController::onWatchdogTimeout()
