@@ -109,11 +109,12 @@ private:
     //   - 上跳阈值 = m_displayWeight + HYSTERESIS_THRESHOLD
     //   - 下跳阈值 = m_displayWeight - HYSTERESIS_THRESHOLD
     //   - 死区 (m_displayWeight - T, m_displayWeight + T) 内保持当前显示
-    // 公式：HYSTERESIS_THRESHOLD = 0.005 (半档) + 0.002 (迟滞量) = 0.007
-    // 注意：硬件真实值在 X.005 临界点漂移会导致常规四舍五入在 X.00/X.01 来回跳
+    // 公式：HYSTERESIS_THRESHOLD = 0.025 (半档) + 0.005 (迟滞量) = 0.030
+    // 注意：硬件真实值在 X.X25 临界点漂移会导致常规四舍五入在两档间来回跳
     //       加迟滞后，需越过死区才跳变，UI 稳定。
     double m_displayWeight = 0.0;
-    static constexpr double HYSTERESIS_THRESHOLD = 0.007;
+    static constexpr double DISPLAY_STEP_KG      = 0.05;   // 检定分度值 e=50g，显示/计价/保存统一按 50g 一档
+    static constexpr double HYSTERESIS_THRESHOLD = 0.030;
 
     // ==================== 滑动窗口滤波 ====================
     // 抖动抑制：缓存最近 N 个原始采样做滑动平均，

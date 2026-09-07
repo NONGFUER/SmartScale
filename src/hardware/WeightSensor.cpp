@@ -279,7 +279,7 @@ void WeightSensor::consumeBuffer()
         // ---- 迟滞算法（Hysteresis）更新显示重量 ----
         // 用 netWeight() getter 取值（已含负20g→0 钳位），与 QML 看到一致
         const double raw   = netWeight();
-        const double round_ = std::round(raw * 100.0) / 100.0;  // 常规四舍五入到 2 位小数
+        const double round_ = std::round(raw / DISPLAY_STEP_KG) * DISPLAY_STEP_KG;  // 四舍五入到 50g 一档（检定分度值 e=50g）
         double newDisplay = m_displayWeight;                    // 默认保持
 
         if (round_ > m_displayWeight) {
