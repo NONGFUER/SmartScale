@@ -664,6 +664,7 @@ void WeightHistoryService::onCloudReply(QNetworkReply *reply)
         Q_EMIT cloudSyncSuccess(localId);
     } else {
         qInfo() << "[SAVE-TIMER]" << QDateTime::currentDateTime().toString("HH:mm:ss.zzz") << "| ⑨b 后台上传成功(静默) id=" << localId;
+        Q_EMIT cloudRecordUploaded(localId);  // 真正上传完成，区别于 addRecord 乐观 emit 的 cloudSyncSuccess
     }
     Q_EMIT cloudSyncProgress(m_syncDone, m_syncTotal);
 

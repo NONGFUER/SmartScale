@@ -43,6 +43,7 @@ void UserIngredientService::setAuthService(AuthService *auth)
 
 void UserIngredientService::fetchIngredients()
 {
+    qInfo() << "[UserIngr] fetchIngredients 被调用 (m_loading=" << m_loading << ")";
     if (m_loading) return;
     if (!m_authService || m_authService->token().isEmpty()) {
         qWarning() << "[UserIngr] 未登录，无法拉取食材列表";
@@ -229,6 +230,7 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         item["cateNm"] = newCateNm;
         item["emsId"]  = "0";
         item["enable"] = enable;
+        item["price"]  = QString();
         m_items.append(item);
 
         m_ingrMap[ingrCd] = ingrId;
@@ -292,6 +294,8 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
 
         // 食材图片 URL（完整地址，可能为空）
         QString imgUrl  = obj.value("img").toString().trimmed();
+        // 单价（元/kg，后端返回字符串如 "5.00"，原样保留）
+        QString price   = obj.value("price").toString();
 
         QVariantMap item;
         item["en"]     = ingrCd;
@@ -302,6 +306,7 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         item["emsId"]  = emsId;
         item["enable"] = enable;
         item["img"]    = imgUrl;
+        item["price"]  = price;
         // 本地缓存路径：若上一次已下载且文件仍在，则复用，避免重复下载
         QString restored = oldImgLocal.value(ingrId);
         item["imgLocal"] = (!restored.isEmpty() && QFile::exists(restored)) ? restored : QString();
@@ -611,6 +616,7 @@ void UserIngredientService::loadFromCache()
             item["enable"] = obj.value("enable").toString();
             item["img"]    = obj.value("img").toString();
             item["imgLocal"] = obj.value("imgLocal").toString();
+            item["price"]  = obj.value("price").toString();
             m_items.append(item);
 
             QString ingrId = item["id"].toString();
@@ -659,6 +665,7 @@ void UserIngredientService::saveToCache()
             itemObj["enable"] = m.value("enable").toString();
             itemObj["img"]    = m.value("img").toString();
             itemObj["imgLocal"] = m.value("imgLocal").toString();
+            itemObj["price"]  = m.value("price").toString();
             itemArr.append(itemObj);
         }
         catObj["items"] = itemArr;

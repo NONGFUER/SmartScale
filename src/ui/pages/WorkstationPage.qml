@@ -562,7 +562,7 @@ Item {
                                             clip: true
                                             Rectangle {
                                                 id: guideBox
-                                                width: Math.min(parent.width, parent.height) * 0.50
+                                                width: Math.min(parent.width, parent.height) * 0.70
                                                 height: width
                                                 x: parent.width * 0.5 - width / 2
                                                 y: parent.height * 0.53 - height / 2
@@ -1237,7 +1237,7 @@ Item {
     function _executeSave() {
         console.log("[SAVE-TIMER]", Qt.formatDateTime(new Date(), "HH:mm:ss.zzz"), "| ①_executeSave 开始")
         console.log(">> 执行保存，重量:", root.pendingSaveWeight, "食材:", root.pendingSaveLabel)
-        root.pendingUnitPrice = root.currentUnitPrice   // 读取食材卡片输入的单价（元/kg）
+        root.pendingUnitPrice = AppSettings.priceInputEnabled ? root.currentUnitPrice : 0   // 价格输入开启才带入单价（元/kg）
         root.pendingManualSave = true
         saveLoadingOverlay.open()
         CameraController.captureVegetable(root.pendingSaveWeight, root.currentPrediction)
@@ -1353,6 +1353,11 @@ Item {
             root.currentIngrId = aiItem["id"]
             // 品类由 AI 识别接口直接得出，标记 aiDetected=true
             root.currentAiDetected = true
+            // 价格输入开启时，自动带出接口单价（元/kg）
+            if (AppSettings.priceInputEnabled) {
+                root.currentUnitPrice = (aiItem["price"] !== undefined && aiItem["price"] !== "")
+                                        ? Number(aiItem["price"]) : 0
+            }
             console.log("[WSP] 食材反查成功, ingrCd=", ingrCd,
                         "ingrId=", root.currentIngrId,
                         "ingrNm=", aiItem["cn"] ? aiItem["cn"] : "",
@@ -1378,6 +1383,13 @@ Item {
             VoiceSpeaker.speak("已保存")
             saveSuccessDialog.openDialog()
             clearIngredientCard()
+            // 乐观完成（DB已写入），但服务器尚未真正回写价格；真正上传完成在 cloudRecordUploaded 回调处理
+            console.log("[WSP] 保存乐观完成（DB已写入），等待服务器回写后重拉价格")
+        }
+        function onCloudRecordUploaded(localId) {
+            // addRecord 路径下服务器真正保存完成后再重拉（此时后端已回写食材单价）
+            console.log("[WSP] 上传真正完成（服务器已回写），重拉食材列表同步价格 id=", localId)
+            UserIngredientService.fetchIngredients()
         }
         function onCloudSyncFailed(localId, errorMsg) {
             console.warn("[Alert] 上传失败 id=", localId, "err=", errorMsg)
@@ -1521,6 +1533,12 @@ Item {
                 // 纠错模式无 ingrId，按 ingrCd 反查
                 var item = UserIngredientService.findByIngrCd(newPred)
                 root.currentIngrId = (item && item["id"]) ? item["id"] : ""
+            }
+            // 价格输入开启时，自动带出接口单价（元/kg）
+            if (AppSettings.priceInputEnabled) {
+                var it = UserIngredientService.findByIngrCd(newPred)
+                root.currentUnitPrice = (it && it["price"] !== undefined && it["price"] !== "")
+                                        ? Number(it["price"]) : 0
             }
         }
         onSelectModeToggled: function(mode) {

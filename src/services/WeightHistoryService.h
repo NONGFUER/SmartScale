@@ -103,6 +103,7 @@ Q_SIGNALS:
     void historyChanged();
     void statsChanged();
     void cloudSyncSuccess(int localId);
+    void cloudRecordUploaded(int localId);  // addRecord 路径下"上传真正完成"（区别于乐观的 cloudSyncSuccess）
     void cloudSyncFailed(int localId, const QString &errorMsg);
     void cloudSyncProgress(int done, int total);
     void userRecordCreated(bool success, const QString &msg);
