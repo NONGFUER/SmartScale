@@ -1,4 +1,5 @@
 #include "NetworkManagerService.h"
+#include "utils/AppPaths.h"
 #include <QCoreApplication>
 #include <QThread>
 #include <QRegularExpression>
@@ -57,10 +58,10 @@ NetworkManagerService::NetworkManagerService(QObject *parent)
     m_process = new QProcess(this);
     m_process->setProcessChannelMode(QProcess::MergedChannels);
 
-    // Wi-Fi 密码本地缓存：~/.config/SmartScale/wifi_passwords.conf
+    // Wi-Fi 密码本地缓存：<AppPaths::configDir()>/wifi_passwords.conf
     {
-        const QString confDir = QDir::homePath() + QStringLiteral("/.config/SmartScale");
-        QDir().mkpath(confDir);
+        const QString confDir = AppPaths::configDir();
+        AppPaths::ensureDir(confDir);
         m_wifiPskCache = new QSettings(confDir + QStringLiteral("/wifi_passwords.conf"),
                                        QSettings::IniFormat, this);
         qDebug() << "[NetworkManager] Wi-Fi 密码缓存文件:" << m_wifiPskCache->fileName();

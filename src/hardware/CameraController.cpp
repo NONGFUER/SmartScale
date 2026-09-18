@@ -1,6 +1,7 @@
 #include "CameraController.h"
 #include "hardware/WeightSensor.h"
 #include "utils/FoodTranslator.h"
+#include "utils/AppPaths.h"
 #include "core/PState.h"
 #include <QVideoFrameFormat>
 #include <QPainter>
@@ -361,7 +362,7 @@ void CameraController::_processCommon(int cameraIndex, QImage &watermarkedImg)
     QString timeStamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
     QString savePath = "";
     if (cameraIndex == 0) {
-        QDir dir(QDir::homePath() + "/Pictures");
+        QDir dir(AppPaths::home() + "/Pictures");
         if (!dir.exists()) dir.mkpath(".");
         QString deviceSn = m_weightSensor ? m_weightSensor->sn() : QStringLiteral("V-XXXXXX");
         if (deviceSn.isEmpty()) deviceSn = QStringLiteral("V-XXXXXX");

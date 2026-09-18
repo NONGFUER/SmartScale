@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
+import SmartScale.Tools 1.0
 
 /**
  * AiResultSelectDialog — AI 识别多结果选择弹窗
@@ -12,8 +13,12 @@ import QtQuick.Effects
  * 关闭方式：点击某个结果（选中）、左上角返回/右上角关闭/底部取消（放弃选择）、倒计时自动选中第 1 个。
  * 用法：aiResultSelectDialog.openDialog(candidates)
  *       candidates: [{code, name}, ...]
- * 信号：resultSelected(code, name)  用户/自动选中某结果
+ * 信号：resultSelected(code, name)  用户/自动选中某结果（name 为反查后的显示名）
  *       cancelled()                 用户主动放弃选择
+ *
+ * 显示名（重要）：候选一律按 ingrCd 反查本地食材库（Translator，与识别完成后
+ * 卡片显示 / 表格 / 语音播报同一份数据），反查不到才回退 AI 返回的中文名。
+ * 否则会出现"弹窗写豆角、选完变四季豆、播报读四季豆"的不一致。
  */
 Dialog {
     id: root
@@ -33,6 +38,13 @@ Dialog {
         root.candidates = list
         if (list.length === 0) return
         root.open()
+    }
+
+    // 候选显示名：按 ingrCd 反查本地食材库（与卡片显示/语音播报同名），
+    // 反查不到（未登录/食材不在库中）才回退 AI 返回的中文名
+    function displayName(code, aiName) {
+        var t = Translator.translate(code)
+        return (t && t !== code) ? t : (aiName || code)
     }
 
     modal: true
@@ -82,7 +94,7 @@ Dialog {
                 autoSelectTimer.stop()
                 if (root.opened && root.candidates.length > 0) {
                     var code = root.candidates[0]["code"] || ""
-                    var name = root.candidates[0]["name"] || ""
+                    var name = root.displayName(code, root.candidates[0]["name"] || "")
                     root.close()
                     root.resultSelected(code, name)
                 }
@@ -251,9 +263,9 @@ Dialog {
                         }
                     }
 
-                    // 食材名称
+                    // 食材名称（反查本地食材库，与选择后的卡片显示/播报保持一致）
                     Text {
-                        text: modelData["name"] || modelData["code"] || "未知"
+                        text: root.displayName(modelData["code"] || "", modelData["name"] || "") || "未知"
                         font.pixelSize: 26
                         font.bold: true
                         font.family: Theme.fontFamilyUi
@@ -270,7 +282,7 @@ Dialog {
                     onClicked: {
                         autoSelectTimer.stop()
                         var code = modelData["code"] || ""
-                        var name = modelData["name"] || ""
+                        var name = root.displayName(code, modelData["name"] || "")
                         root.close()
                         root.resultSelected(code, name)
                     }

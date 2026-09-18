@@ -1,4 +1,5 @@
 #include "PpocrRecognizer.h"
+#include "utils/EmbeddedAssets.h"     // 模型目录自愈（内嵌副本释放）
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -75,7 +76,12 @@ bool PpocrRecognizer::ensureLoaded()
         return false;   // 已尝试过且失败，不重复刷日志
     m_loadAttempted = true;
 
-    const QString basePath = QCoreApplication::applicationDirPath() + "/AI/";
+    // 模型目录：优先设备上的 <APP_DIR>/AI；缺失时用 EmbeddedAssets 释放二进制内嵌副本
+    // （历史 OTA 包不会把 AI/ 同步到设备 —— 刷写脚本来自设备上运行的旧版本，只 cp 一个文件）
+    const QString aiDir = EmbeddedAssets::aiDir();
+    const QString basePath = aiDir.isEmpty()
+                                 ? QCoreApplication::applicationDirPath() + "/AI/"
+                                 : aiDir + "/";
     const QString modelPath = basePath + "rec.onnx";
     const QString dictPath = basePath + "ppocrv5_dict.txt";
 

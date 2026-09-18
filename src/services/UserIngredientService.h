@@ -79,6 +79,7 @@ private:
     QString imageCacheDir() const;            // 图片缓存目录 (~/.cache/smartscale/ingr_images)
     QString localImagePathFor(const QString &imgUrl) const;  // 由 URL 推导本地文件名
     void setItemLocalImage(const QString &ingrId, const QString &localPath); // 更新某项本地图路径
+    void cleanupOrphanImages();               // 删除缓存目录中不再被索引引用的历史图片
 
     /** @brief Token 刷新完成后，重发排队的请求 */
     void onTokenRefreshCompleted(bool success, const QString &errMsg);

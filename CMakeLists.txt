@@ -118,6 +118,8 @@ qt_add_qml_module(appSmartScale
 
         # --- 工具层 (Utils) ---
         SOURCES src/utils/FoodTranslator.h src/utils/FoodTranslator.cpp
+        SOURCES src/utils/AppPaths.h src/utils/AppPaths.cpp
+        SOURCES src/utils/EmbeddedAssets.h src/utils/EmbeddedAssets.cpp
 
         # --- 业务服务层 (Services) ---
         SOURCES src/services/AuthService.h src/services/AuthService.cpp

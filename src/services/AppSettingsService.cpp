@@ -1,4 +1,5 @@
 #include "AppSettingsService.h"
+#include "utils/AppPaths.h"
 
 #include <QDebug>
 
@@ -13,10 +14,18 @@ static const char *kKeyWeightUnit        = "weightUnit";
 // 构造 — 从 QSettings 读取持久化配置
 // ============================================================================
 
+// 设置文件路径：显式指定，不再用 QSettings::UserScope
+// （UserScope 依赖进程 HOME，会被 OTA 以 root 拉起时的 /root 带偏，
+//   导致同一台设备出现两套设置，例如"按斤显示"在 OTA 后失效）
+static QString appSettingsPath()
+{
+    AppPaths::ensureDir(AppPaths::configDir());
+    return AppPaths::configDir() + QStringLiteral("/AppSettings.ini");
+}
+
 AppSettingsService::AppSettingsService(QObject *parent)
     : QObject(parent)
-    , m_settings(QSettings::IniFormat, QSettings::UserScope,
-                 QStringLiteral("SmartScale"), QStringLiteral("AppSettings"))
+    , m_settings(appSettingsPath(), QSettings::IniFormat)
 {
     m_priceInputEnabled = m_settings.value(kKeyPriceInputEnabled, false).toBool();
     m_cellularEnabled   = m_settings.value(kKeyCellularEnabled, true).toBool();  // 默认 true 保持开机自连

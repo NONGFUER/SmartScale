@@ -30,6 +30,8 @@
 
 // 工具层
 #include "utils/FoodTranslator.h"
+#include "utils/AppPaths.h"                       // 配置/缓存根目录统一解析
+#include "utils/EmbeddedAssets.h"                 // 内嵌资源（键盘样式/手写模型）自愈
 #include "hardware/VoiceSpeaker.h"
 
 // 业务层 (已接入 Repository)
@@ -173,6 +175,12 @@ int main(int argc, char *argv[])
             qInfo() << "[Main] 日志文件:" << logPath;
     }
 
+    // 作废 /root 下的旧配置与缓存（仅当本次以 root 启动，即 OTA 脚本兜底拉起时）。
+    // 必须放在任何配置读取之前：否则 /root/.config/SmartScale/last_login.conf
+    // 里那个历史账号会在本次启动就被自动登录（表现为"OTA 后自动登录了另一个账号"）。
+    qInfo() << "[Main] 配置根目录:" << AppPaths::home();
+    AppPaths::retireStaleRootData();
+
     // 触摸屏环境：全局隐藏鼠标光标
     QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
 
@@ -188,16 +196,19 @@ int main(int argc, char *argv[])
     //      （曾导致手写样式不生效、手写区采集不到笔迹）。
     //   2) 环境变量必须在 QML 引擎加载（VK Settings 单例首次构造）之前设置；
     //      这里需要 applicationDirPath()，所以放在 QGuiApplication 之后、engine.load 之前。
-    const QString styleDir = QCoreApplication::applicationDirPath() + QLatin1String("/keyboard_styles");
-    const QString styleFile = styleDir
-            + QLatin1String("/QtQuick/VirtualKeyboard/Styles/smartscale/style.qml");
-    engine.addImportPath(styleDir);
-    if (QFile::exists(styleFile)) {
+    //   2) 环境变量必须在 QML 引擎加载（VK Settings 单例首次构造）之前设置；
+    //      这里需要 applicationDirPath()，所以放在 QGuiApplication 之后、engine.load 之前。
+    //   3) 样式来源由 EmbeddedAssets 保障：设备上 <APP_DIR>/keyboard_styles 可用则直接用，
+    //      否则释放二进制内嵌副本到可写目录 —— OTA 刷写脚本由"设备上正在运行的旧版本"导出
+    //      且只 cp 一个 appSmartScale，历史上就是靠这一步兜住"样式缺失导致手写采不到笔迹"。
+    const QString styleRoot = EmbeddedAssets::keyboardStyleRoot();
+    if (!styleRoot.isEmpty()) {
+        engine.addImportPath(styleRoot);
         qputenv("QT_VIRTUALKEYBOARD_STYLE", "smartscale");
+        qInfo() << "[Main] 键盘样式根目录:" << styleRoot;
     } else {
-        // 兜底：目录缺失（只跑 make 没重跑 cmake / 旧设备未随包更新）时退回系统目录的 light 样式，
-        // 避免退化成 Qt 内置默认样式 —— 那样手写区会因为没有 traceCanvasDelegate 而失效
-        qWarning() << "[Main] 未找到部署样式:" << styleFile << " => 回退系统 light 样式";
+        qWarning() << "[Main] 键盘样式不可用（设备目录与内嵌副本均缺失）=> 回退系统 light 样式"
+                   << "（手写区可能采不到笔迹）";
         qputenv("QT_VIRTUALKEYBOARD_STYLE", "light");
     }
 

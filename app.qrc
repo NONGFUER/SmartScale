@@ -31,6 +31,20 @@
         <file>resources/img/back_w.png</file>
         <!-- 自定义虚拟键盘明亮风格：Qt6.8 查找 <导入路径>/QtQuick/VirtualKeyboard/Styles/<名>/style.qml -->
         <file alias="qt-project.org/imports/QtQuick/VirtualKeyboard/Styles/light/style.qml">src/ui/vkbdstyle/light/style.qml</file>
+        <!-- 键盘样式内嵌副本：设备上 <APP_DIR>/keyboard_styles 缺失时（历史 OTA 包不带它，
+             或刷写脚本来自旧版本、只 cp 一个 appSmartScale），由 EmbeddedAssets 释放到可写目录
+             再作为 Qt 样式导入路径 —— 否则会回退到缺 traceCanvasDelegate 的系统 light 样式，
+             表现为"手写区一个笔画都采不到"。 -->
+        <file alias="embedded/keyboard_styles/QtQuick/VirtualKeyboard/Styles/smartscale/style.qml">src/ui/vkbdstyle/light/style.qml</file>
+        <!-- 手写识别模型内嵌副本（PP-OCRv5）。
+             为什么内嵌：OTA 刷写脚本是"设备上正在运行的那个旧版本"导出的，旧脚本只 cp
+             一个文件 appSmartScale、会忽略包内其它目录（AI/、keyboard_styles/），
+             所以"一次 OTA 就修好存量机器"只能靠资源随二进制走 —— 启动时若
+             <APP_DIR>/AI 缺失，由 EmbeddedAssets 释放内嵌副本到可写目录。
+             食材识别走在线接口（本地 mobilenetv3 已在 CameraController 中停用），
+             故不需要内嵌 mobilenetv3_food.* 。 -->
+        <file alias="embedded/AI/rec.onnx">AI/rec.onnx</file>
+        <file alias="embedded/AI/ppocrv5_dict.txt">AI/ppocrv5_dict.txt</file>
         <!-- OTA 刷写脚本：install() 时导出到 data/ota/ 执行（设备部署目录无 scripts/） -->
         <file>scripts/apply_update.sh</file>
     </qresource>

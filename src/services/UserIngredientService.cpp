@@ -2,6 +2,7 @@
 #include "AuthService.h"
 #include "core/NetworkUtils.h"
 #include "utils/FoodTranslator.h"
+#include "utils/AppPaths.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -10,6 +11,7 @@
 #include <QNetworkReply>
 #include <QDebug>
 #include <QFile>
+#include <QFileInfo>
 #include <QDir>
 #include <QDateTime>
 #include <QUuid>
@@ -264,14 +266,18 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         return;
     }
 
-    // 保留已有本地图片路径，避免重新拉取后 imgLocal 被清空导致重复下载
+    // 保留已有本地图片路径及其对应的后端版本号 updAt，用于判断本地缓存能否复用
     QMap<QString, QString> oldImgLocal;
+    QMap<QString, QString> oldUpdAt;
     for (const QVariant &v : m_items) {
         QVariantMap m = v.toMap();
         QString id = m.value("id").toString();
+        if (id.isEmpty())
+            continue;
         QString loc = m.value("imgLocal").toString();
-        if (!id.isEmpty() && !loc.isEmpty())
+        if (!loc.isEmpty())
             oldImgLocal[id] = loc;
+        oldUpdAt[id] = m.value("updAt").toString();
     }
 
     m_items.clear();
@@ -294,6 +300,8 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
 
         // 食材图片 URL（完整地址，可能为空）
         QString imgUrl  = obj.value("img").toString().trimmed();
+        // 后端记录的最近修改时间，作为图片版本号（图片被覆盖但 URL 不变时仅此字段变化）
+        QString updAt   = obj.value("updAt").toString().trimmed();
         // 单价（元/kg，后端返回字符串如 "5.00"，原样保留）
         QString price   = obj.value("price").toString();
 
@@ -306,10 +314,23 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
         item["emsId"]  = emsId;
         item["enable"] = enable;
         item["img"]    = imgUrl;
+        item["updAt"]  = updAt;
         item["price"]  = price;
-        // 本地缓存路径：若上一次已下载且文件仍在，则复用，避免重复下载
+        // 本地缓存路径：仅当以下三条同时满足才复用，否则置空触发重新下载：
+        //   1) 磁盘文件仍存在；
+        //   2) 该文件正是当前 imgUrl 推导出的文件名（后端换图会生成新的 UUID 对象路径）；
+        //   3) 后端版本号 updAt 未变（图片对象路径不变但内容被覆盖时，只有它能反映变化）。
+        // 只按「ingrId 相同 + 文件存在」复用会让新图永远下载不到（实测：农夫山泉换图后设备仍显示旧图）。
+        // 注意：升级后第一次 fetch 时旧 JSON 尚无 updAt，记录为空视为「版本未知」，
+        //       退回仅比对 URL —— 否则会把全部已有图片判为过期而整批重下（约百 MB）。
+        const QString recordedUpdAt = oldUpdAt.value(ingrId);
+        bool updAtSame = recordedUpdAt.isEmpty() || recordedUpdAt == updAt;
         QString restored = oldImgLocal.value(ingrId);
-        item["imgLocal"] = (!restored.isEmpty() && QFile::exists(restored)) ? restored : QString();
+        bool reuseLocal = !imgUrl.isEmpty() && !restored.isEmpty()
+                          && restored == localImagePathFor(imgUrl)
+                          && updAtSame
+                          && QFile::exists(restored);
+        item["imgLocal"] = reuseLocal ? restored : QString();
         m_items.append(item);
 
         if (!ingrId.isEmpty() && !ingrCd.isEmpty()) {
@@ -336,6 +357,9 @@ void UserIngredientService::onNetworkReply(QNetworkReply *reply)
 
     // 下载食材图片到本地缓存（异步，完成后刷新 UI 并落盘）
     downloadIngredientImages();
+
+    // 清理不再被引用的历史图片（后端换图会写新文件名，旧文件会长期堆积）
+    cleanupOrphanImages();
 
     // 更新翻译器内存字典 (ingrCd → ingrNm)，翻译器不再自行写缓存
     FoodTranslator::instance()->updateFromApi(m_items);
@@ -396,15 +420,15 @@ void UserIngredientService::rebuildCategories()
 // ============================================================
 QString UserIngredientService::cacheFilePath()
 {
-    QString dir = QDir::homePath() + "/.cache/smartscale";
-    QDir().mkpath(dir);
+    const QString dir = AppPaths::cacheDir();
+    AppPaths::ensureDir(dir);
     return dir + "/ingredients.json";
 }
 
 QString UserIngredientService::rawCacheFilePath()
 {
-    QString dir = QDir::homePath() + "/.cache/smartscale";
-    QDir().mkpath(dir);
+    const QString dir = AppPaths::cacheDir();
+    AppPaths::ensureDir(dir);
     return dir + "/ingredients_raw.json";
 }
 
@@ -426,9 +450,60 @@ void UserIngredientService::saveRawResponse(const QByteArray &data)
 // ============================================================
 QString UserIngredientService::imageCacheDir() const
 {
-    QString dir = QDir::homePath() + "/.cache/smartscale/ingr_images";
-    QDir().mkpath(dir);
+    const QString dir = AppPaths::cacheDir() + "/ingr_images";
+    AppPaths::ensureDir(dir);
     return dir;
+}
+
+// ============================================================
+//  清理孤儿图片：删除缓存目录中不再被当前食材索引引用的历史图片
+//  （后端换图会写新文件名，旧文件不会被覆盖，长期累积可达数百 MB）
+//  仅在 fetchIngredients 拿到完整食材快照后调用，白名单来自该快照，
+//  因此不会误删；在途下载的目标文件也一并保留。
+// ============================================================
+void UserIngredientService::cleanupOrphanImages()
+{
+    if (m_items.isEmpty())
+        return;   // 快照不完整时绝不动磁盘
+
+    // 保护期：不删最近还"可能被用到"的图。同一切换账号场景下，上一账号的图
+    // 在本账号快照里是孤儿，立即删除会导致切回时整批重新下载（约百 MB）。
+    static constexpr int kOrphanKeepDays = 7;
+
+    QSet<QString> keep;
+    for (const QVariant &v : m_items) {
+        const QString loc = v.toMap().value("imgLocal").toString();
+        if (!loc.isEmpty())
+            keep.insert(QFileInfo(loc).absoluteFilePath());
+    }
+    // 正在下载的图片：其目标文件此刻尚未写入索引，必须保留
+    const QSet<QString> downloading = m_imgDownloading;
+    for (const QString &url : downloading)
+        keep.insert(QFileInfo(localImagePathFor(url)).absoluteFilePath());
+
+    QDir dir(imageCacheDir());
+    const QFileInfoList files = dir.entryInfoList(QDir::Files);
+    const QDateTime now = QDateTime::currentDateTime();
+    int removed = 0;
+    qint64 freedBytes = 0;
+    for (const QFileInfo &fi : files) {
+        if (keep.contains(fi.absoluteFilePath()))
+            continue;
+        if (fi.lastModified().daysTo(now) < kOrphanKeepDays)
+            continue;   // 保护期内（孤儿文件的 mtime 即当初下载时间）
+        const qint64 size = fi.size();
+        if (QFile::remove(fi.absoluteFilePath())) {
+            ++removed;
+            freedBytes += size;
+        }
+    }
+
+    if (removed > 0) {
+        qInfo() << "[UserIngr] 清理孤儿图片:" << removed << "个, 释放"
+                << (freedBytes / 1024 / 1024) << "MB, 保留" << keep.size() << "个";
+    } else {
+        qInfo() << "[UserIngr] 无孤儿图片, 保留" << keep.size() << "个";
+    }
 }
 
 QString UserIngredientService::localImagePathFor(const QString &imgUrl) const
@@ -491,9 +566,11 @@ void UserIngredientService::downloadIngredientImages()
         if (imgUrl.isEmpty() || ingrId.isEmpty())
             continue;
 
-        // 已有本地缓存且文件仍存在则跳过
+        // 已有本地缓存、且该缓存文件对应当前图片 URL 时才跳过。
+        // 必须比对 URL：本地 JSON 可能是旧版本写下的（imgLocal 指向旧图），
+        // 仅按文件存在性跳过会让后端换过的图永远下载不到。
         QString local = m.value("imgLocal").toString();
-        if (!local.isEmpty() && QFile::exists(local))
+        if (!local.isEmpty() && QFile::exists(local) && local == localImagePathFor(imgUrl))
             continue;
         // 正在下载中则跳过，避免重复请求
         if (m_imgDownloading.contains(imgUrl))
@@ -587,15 +664,6 @@ void UserIngredientService::loadFromCache()
     }
 
     QJsonArray cats = root.value("categories").toArray();
-    // 保留已有本地图片路径，避免重新拉取后 imgLocal 被清空导致重复下载
-    QMap<QString, QString> oldImgLocal;
-    for (const QVariant &v : m_items) {
-        QVariantMap m = v.toMap();
-        QString id = m.value("id").toString();
-        QString loc = m.value("imgLocal").toString();
-        if (!id.isEmpty() && !loc.isEmpty())
-            oldImgLocal[id] = loc;
-    }
 
     m_items.clear();
     m_ingrMap.clear();
@@ -616,6 +684,7 @@ void UserIngredientService::loadFromCache()
             item["enable"] = obj.value("enable").toString();
             item["img"]    = obj.value("img").toString();
             item["imgLocal"] = obj.value("imgLocal").toString();
+            item["updAt"]  = obj.value("updAt").toString();
             item["price"]  = obj.value("price").toString();
             m_items.append(item);
 
@@ -665,6 +734,7 @@ void UserIngredientService::saveToCache()
             itemObj["enable"] = m.value("enable").toString();
             itemObj["img"]    = m.value("img").toString();
             itemObj["imgLocal"] = m.value("imgLocal").toString();
+            itemObj["updAt"]  = m.value("updAt").toString();
             itemObj["price"]  = m.value("price").toString();
             itemArr.append(itemObj);
         }

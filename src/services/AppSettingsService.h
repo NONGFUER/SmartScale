@@ -74,7 +74,7 @@ Q_SIGNALS:
     void weightUnitChanged();
 
 private:
-    QSettings m_settings;   // IniFormat, UserScope, "SmartScale"/"AppSettings"
+    QSettings m_settings;   // IniFormat，显式路径 <AppPaths::configDir()>/AppSettings.ini
     bool m_priceInputEnabled;
     bool m_cellularEnabled;
     bool m_wifiEnabled;

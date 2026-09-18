@@ -1,4 +1,5 @@
 #include "FoodTranslator.h"
+#include "AppPaths.h"
 #include "core/PState.h"
 #include <QFile>
 #include <QDir>
@@ -9,9 +10,9 @@
 
 static QString cacheFilePath()
 {
-    // 缓存路径: ~/.cache/smartscale/ingredients.json
-    QString dir = QDir::homePath() + "/.cache/smartscale";
-    QDir().mkpath(dir);
+    // 缓存路径: <AppPaths::cacheDir()>/ingredients.json（~/.cache/smartscale/ingredients.json）
+    const QString dir = AppPaths::cacheDir();
+    AppPaths::ensureDir(dir);
     return dir + "/ingredients.json";
 }
 

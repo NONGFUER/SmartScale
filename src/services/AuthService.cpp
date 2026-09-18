@@ -2,6 +2,7 @@
 #include "core/NetworkUtils.h"
 #include "data/repositories/UserRepo.h"
 #include "services/UserIngredientService.h"
+#include "utils/AppPaths.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -143,7 +144,7 @@ void AuthService::tryOnlineLogin(const QString &userCode, const QString &passwor
     bodyObj["Password"] = password;
     bodyObj["Sn"]       = m_deviceSn;  // 设备序列号（由 WeightSensor 注入）
     bodyObj["Role"]     = 2;      // 角色类型
-    bodyObj["Dev"]      = 3; //4      // 设备类型
+    bodyObj["Dev"]      = 4; //4      // 设备类型
     bodyObj["zone"]     = "Asia/Shanghai";     // 区域
 
     QJsonDocument bodyDoc(bodyObj);
@@ -676,7 +677,7 @@ bool AuthService::isTokenValid() const
 
 void AuthService::loadProductFromCache()
 {
-    QString path = QDir::homePath() + "/.cache/smartscale/product.json";
+    QString path = AppPaths::cacheDir() + "/product.json";
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         qInfo() << "[Auth] 无本地 productId 缓存，等待登录后从 API 拉取";
@@ -703,8 +704,8 @@ void AuthService::saveProductToCache() const
 {
     if (m_productId.isEmpty()) return;
 
-    QString dir = QDir::homePath() + "/.cache/smartscale";
-    QDir().mkpath(dir);
+    const QString dir = AppPaths::cacheDir();
+    AppPaths::ensureDir(dir);
     QString path = dir + "/product.json";
 
     QFile file(path);
@@ -722,14 +723,19 @@ void AuthService::saveProductToCache() const
 
 // ==========================================================================
 //  记住登录功能
-//  存储: ~/.config/SmartScale/last_login.conf
+//  存储: <AppPaths::configDir()>/last_login.conf（~/.config/SmartScale/last_login.conf）
 // ==========================================================================
 
-static const QString kLastLoginPath = QDir::homePath() + "/.config/SmartScale/last_login.conf";
+// 必须是函数而不是文件级 static 常量：常量会在 main() 之前求值，
+// 拿不到运行期才确定的 AppPaths 家目录解析结果。
+static QString lastLoginPath()
+{
+    return AppPaths::configDir() + "/last_login.conf";
+}
 
 void AuthService::loadLastLogin()
 {
-    QSettings settings(kLastLoginPath, QSettings::IniFormat);
+    QSettings settings(lastLoginPath(), QSettings::IniFormat);
     m_rememberLogin = settings.value("remember", false).toBool();
     m_lastUserCode  = settings.value("userCode").toString();
     m_lastPassword  = settings.value("password").toString();  // 简单 base64 编码存储
@@ -743,10 +749,10 @@ void AuthService::saveLastLogin()
 {
     if (!m_rememberLogin) return;
 
-    QString dir = QDir::homePath() + "/.config/SmartScale";
-    QDir().mkpath(dir);
+    const QString dir = AppPaths::configDir();
+    AppPaths::ensureDir(dir);
 
-    QSettings settings(kLastLoginPath, QSettings::IniFormat);
+    QSettings settings(lastLoginPath(), QSettings::IniFormat);
     settings.setValue("remember", true);
     settings.setValue("userCode", m_pendingUserCode);
     settings.setValue("password", m_pendingPassword.toUtf8().toBase64());
@@ -759,7 +765,7 @@ void AuthService::saveLastLogin()
 
 void AuthService::clearSavedLoginData()
 {
-    QFile::remove(kLastLoginPath);
+    QFile::remove(lastLoginPath());
     m_lastUserCode.clear();
     m_lastPassword.clear();
     qInfo() << "[Auth] 清除记住的登录信息";
@@ -807,7 +813,7 @@ void AuthService::clearSavedLogin()
 
 void AuthService::loadLoginHistory()
 {
-    QString path = QDir::homePath() + "/.cache/smartscale/login_history.json";
+    QString path = AppPaths::cacheDir() + "/login_history.json";
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
         return;
@@ -832,8 +838,8 @@ void AuthService::loadLoginHistory()
 
 void AuthService::saveLoginHistory() const
 {
-    QString dir = QDir::homePath() + "/.cache/smartscale";
-    QDir().mkpath(dir);
+    const QString dir = AppPaths::cacheDir();
+    AppPaths::ensureDir(dir);
     QString path = dir + "/login_history.json";
 
     QFile file(path);

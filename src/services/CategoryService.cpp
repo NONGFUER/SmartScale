@@ -1,6 +1,7 @@
 #include "CategoryService.h"
 #include "AuthService.h"
 #include "core/NetworkUtils.h"
+#include "utils/AppPaths.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -72,8 +73,8 @@ void CategoryService::fetchCategories()
 
 QString CategoryService::ingrCateCacheFilePath() const
 {
-    QString dir = QDir::homePath() + "/.cache/smartscale";
-    QDir().mkpath(dir);
+    const QString dir = AppPaths::cacheDir();
+    AppPaths::ensureDir(dir);
     return dir + "/ingr_categories.json";
 }
 

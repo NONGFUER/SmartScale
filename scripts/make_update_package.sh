@@ -42,11 +42,15 @@ BIN_SHA="$(sha256sum "$APP_BIN" | awk '{print $1}')"
 cd "$BUILD_DIR"
 
 # 资源目录(可选): 存在则随包分发(appSmartScale 之外的文件)
-#   AI              - 识别模型(手写 rec.onnx 等)
-#   keyboard_styles - 虚拟键盘自定义样式(light，含手写书写区样式)
+#   注意（2026-09-19 起）：键盘样式与手写模型（AI/rec.onnx、AI/ppocrv5_dict.txt）
+#   已改为**内嵌进 appSmartScale**（app.qrc → EmbeddedAssets 启动时按需释放），
+#   默认不再随包分发：一是缩小包体，二是老设备第一次 OTA 时执行的旧脚本只 cp 一个
+#   appSmartScale，包内其它目录会被忽略（AI/ 与 keyboard_styles/ 都到不了设备）。
+#   如需临时用包分发某个目录（例如做模型 A/B 验证），把它加进下面的 ASSET_DIRS 即可。
+ASSET_DIRS=()
 TAR_ITEMS=(appSmartScale manifest.json)
 FILE_ENTRIES="    { \"name\": \"appSmartScale\", \"sha256\": \"${BIN_SHA}\" }"
-for asset_dir in AI keyboard_styles; do
+for asset_dir in ${ASSET_DIRS[@]+"${ASSET_DIRS[@]}"}; do
   abs_asset="${BUILD_DIR}/${asset_dir}"
   [ -d "$abs_asset" ] || continue
   while IFS= read -r abs_path; do
