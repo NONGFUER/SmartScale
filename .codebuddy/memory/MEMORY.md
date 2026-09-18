@@ -59,8 +59,12 @@
 ## 虚拟键盘
 - Qt6 `QtQuick.VirtualKeyboard`，`locale="zh_CN"`；`QT_IM_MODULE=qtvirtualkeyboard`，`QT_VIRTUALKEYBOARD_STYLE=light`。
 - 键盘悬浮覆盖：主布局与弹窗 `y:(parent.height-height)/2` 居中不避让；`keyboardContainer.parent: Overlay.overlay`+`z:99999`。
-- 自定义 light 样式 `src/ui/vkbdstyle/light/style.qml`（入口文件名必须 style.qml，`keyboardDesignWidth/Height` 显式 2560×800），同时拷贝到系统 Qt 路径免重编译。
+- 自定义样式源码 `src/ui/vkbdstyle/light/style.qml`（入口文件名必须 style.qml，`keyboardDesignWidth/Height` 显式 2560×800）。
+- **样式部署/加载机制（2026-09-18 修正，重要）**：Qt `stylePath()` 对每个 QML 导入路径拼 `<path>/QtQuick/VirtualKeyboard/Styles/<样式名>/style.qml` 并**倒序**匹配，系统 `/usr/lib/<arch>/qt6/qml/...` 下的**同名副本会抢先命中**。因此：①`QT_VIRTUALKEYBOARD_STYLE` 改用唯一名 `smartscale`；②CMake 把 style.qml 拷到 `<build>/keyboard_styles/QtQuick/VirtualKeyboard/Styles/smartscale/style.qml`；③main.cpp `engine.addImportPath(applicationDirPath()+"/keyboard_styles")`。**禁止再用样式名 "light"**（旧做法是手工 cp 到系统目录，已废弃——曾导致手写样式改动完全不生效、手写区采不到笔迹）；OTA 包已把 `keyboard_styles` 与 `AI` 一起分发并在刷写时同步。
 - `Main.qml InputPanel.scale=0.62`，背景 `#E9EEF4`。
+- **手写输入法（PP-OCRv5，2026-09-17 落地）**：`src/ai/PpocrRecognizer`（`AI/rec.onnx` 输入 [1,3,48,W]/输出 [1,T,18385] 已含 softmax；字典 18383 行 + 末尾空格类 + blank = 18385，映射 class i>0 → 字典第 i 行）+ `src/ai/HandwritingInputMethod`（`QVirtualKeyboardAbstractInputMethod` 子类，只用公开头文件，抬笔 380ms 去抖，QtConcurrent 识别，连续手写自动落字）。注入方式：`src/ui/components/HandwritingBridge.qml` 调 `keyboard.setHandwritingMode(true)` 并覆盖 `InputContext.inputEngine.inputMethod`（不依赖 Qt 的 createInputMethod 类型解析）；入口是 Main.qml 键盘左上角"手写"按钮，测试入口 SystemInfoDialog→HwrTestDialog。
+- **样式硬约束**：`KeyboardStyle.traceInputKeyPanelDelegate` / `traceCanvasDelegate` / `handwritingKeyPanel` 基类默认 null；自定义样式若不定义 traceCanvasDelegate，`TraceInputArea.onPressed` 直接 return，手写区采不到任何笔迹。
+- 系统 Qt 自带 Example HWR 插件（`Plugins/Example/HWR`，`QT_FEATURE_example_hwr=1` ⇒ `VirtualKeyboardFeatures.Handwriting=1`）提供手写布局 `zh_CN/handwriting.qml`，但其识别是随机字母占位；Debian 未打包 Cerence/MyScript 引擎（`scripts/setup_handwriting.sh` 那条路走不通）。
 
 ## 语音
 - `VoiceSpeaker`（src/hardware/）：sherpa-onnx C API + Matcha 中文模型，进程内合成 + QThread 后台线程 + aplay 播放；对外接口（speak/stop/warmup/isReady/isSpeaking/信号）不变。`dlopen(RTLD_LOCAL)` 隔离 onnxruntime 符号冲突。
@@ -72,6 +76,7 @@
 - `OtaService`（QML `App.Backend::OtaService`）：状态机 Idle/Checking/HasUpdate/Downloading/Verifying/ReadyToInstall/Installing/Success/Failed/RolledBack；组合复用 `UpdateService`（纯查询，接口勿动）。Q_INVOKABLE：checkUpdate/startDownload/cancelDownload/install/resetState；信号：checkFinished(success,hasUpdate,version)、upgradeResult(success,version,rolledBack)。
 - **版本比较用 QVersionNumber（远端 version 去 V 前缀 vs APP_VERSION_FULL），禁止 verCode vs BUILD_NUMBER 直接比**。
 - 下载：QNAM 流式写 `data/ota/update.part`+增量 SHA256 对照 `UpdateService.hash`，进度 500ms 节流，Failed 态可重试。**取消下载回 HasUpdate（非 Idle）**——startDownload 守卫仅放行 HasUpdate/Failed，回 Idle 会导致再次下载被静默拒绝。
-- 刷写：`scripts/apply_update.sh`（app.qrc 注册，install() 导出 data/ota/ 执行，QProcess::startDetached）。流程：sudo -n 预检→解压→manifest 校验→探测 systemd service（第3参数/env SMARTSCALE_SERVICE 覆盖）→停应用（**须轮询等待进程真正退出，最多15s再 SIGKILL，否则旧进程残留持有 /dev/ttyAMA0 的 flock 锁，新进程报 Permission error while locking the device**）→备份 .bak.<ts>（留2份）→替换→拉起→60s 等进程+30s 稳定观察→result.success / 失败回滚 result.rolledback。退出码 0/1参数包备份/2解压校验/3权限/4拉起失败/5存活失败。
+- 刷写：`scripts/apply_update.sh`（app.qrc 注册，install() 导出 data/ota/ 执行，QProcess::startDetached）。流程：sudo -n 预检→解压→manifest 校验→探测 systemd service（第3参数/env SMARTSCALE_SERVICE 覆盖）→停应用（**须轮询等待进程真正退出，最多15s再 SIGKILL，否则旧进程残留持有 /dev/ttyAMA0 的 flock 锁，新进程报 Permission error while locking the device**）→备份 .bak.<ts>（留2份）→**AI 模型同步（包内带 `AI/` 时 `cp -a` 到 APP_DIR/AI，失败则在替换二进制前中止）**→替换→拉起→60s 等进程+30s 稳定观察→result.success / 失败回滚 result.rolledback。退出码 0/1参数包备份/2解压校验或AI同步失败/3权限/4拉起失败/5存活失败。
+- 打包：`scripts/make_update_package.sh <版本> [build目录]`；build/AI 存在时整目录进包并写入 manifest files[]（逐文件 sha256）。
 - 首启自检：构造时读 `data/ota/result.*|pending.json`，延迟 3s emit upgradeResult → Main.qml alert 后 resetState()。
 - UI：SettingsDialog 版本更新行 + `OtaUpdateDialog.qml`（NoAutoClose，进度条/取消/立即重启安装/重新下载）。

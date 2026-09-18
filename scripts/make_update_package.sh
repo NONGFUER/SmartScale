@@ -8,8 +8,12 @@
 #   ./make_update_package.sh 2.13.3.24 /home/sjwu/SmartScale/build
 #
 # 产出:
-#   ./smartscale-<版本号>.tar.gz   更新包(内含 appSmartScale + manifest.json)
+#   ./smartscale-<版本号>.tar.gz   更新包(内含 appSmartScale + AI/ 模型 + manifest.json)
 #   manifest.json 同时承载版本号/说明/文件校验信息, 不单独生成外置 json
+#
+# 说明:
+#   build/AI 目录存在时会整目录打进更新包(手写识别 rec.onnx 等模型随包分发),
+#   由 apply_update.sh 在刷写时同步到应用目录。若只需增量分发, 可先清理 build/AI。
 #
 set -euo pipefail
 
@@ -36,6 +40,25 @@ BIN_SHA="$(sha256sum "$APP_BIN" | awk '{print $1}')"
 
 # 2. 在 build 目录生成临时 manifest(版本元信息 + 文件清单), 打包后清理
 cd "$BUILD_DIR"
+
+# 资源目录(可选): 存在则随包分发(appSmartScale 之外的文件)
+#   AI              - 识别模型(手写 rec.onnx 等)
+#   keyboard_styles - 虚拟键盘自定义样式(light，含手写书写区样式)
+TAR_ITEMS=(appSmartScale manifest.json)
+FILE_ENTRIES="    { \"name\": \"appSmartScale\", \"sha256\": \"${BIN_SHA}\" }"
+for asset_dir in AI keyboard_styles; do
+  abs_asset="${BUILD_DIR}/${asset_dir}"
+  [ -d "$abs_asset" ] || continue
+  while IFS= read -r abs_path; do
+    rel_path="${abs_path#${BUILD_DIR}/}"
+    file_sha="$(sha256sum "$abs_path" | awk '{print $1}')"
+    FILE_ENTRIES="${FILE_ENTRIES},
+    { \"name\": \"${rel_path}\", \"sha256\": \"${file_sha}\" }"
+  done < <(find "$abs_asset" -type f | LC_ALL=C sort)
+  TAR_ITEMS+=("$asset_dir")
+  echo "已包含资源目录 ${asset_dir}: $(find "$abs_asset" -type f | wc -l) 个文件"
+done
+
 cat > manifest.json <<EOF
 {
   "version": "${VERSION}",
@@ -43,11 +66,11 @@ cat > manifest.json <<EOF
   "force": false,
   "url": "https://<YOUR_SERVER>/update/${PKG_NAME}",
   "files": [
-    { "name": "appSmartScale", "sha256": "${BIN_SHA}" }
+${FILE_ENTRIES}
   ]
 }
 EOF
-tar -czf "$PKG_PATH" appSmartScale manifest.json
+tar -czf "$PKG_PATH" "${TAR_ITEMS[@]}"
 rm -f manifest.json
 
 # 3. 计算包自身的 sha256 与大小(供服务器/下载方记录)

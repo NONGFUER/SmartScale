@@ -7,7 +7,7 @@
 #
 # 流程:
 #   权限探测(sudo -n) → 解压 → manifest 二次校验 → 探测 systemd service
-#   → 停应用 → 备份 appSmartScale.bak.<ts> → 新版就位 → 拉起
+#   → 停应用 → 备份 appSmartScale.bak.<ts> → AI 模型同步(包内带 AI/ 时) → 新版就位 → 拉起
 #   → 30s 存活验证 → 成功写 result.success / 失败恢复 .bak 并写 result.rolledback
 #
 # 退出码:
@@ -132,6 +132,23 @@ fi
 log "已备份: $BAK"
 # shellcheck disable=SC2012
 ls -1t "${APP_BIN}.bak."* 2>/dev/null | tail -n +3 | xargs -r rm -f
+
+# ---------- 7.5 资源目录同步（包内带 AI/ keyboard_styles/ 时同步：识别模型 + 键盘自定义样式） ----------
+# 失败时在替换二进制之前中止：应用目录仍是旧版本，避免"新程序 + 旧/缺模型"的半升级状态
+for asset_dir in AI keyboard_styles; do
+  [ -d "${TMP_DIR}/${asset_dir}" ] || continue
+  log "同步资源目录 ${asset_dir}..."
+  mkdir -p "${APP_DIR}/${asset_dir}"
+  if cp -a "${TMP_DIR}/${asset_dir}/." "${APP_DIR}/${asset_dir}/"; then
+    sync
+    log "${asset_dir} 已同步"
+  else
+    log "错误: ${asset_dir} 同步失败"
+    if [ -n "$SVC" ]; then systemctl start "$SVC"; fi
+    echo "$VERSION" > "${OTA_DIR}/result.rolledback"
+    exit 2
+  fi
+done
 
 # ---------- 8. 新版就位 ----------
 if ! cp "${TMP_DIR}/appSmartScale" "$APP_BIN"; then

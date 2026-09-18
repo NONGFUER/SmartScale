@@ -1,16 +1,20 @@
 // ============================================================
-// SmartScale 明亮虚拟键盘风格 (light)
+// SmartScale 明亮虚拟键盘风格（部署样式名：smartscale，源目录仍叫 light）
 //
 // 浅灰蓝底 + 白色键帽 + 清晰边框的现代 iOS 风格。
-// 通过 QT_VIRTUALKEYBOARD_STYLE=light 启用。
+// 通过 QT_VIRTUALKEYBOARD_STYLE=smartscale 启用（见 app/main.cpp）。
 //
-// Qt6.8 自定义样式查找规则（实测 + 源码确认）：
-//   搜索 <QML导入路径>/QtQuick/VirtualKeyboard/Styles/<风格名>/style.qml
+// Qt6.8 自定义样式查找规则（源码确认 qquickvirtualkeyboardsettings.cpp::stylePath）：
+//   对每个 QML 导入路径拼出 <路径>/QtQuick/VirtualKeyboard/Styles/<样式名>/style.qml，
+//   QFileInfo::exists() 命中即用，且**按导入路径倒序**匹配（越靠后越优先）；
 //   入口文件名必须是 style.qml（不是 KeyboardStyle.qml），根元素为 KeyboardStyle。
-// 本文件通过 app.qrc alias 嵌入到
-//   :/qt-project.org/imports/QtQuick/VirtualKeyboard/Styles/light/style.qml
-// 同时也拷贝到系统目录（免重编译即可生效）：
-//   /usr/lib/aarch64-linux-gnu/qt6/qml/QtQuick/VirtualKeyboard/Styles/light/style.qml
+// 部署方式（2026-09-18 修正，别再用旧办法）：
+//   CMake 把本文件拷到 <可执行文件目录>/keyboard_styles/QtQuick/VirtualKeyboard/Styles/
+//   smartscale/style.qml，main.cpp 用 engine.addImportPath(<可执行文件目录>/keyboard_styles)
+//   把该目录加入导入路径。
+//   ⚠ 不要复用内置样式名 "light"：系统 /usr/lib/<arch>/qt6/qml/QtQuick/VirtualKeyboard/
+//     Styles/light/style.qml 下的同名副本会抢先命中，导致本文件的改动完全不生效
+//     （典型症状：加了 traceCanvasDelegate 却依然"手写区采集不到笔迹"）。
 //
 // 关键实现约束（对照 Qt6.8.2 内置 default 样式）：
 //   1. KeyboardStyle 是 QtObject，必须设置 keyboardDesignWidth/Height，
@@ -392,5 +396,76 @@ KeyboardStyle {
         border.color: "#CBD5E1"
         border.width: 1
         radius: 12 * scaleHint
+    }
+
+    // ============================================================
+    // 手写输入（配合 PP-OCRv5 手写输入法）
+    // 注意：KeyboardStyle 基类里 handwritingKeyPanel / traceInputKeyPanelDelegate /
+    //       traceCanvasDelegate 默认均为 null。若不在此定义，手写布局的书写区
+    //       根本不会采集笔迹 —— TraceInputArea.onPressed 里有
+    //       `if (!keyboard.style.traceCanvasDelegate) return`。
+    // ============================================================
+
+    // ---- 手写书写区面板（手写布局里的大白框）----
+    traceInputKeyPanelDelegate: TraceInputKeyPanel {
+        id: traceInputKeyPanel
+        traceMargins: keyBackgroundMargin
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: keyBackgroundMargin
+            radius: 14 * scaleHint
+            color: "#FFFFFF"
+            border.color: "#CBD5E1"
+            border.width: Math.max(2, Math.round(3.5 * scaleHint))
+
+            // 落笔暗示水印
+            Text {
+                anchors.centerIn: parent
+                text: "在此手写"
+                font.pixelSize: 96 * scaleHint
+                font.family: "PingFang SC"
+                font.bold: true
+                color: "#E5E9F0"
+            }
+        }
+    }
+
+    // ---- 手写墨迹画布（浅底 -> 深色墨迹；键盘内 / 全屏两种画布共用）----
+    traceCanvasDelegate: TraceCanvas {
+        id: traceCanvas
+        onAvailableChanged: {
+            if (!available)
+                return
+            var ctx = getContext("2d")
+            // 全屏手写时的画布远大于键盘内的书写区，笔迹要相应加粗才好看
+            var fullScreen = parent && parent.canvasType === "fullscreen"
+            ctx.lineWidth = fullScreen ? 16 : Math.max(4, Math.round(12 * scaleHint))
+            ctx.lineCap = "round"
+            ctx.strokeStyle = "#1B263B"
+            ctx.fillStyle = "#1B263B"
+        }
+        autoDestroyDelay: 800
+        onTraceChanged: if (trace === null) opacity = 0
+        Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+    }
+
+    // ---- 手写模式键（仅出现在手写布局中 -> 语义固定为"切回键盘"）----
+    handwritingKeyPanel: KeyPanel {
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: keyBackgroundMargin
+            radius: 12 * scaleHint
+            color: control.pressed ? "#3F3FD0" : "#4649E5"
+
+            Text {
+                anchors.centerIn: parent
+                text: "键盘"
+                font.pixelSize: 64 * scaleHint
+                font.family: "PingFang SC"
+                font.bold: true
+                color: "#FFFFFF"
+            }
+        }
     }
 }

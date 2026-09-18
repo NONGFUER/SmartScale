@@ -16,6 +16,7 @@
 #include <QProcess>
 #include <QFont>
 #include <QFontDatabase>
+#include <QtConcurrent/QtConcurrentRun>
 #include <cstdio>
 
 // 硬件层
@@ -24,6 +25,8 @@
 
 // AI 层
 #include "ai/VisionAIService.h"
+#include "ai/PpocrRecognizer.h"          // PP-OCRv5 手写识别引擎
+#include "ai/HandwritingInputMethod.h"   // 手写输入法（Qt 虚拟键盘）
 
 // 工具层
 #include "utils/FoodTranslator.h"
@@ -97,7 +100,6 @@ int main(int argc, char *argv[])
     // 注意：Debian 13 的 Qt6 VirtualKeyboard 不打包 Pinyin 插件，
     // 触摸屏键盘只能输入英文/数字/符号，无法输入中文（除非自编译 Pinyin 插件）。
     qputenv("QT_IM_MODULE", QByteArray("qtvirtualkeyboard"));
-    qputenv("QT_VIRTUALKEYBOARD_STYLE", "light");  // light 纯白明亮风格（自定义样式 src/ui/vkbdstyle/light/style.qml，经 app.qrc alias 嵌入）
     qputenv("QT_MEDIA_BACKEND", "ffmpeg");
 
     QGuiApplication app(argc, argv);
@@ -175,6 +177,29 @@ int main(int argc, char *argv[])
     QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
 
     QQmlApplicationEngine engine;
+
+    // 虚拟键盘自定义样式：源文件 src/ui/vkbdstyle/light/style.qml，由 CMake 部署到
+    // <可执行文件目录>/keyboard_styles/QtQuick/VirtualKeyboard/Styles/smartscale/style.qml，
+    // 这里把它所在的目录追加为 QML 导入路径（样式查找按导入路径倒序匹配，因此会优先命中）。
+    // 注意：
+    //   1) 【样式名必须唯一】。Qt 的样式查找会按导入路径倒序匹配
+    //      <path>/QtQuick/VirtualKeyboard/Styles/<样式名>/style.qml，若沿用内置名 "light"，
+    //      系统 /usr/lib/<arch>/qt6/qml/... 下的同名副本会抢先命中
+    //      （曾导致手写样式不生效、手写区采集不到笔迹）。
+    //   2) 环境变量必须在 QML 引擎加载（VK Settings 单例首次构造）之前设置；
+    //      这里需要 applicationDirPath()，所以放在 QGuiApplication 之后、engine.load 之前。
+    const QString styleDir = QCoreApplication::applicationDirPath() + QLatin1String("/keyboard_styles");
+    const QString styleFile = styleDir
+            + QLatin1String("/QtQuick/VirtualKeyboard/Styles/smartscale/style.qml");
+    engine.addImportPath(styleDir);
+    if (QFile::exists(styleFile)) {
+        qputenv("QT_VIRTUALKEYBOARD_STYLE", "smartscale");
+    } else {
+        // 兜底：目录缺失（只跑 make 没重跑 cmake / 旧设备未随包更新）时退回系统目录的 light 样式，
+        // 避免退化成 Qt 内置默认样式 —— 那样手写区会因为没有 traceCanvasDelegate 而失效
+        qWarning() << "[Main] 未找到部署样式:" << styleFile << " => 回退系统 light 样式";
+        qputenv("QT_VIRTUALKEYBOARD_STYLE", "light");
+    }
 
     // ============================================================
     // 1. 初始化数据库 (必须在所有 Service 之前)
@@ -432,6 +457,19 @@ int main(int argc, char *argv[])
     qmlRegisterSingletonInstance("App.Backend", 1, 0, "OtaService", otaService);                  // OTA 远程升级
     qmlRegisterSingletonInstance<FoodTranslator>("SmartScale.Tools", 1, 0, "Translator", FoodTranslator::instance());
     qmlRegisterSingletonInstance<PState>("SmartScale.Tools", 1, 0, "PState", &PState::inst());
+
+    // ============================================================
+    // 手写输入法（PP-OCRv5）
+    //   HandwritingInputMethod -> Main.qml 里注入虚拟键盘的输入法实例
+    //   Ppocr                 -> 识别引擎单例（HwrTestDialog 调试用）
+    // ============================================================
+    qmlRegisterType<HandwritingInputMethod>("SmartScale.Hwr", 1, 0, "HandwritingInputMethod");
+    qmlRegisterSingletonInstance("SmartScale.Hwr", 1, 0, "Ppocr", PpocrRecognizer::instance());
+
+    // 识别引擎预热：工作线程加载 ONNX 模型（约 16MB），避免首次手写时卡顿
+    (void)QtConcurrent::run([]() {
+        PpocrRecognizer::instance()->warmup();
+    });
 
     QObject::connect(
         &engine,

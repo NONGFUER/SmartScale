@@ -222,8 +222,13 @@ ApplicationWindow {
             width: window.width
             x: (parent.width - width) / 2
             anchors.bottom: parent.bottom
-            scale: 0.62
+            // 手写模式把键盘整体放大：书写区从 ~950×330 变成 ~1230×576（面积 ≈2.2 倍），
+            // 指头写字明显更舒服；普通输入保持 0.62 不占屏
+            scale: hwrBridge.handwritingActive ? 0.80 : 0.62
             transformOrigin: Item.Bottom
+            Behavior on scale {
+                NumberAnimation { duration: 220; easing.type: Easing.InOutQuad }
+            }
 
             states: State {
                 name: "visible"
@@ -242,6 +247,266 @@ ApplicationWindow {
             }
         }
     }
+
+    // ============================================================
+    //  手写输入法桥接（PP-OCRv5）
+    //  进入手写模式后，键盘布局切换为 handwriting（大书写区 + 退格/回车/标点 + 键盘键），
+    //  笔迹由 HandwritingInputMethod 识别并直接落字到当前焦点输入框。
+    // ============================================================
+    HandwritingBridge {
+        id: hwrBridge
+        inputPanel: inputPanel
+    }
+
+    // 手写入口按钮：浮在键盘左上角（键盘容器裁剪区之外，不遮挡按键）
+    //   [手写/键盘] 键盘内手写模式（键盘放大到 0.82）
+    //   [全屏手写]   书写区 = 整个屏幕，写大字最舒服
+    Row {
+        id: handwritingButtons
+        parent: Overlay.overlay
+        z: 99999
+        spacing: 12
+        visible: inputPanel.active && hwrBridge.available && !hwrBridge.fullScreen
+        anchors.left: keyboardContainer.left
+        anchors.bottom: keyboardContainer.top
+        anchors.bottomMargin: 10
+
+        component HwrButton: Rectangle {
+            id: hwrBtn
+            property alias label: hwrBtnLabel.text
+            signal clicked()
+
+            width: Math.max(104, hwrBtnLabel.implicitWidth + 40)
+            height: 48
+            radius: 24
+            color: hwrBtnArea.pressed ? "#3F3FD0" : "#4649E5"
+
+            Text {
+                id: hwrBtnLabel
+                anchors.centerIn: parent
+                font.pixelSize: 22
+                font.bold: true
+                color: "#FFFFFF"
+            }
+
+            MouseArea {
+                id: hwrBtnArea
+                anchors.fill: parent
+                onClicked: hwrBtn.clicked()
+            }
+        }
+
+        HwrButton {
+            // 手写布局里本身也有"键盘"键，这里给个一致的入口
+            label: hwrBridge.handwritingActive ? "键盘" : "手写"
+            onClicked: {
+                console.log("[Main] 切换手写模式")
+                hwrBridge.toggle()
+            }
+        }
+
+        HwrButton {
+            label: "全屏手写"
+            onClicked: {
+                console.log("[Main] 进入全屏手写")
+                hwrBridge.enterFullScreen()
+            }
+        }
+    }
+
+    // ============================================================
+    //  全屏手写（PP-OCRv5）：书写区 = 整个屏幕
+    //  Qt 自带候选项弹窗跟随光标位置（会被本层盖住），因此候选条自建，
+    //  数据源用引擎的 wordCandidateListModel，点选调 model.selectItem(index)。
+    // ============================================================
+    Rectangle {
+        id: fullScreenHwrLayer
+        parent: Overlay.overlay
+        z: 100000
+        anchors.fill: parent
+        color: "#F4F8FC"
+        visible: hwrBridge.fullScreen
+
+        // ---- 实时预览：全屏层盖住了输入框，这里回显"写了什么" ----
+        //   surroundingText = 焦点输入框里光标前的内容（不含预编辑）
+        //   preeditText     = 输入法刚识别出、还没确认的字（蓝色下划线）
+        // 注意：这里刻意把属性读取都写在绑定表达式内部（不抽成函数），
+        //       保证 QML 能建立依赖，内容变化时实时刷新。
+        readonly property string previewHtml: {
+            var hidden = (InputContext.inputMethodHints & Qt.ImhHiddenText) !== 0
+            var text = InputContext.surroundingText ? String(InputContext.surroundingText) : ""
+            var pos = InputContext.cursorPosition
+            // surroundingText 可能同时含光标前后的内容，只取光标之前的部分
+            if (typeof pos === "number" && pos > 0 && pos < text.length)
+                text = text.substring(0, pos)
+            var preedit = InputContext.preeditText ? String(InputContext.preeditText) : ""
+            if (hidden) {   // 密码类输入框：回显时打码
+                text = "●".repeat(text.length)
+                preedit = "●".repeat(preedit.length)
+            }
+            if (text.length > 40)   // 只显示最后一段，预编辑始终可见
+                text = "…" + text.substring(text.length - 40)
+            if (text.length === 0 && preedit.length === 0)
+                return "<span style='color:#94A3B8'>在这里手写，写完停顿一下自动上屏</span>"
+            var escape = function (value) {
+                return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+            }
+            return escape(text) + (preedit.length > 0
+                    ? "<span style='color:#2563EB;text-decoration:underline'>" + escape(preedit) + "</span>"
+                    : "")
+        }
+
+        HandwritingInputPanel {
+            id: fullScreenHwrPanel
+            anchors.fill: parent
+            inputPanel: inputPanel
+            available: hwrBridge.fullScreen
+            active: hwrBridge.fullScreen
+        }
+
+        // ---- 顶部工具条：提示 + 退格/空格/回车/收起 ----
+        Rectangle {
+            id: fsToolbar
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 92
+            color: "#E8EFF7"
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 24
+                anchors.rightMargin: 24
+                spacing: 14
+
+                Text {
+                    text: "全屏手写　写完停顿一下自动上屏，点候选可纠正"
+                    font.pixelSize: 22
+                    color: "#475569"
+                }
+
+                Item { Layout.fillWidth: true }
+
+                component FsButton: Rectangle {
+                    id: fsBtn
+                    property alias label: fsBtnLabel.text
+                    signal clicked()
+
+                    implicitWidth: Math.max(100, fsBtnLabel.implicitWidth + 36)
+                    implicitHeight: 56
+                    radius: 10
+                    color: fsBtnArea.pressed ? "#DCE5F0" : "#FFFFFF"
+                    border.color: "#CBD5E1"
+                    border.width: 1
+
+                    Text {
+                        id: fsBtnLabel
+                        anchors.centerIn: parent
+                        font.pixelSize: 24
+                        font.bold: true
+                        color: "#334155"
+                    }
+
+                    MouseArea {
+                        id: fsBtnArea
+                        anchors.fill: parent
+                        onClicked: fsBtn.clicked()
+                    }
+                }
+
+                // 按键走 InputEngine.virtualKeyClick，保证先经过我们的输入法
+                // （预编辑下退格删的是未确认的字，而不是正文）
+                FsButton {
+                    label: "退格"
+                    onClicked: InputContext.inputEngine.virtualKeyClick(Qt.Key_Backspace, "", Qt.NoModifier)
+                }
+                FsButton {
+                    label: "空格"
+                    onClicked: InputContext.inputEngine.virtualKeyClick(Qt.Key_Space, " ", Qt.NoModifier)
+                }
+                FsButton {
+                    label: "回车"
+                    onClicked: InputContext.inputEngine.virtualKeyClick(Qt.Key_Return, "\n", Qt.NoModifier)
+                }
+                FsButton {
+                    label: "收起"
+                    onClicked: hwrBridge.leaveFullScreen()
+                }
+            }
+        }
+
+        // ---- 实时回显：已上屏内容 + 正在识别的字（蓝色下划线）----
+        Rectangle {
+            id: fsPreview
+            anchors.top: fsToolbar.bottom
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.topMargin: 14
+            anchors.leftMargin: 24
+            anchors.rightMargin: 24
+            height: 118
+            radius: 12
+            color: "#FFFFFF"
+            border.color: "#CBD5E1"
+            border.width: 1
+
+            Text {
+                anchors.fill: parent
+                anchors.margins: 18
+                textFormat: Text.RichText
+                text: fullScreenHwrLayer.previewHtml
+                font.pixelSize: 46
+                font.bold: true
+                color: "#1B263B"
+                verticalAlignment: Text.AlignVCenter
+                // 富文本不支持 elide，超长时靠 committedPreviewText() 截尾
+                wrapMode: Text.Wrap
+                clip: true
+            }
+        }
+
+        // ---- 候选条（自建）----
+        Row {
+            id: fsCandidateRow
+            anchors.top: fsPreview.bottom
+            anchors.left: parent.left
+            anchors.topMargin: 16
+            anchors.leftMargin: 24
+            spacing: 12
+
+            Repeater {
+                model: InputContext.inputEngine ? InputContext.inputEngine.wordCandidateListModel : null
+
+                delegate: Rectangle {
+                    id: fsCandidateItem
+                    required property int index
+                    required property string display
+
+                    width: Math.max(110, fsCandidateLabel.implicitWidth + 44)
+                    height: 82
+                    radius: 12
+                    color: "#FFFFFF"
+                    border.color: "#CBD5E1"
+                    border.width: 1
+
+                    Text {
+                        id: fsCandidateLabel
+                        anchors.centerIn: parent
+                        text: fsCandidateItem.display
+                        font.pixelSize: 40
+                        font.bold: true
+                        color: "#1B263B"
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: InputContext.inputEngine.wordCandidateListModel.selectItem(fsCandidateItem.index)
+                    }
+                }
+            }
+        }
+    }
+
     //Shortcut
     Shortcut{
         sequence: "Escape"
@@ -321,6 +586,16 @@ ApplicationWindow {
     SystemInfoDialog {
         id: systemInfoDialog
         // 居中显示（键盘悬浮覆盖，不做避让）
+        x: (parent.width - width) / 2
+        y: (parent.height - height) / 2
+
+        // 手写识别测试（调试）
+        onHwrTestRequested: hwrTestDialog.open()
+    }
+
+    // 手写识别测试弹窗（PP-OCRv5，调试用）
+    HwrTestDialog {
+        id: hwrTestDialog
         x: (parent.width - width) / 2
         y: (parent.height - height) / 2
     }

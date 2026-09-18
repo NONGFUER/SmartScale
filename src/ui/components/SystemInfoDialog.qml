@@ -14,6 +14,9 @@ import SmartScale
 Popup {
     id: root
 
+    /// 请求打开手写识别测试弹窗（由 Main.qml 处理）
+    signal hwrTestRequested()
+
     modal: true
     Overlay.modal: Rectangle { color: "#80000000" }   // 显式遮罩，强制 Qt 用此 Rectangle 替换默认 dimmer
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -169,29 +172,60 @@ Popup {
             height: 56
             color: "#F8FAFC"
 
-            Button {
-                id: closeBtn
-                text: "关闭"
+            RowLayout {
                 anchors.centerIn: parent
+                spacing: 16
 
-                implicitWidth: 120
-                implicitHeight: 36
+                // 手写识别测试（PP-OCRv5）：脱离键盘直接评测手写识别率
+                Button {
+                    id: hwrTestBtn
+                    text: "手写识别测试"
+                    implicitWidth: 160
+                    implicitHeight: 36
 
-                background: Rectangle {
-                    radius: 6
-                    color: closeBtn.hovered ? "#2563EB" : "#3B82F6"
+                    background: Rectangle {
+                        radius: 6
+                        color: hwrTestBtn.hovered ? "#0F766E" : "#14B8A6"
+                    }
+
+                    contentItem: Text {
+                        text: hwrTestBtn.text
+                        font.pixelSize: 15
+                        font.bold: true
+                        color: "#FFFFFF"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    onClicked: {
+                        root.close()
+                        root.hwrTestRequested()
+                    }
                 }
 
-                contentItem: Text {
-                    text: closeBtn.text
-                    font.pixelSize: 15
-                    font.bold: true
-                    color: "#FFFFFF"
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-                }
+                Button {
+                    id: closeBtn
+                    text: "关闭"
 
-                onClicked: root.close()
+                    implicitWidth: 120
+                    implicitHeight: 36
+
+                    background: Rectangle {
+                        radius: 6
+                        color: closeBtn.hovered ? "#2563EB" : "#3B82F6"
+                    }
+
+                    contentItem: Text {
+                        text: closeBtn.text
+                        font.pixelSize: 15
+                        font.bold: true
+                        color: "#FFFFFF"
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                    }
+
+                    onClicked: root.close()
+                }
             }
         }
     }

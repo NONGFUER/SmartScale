@@ -92,6 +92,8 @@ qt_add_qml_module(appSmartScale
         src/ui/components/OtaUpdateDialog.qml           # OTA 升级进度弹窗（下载进度/确认安装/结果）
         src/ui/components/OtaDownloadConfirmDialog.qml   # OTA 下载更新确认弹窗（确认是否立即下载）
         src/ui/components/AiResultSelectDialog.qml       # AI 识别结果候选选择弹窗
+        src/ui/components/HandwritingBridge.qml          # 手写输入法桥接（PP-OCRv5，注入虚拟键盘）
+        src/ui/components/HwrTestDialog.qml              # 手写识别测试弹窗（调试用）
 
     # --- 核心基础设施 ---
         SOURCES src/core/NetworkUtils.h src/core/NetworkUtils.cpp
@@ -105,6 +107,8 @@ qt_add_qml_module(appSmartScale
 
         # --- AI 推理层 ---
         SOURCES src/ai/VisionAIService.h src/ai/VisionAIService.cpp
+        SOURCES src/ai/PpocrRecognizer.h src/ai/PpocrRecognizer.cpp              # PP-OCRv5 手写识别引擎
+        SOURCES src/ai/HandwritingInputMethod.h src/ai/HandwritingInputMethod.cpp # 手写输入法（虚拟键盘插件）
 
         # --- 工具层 (Utils) ---
         SOURCES src/utils/FoodTranslator.h src/utils/FoodTranslator.cpp
@@ -188,6 +192,15 @@ file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/AI"
 # 部署资源文件（图标、水印等）到编译输出目录
 file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/resources"
      DESTINATION "${CMAKE_CURRENT_BINARY_DIR}")
+
+# 部署虚拟键盘自定义样式到**文件系统**（样式名 smartscale，见 main.cpp 的 QT_VIRTUALKEYBOARD_STYLE）：
+#   Qt 的样式查找 QQuickVirtualKeyboardSettingsPrivate::stylePath() 会把每个 QML 导入路径拼成
+#   <path>/QtQuick/VirtualKeyboard/Styles/<样式名>/style.qml，用 QFileInfo::exists() 判断，
+#   并按导入路径**倒序**匹配。若沿用内置名 "light"，系统 /usr/lib/<arch>/qt6/qml/... 下的
+#   同名旧副本会抢先命中（表现为改样式不生效 / 手写区采不到笔迹）；用唯一名字 smartscale
+#   则只会命中随程序部署的这一份，不依赖任何系统文件。
+file(COPY "${CMAKE_CURRENT_SOURCE_DIR}/src/ui/vkbdstyle/light/style.qml"
+     DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/keyboard_styles/QtQuick/VirtualKeyboard/Styles/smartscale")
 
 file(COPY "${ONNXRUNTIME_DIR}/lib/"
      DESTINATION "${CMAKE_CURRENT_BINARY_DIR}"
