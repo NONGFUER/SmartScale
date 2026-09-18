@@ -7,6 +7,7 @@ static const char *kKeyCellularEnabled   = "cellularEnabled";
 static const char *kKeyWifiEnabled       = "wifiEnabled";
 static const char *kKeyNetworkAutoSwitch = "networkAutoSwitch";
 static const char *kKeyNetworkMode       = "networkMode";
+static const char *kKeyWeightUnit        = "weightUnit";
 
 // ============================================================================
 // 构造 — 从 QSettings 读取持久化配置
@@ -22,6 +23,7 @@ AppSettingsService::AppSettingsService(QObject *parent)
     m_wifiEnabled       = m_settings.value(kKeyWifiEnabled, true).toBool();       // 默认 true
     m_networkAutoSwitch = m_settings.value(kKeyNetworkAutoSwitch, true).toBool(); // 默认 true
     m_networkMode       = m_settings.value(kKeyNetworkMode, -1).toInt();          // -1 表示尚未选择
+    m_weightUnit        = m_settings.value(kKeyWeightUnit, UnitKg).toInt();       // 默认 kg
 
     qDebug() << "[AppSettings] 加载配置:"
              << "priceInputEnabled =" << m_priceInputEnabled
@@ -29,6 +31,7 @@ AppSettingsService::AppSettingsService(QObject *parent)
              << "wifiEnabled =" << m_wifiEnabled
              << "networkAutoSwitch =" << m_networkAutoSwitch
              << "networkMode =" << m_networkMode
+             << "weightUnit =" << m_weightUnit
              << "文件:" << m_settings.fileName();
 }
 
@@ -115,4 +118,21 @@ void AppSettingsService::setNetworkMode(int mode)
 
     qDebug() << "[AppSettings] networkMode ->" << mode;
     Q_EMIT networkModeChanged();
+}
+
+// ============================================================================
+// weightUnit setter — 写回 QSettings 并发射信号（0=kg, 1=斤）
+// ============================================================================
+
+void AppSettingsService::setWeightUnit(int unit)
+{
+    if (m_weightUnit == unit)
+        return;
+
+    m_weightUnit = unit;
+    m_settings.setValue(kKeyWeightUnit, unit);
+    m_settings.sync();
+
+    qDebug() << "[AppSettings] weightUnit ->" << unit << (unit == UnitJin ? "(斤)" : "(kg)");
+    Q_EMIT weightUnitChanged();
 }

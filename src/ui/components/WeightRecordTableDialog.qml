@@ -12,7 +12,7 @@ import SmartScale
 //   - 以表格形式展示云端分页称重记录
 //   - 服务端分页（每页 10 条），底部页码导航
 //   - 关键字搜索（按食材名称过滤）
-//   - 列：序号 | 食材 | 重量(kg) | 单价(元/kg) | 金额(元) | 时间 | 图片
+//   - 列：序号 | 食材 | 重量 | 单价 | 金额(元) | 时间 | 图片（重量/单价单位跟随 WeightUnit，数据源为 kg / 元每kg）
 //   - 点击图片列可查看大图
 //
 // 用法：
@@ -469,8 +469,8 @@ Dialog {
 
                         TableHeaderCell { w: root.colIndex; t: "序号" }
                         TableHeaderCell { w: root.colIngr;  t: "食材" }
-                        TableHeaderCell { w: root.colWeight; t: "重量(kg)" }
-                        TableHeaderCell { w: root.colPrice;  t: "单价(元/kg)" }
+                        TableHeaderCell { w: root.colWeight; t: "重量(" + WeightUnit.unit + ")" }
+                        TableHeaderCell { w: root.colPrice;  t: "单价(" + WeightUnit.priceUnit + ")" }
                         TableHeaderCell { w: root.colAmount; t: "金额(元)" }
                         TableHeaderCell { w: root.colTime;   t: "时间" }
                         TableHeaderCell { w: root.colImg;    t: "图片"; showRightBorder: false }
@@ -523,9 +523,9 @@ Dialog {
                                 // 食材名称
                                 TableCell { w: root.colIngr; t: modelData.ingrNm || "—"; bold: true }
                                 // 重量
-                                TableCell { w: root.colWeight; t: Number(modelData.val || 0).toFixed(2); useAccent: true; accent: "#2563EB"; bold: true }
+                                TableCell { w: root.colWeight; t: WeightUnit.disp(modelData.val).toFixed(2); useAccent: true; accent: "#2563EB"; bold: true }
                                 // 单价（保留两位小数）
-                                TableCell { w: root.colPrice; t: _fmtPrice(modelData.price) }
+                                TableCell { w: root.colPrice; t: _fmtPrice(WeightUnit.price(modelData.price)) }
                                 // 金额
                                 TableCell { w: root.colAmount; t: _fmtPrice(modelData.amount); bold: true; useAccent: true; accent: "#16A34A" }
                                 // 时间（日期 + 时间换行显示）

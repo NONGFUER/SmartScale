@@ -5,6 +5,7 @@ import QtMultimedia
 import QtQuick.Effects
 import App.Backend 1.0
 import SmartScale.Tools 1.0
+import SmartScale                 // 模块级单例（Theme/WeightUnit）：隐式导入只覆盖同目录，pages/ 下必须显式导入
 import "../components"
 
 Item {
@@ -260,7 +261,7 @@ Item {
 
                                                 // 重量（选中=品牌色，否则=绿色）
                                                 Text {
-                                                    text: modelData.weight ? modelData.weight.toFixed(2) + " kg" : "0.00 kg"
+                                                    text: WeightUnit.text(modelData.weight)
                                                     font.pixelSize: 24
                                                     font.bold: true
                                                     color: historyDelegate.isSelected ? "#4361EE" : "#16A34A"
@@ -754,7 +755,7 @@ Item {
 
                                             // ---- 单价标签 ----
                                             Text {
-                                                text: "单价（元/kg）"
+                                                text: "单价（" + WeightUnit.priceUnit + "）"
                                                 font.pixelSize: 24
                                                 font.bold:true
                                                 font.family: "PingFang SC"
@@ -780,7 +781,7 @@ Item {
                                                     Text {
                                                         Layout.alignment: Qt.AlignVCenter
                                                         text: root.currentUnitPrice > 0
-                                                              ? root.currentUnitPrice.toFixed(2)
+                                                              ? WeightUnit.price(root.currentUnitPrice).toFixed(2)
                                                               : "—"
                                                         font.pixelSize: 40
                                                         font.bold: true
@@ -794,7 +795,7 @@ Item {
                                                     id: priceMA
                                                     anchors.fill: parent
                                                     hoverEnabled: true
-                                                    onClicked: numberPad.openPad(root.currentUnitPrice)
+                                                    onClicked: numberPad.openPad(WeightUnit.price(root.currentUnitPrice))
                                                 }
                                             }
                                             // ---- 金额标签 ----
@@ -1050,7 +1051,7 @@ Item {
                                     Row {
                                         anchors.centerIn: parent
                                         Text {
-                                            text: WeightManager.displayWeight.toFixed(2)
+                                            text: WeightUnit.disp(WeightManager.displayWeight).toFixed(2)
                                             font.pixelSize: 100
                                             font.bold: true
                                             color: "#FFFFFF"
@@ -1060,8 +1061,8 @@ Item {
 
                                     // 单位显示在容器右侧
                                     Text {
-                                        text: "kg"
-                                        font.pixelSize: 48
+                                        text: WeightUnit.unit
+                                        font.pixelSize: 64
                                         font.bold: true
                                         color: "#FFFFFF"
                                         anchors.right: parent.right
@@ -1826,8 +1827,9 @@ Item {
     NumberPadPopup {
         id: numberPad
         onConfirmed: function(value) {
-            root.currentUnitPrice = value
-            console.log("[WSP] 单价输入完成:", value, "金额:", root.currentAmount.toFixed(2))
+            // 输入值为当前显示单位（元/斤 或 元/kg），统一回写为 元/kg 存储
+            root.currentUnitPrice = WeightUnit.priceToKg(value)
+            console.log("[WSP] 单价输入完成:", value, WeightUnit.priceUnit, "->元/kg:", root.currentUnitPrice, "金额:", root.currentAmount.toFixed(2))
         }
     }
 

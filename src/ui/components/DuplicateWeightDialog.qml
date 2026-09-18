@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
+import SmartScale                 // 模块级单例（Theme/WeightUnit）：隐式导入只覆盖同目录，components/ 下必须显式导入
 
 /**
  * DuplicateWeightDialog — 重复称重提醒弹窗
@@ -127,7 +128,7 @@ Dialog {
 
         // 重复记录详情
         Text {
-            text: "刚刚已称过：" + root.categoryName + "  " + root.dupWeight.toFixed(2) + " kg" +
+            text: "刚刚已称过：" + root.categoryName + "  " + WeightUnit.text(root.dupWeight) +
                   (root.recordTime ? "  (" + root.recordTime.substring(5, 16) + ")" : "")
             width: 400
             wrapMode: Text.WordWrap

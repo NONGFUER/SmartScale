@@ -143,7 +143,7 @@ void AuthService::tryOnlineLogin(const QString &userCode, const QString &passwor
     bodyObj["Password"] = password;
     bodyObj["Sn"]       = m_deviceSn;  // 设备序列号（由 WeightSensor 注入）
     bodyObj["Role"]     = 2;      // 角色类型
-    bodyObj["Dev"]      = 4;      // 设备类型
+    bodyObj["Dev"]      = 3; //4      // 设备类型
     bodyObj["zone"]     = "Asia/Shanghai";     // 区域
 
     QJsonDocument bodyDoc(bodyObj);

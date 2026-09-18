@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Effects
 import App.Backend 1.0
+import SmartScale                 // 模块级单例（Theme/WeightUnit）：隐式导入只覆盖同目录，components/ 下必须显式导入
 
 /**
  * NumberPadPopup — 底部弹出的 9 宫格数字键盘
@@ -84,7 +85,7 @@ Popup {
         anchors.margins: 24
         spacing: 16
 
-        // ---------- 显示栏：左(返回+单价) | 中(数值) | 右(元/kg+清空) ----------
+        // ---------- 显示栏：左(返回+单价) | 中(数值) | 右(单价单位+清空) ----------
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 64
@@ -152,14 +153,14 @@ Popup {
                 color: "#1E293B"
             }
 
-            // 右侧：元/kg + 清空
+            // 右侧：单价单位（元/kg 或 元/斤）+ 清空
             Row {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 10
 
                 Text {
-                    text: "元/kg"
+                    text: WeightUnit.priceUnit
                     font.pixelSize: 30
                     font.bold: true
                     font.family: Theme.fontFamilyUi

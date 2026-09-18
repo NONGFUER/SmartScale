@@ -324,6 +324,24 @@ Dialog {
                 // 分隔线
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
 
+                // ----- 重量/单价按斤显示 -----
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 0
+                    Text {
+                        text: "按斤显示（1斤=0.5kg）"
+                        font.family: Theme.fontFamilyUi
+                        font.pixelSize: 24
+                        color: Theme.colorTextSecondary
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Item { Layout.fillWidth: true }
+                    ToggleSwitch { id: swJin; checked: AppSettings.weightUnit === 1; onToggled: AppSettings.weightUnit = checked ? 1 : 0 }
+                }
+
+                // 分隔线
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#E2E8F0" }
+
                 // ----- 网络模式（四选一）-----
                 // Text {
                 //     text: "网络模式"

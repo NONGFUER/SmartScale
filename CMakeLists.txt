@@ -57,10 +57,16 @@ set_source_files_properties(src/ui/Theme.qml PROPERTIES
     QT_QML_SINGLETON_TYPE TRUE
 )
 
+# 声明 WeightUnit.qml 为 QML singleton（重量/单价显示单位换算）
+set_source_files_properties(src/ui/WeightUnit.qml PROPERTIES
+    QT_QML_SINGLETON_TYPE TRUE
+)
+
 qt_add_qml_module(appSmartScale
     URI SmartScale
     QML_FILES
         src/ui/Theme.qml                       # 全局主题 singleton（字体/颜色常量）
+        src/ui/WeightUnit.qml                  # 重量/单价显示单位换算 singleton（kg ↔ 斤）
         src/ui/Main.qml
         src/ui/pages/LoginPage.qml             # 登录页面
         src/ui/pages/WorkstationPage.qml       # 主操作台页面

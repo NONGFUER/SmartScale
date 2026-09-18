@@ -872,7 +872,7 @@ Dialog {
                         }
 
                         Text {
-                            text: (cardRoot.record.weight || 0).toFixed(2) + " kg"
+                            text: WeightUnit.text(cardRoot.record.weight)
                             font.pixelSize: 24
                             font.family: Theme.fontFamilyUi
                             font.bold: true
