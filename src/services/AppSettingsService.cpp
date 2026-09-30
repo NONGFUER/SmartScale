@@ -2,6 +2,7 @@
 #include "utils/AppPaths.h"
 
 #include <QDebug>
+#include <QFileInfo>
 
 static const char *kKeyPriceInputEnabled = "priceInputEnabled";
 static const char *kKeyCellularEnabled   = "cellularEnabled";
@@ -42,6 +43,25 @@ AppSettingsService::AppSettingsService(QObject *parent)
              << "networkMode =" << m_networkMode
              << "weightUnit =" << m_weightUnit
              << "文件:" << m_settings.fileName();
+
+    // 自检：文件存在但当前用户不可写 → 改动会静默丢失（"设置改了、重启后还是旧值"）。
+    // 最常见成因是被以 root 启动的实例（OTA 脚本兜底拉起）写成了 root:root。
+    const QFileInfo info(m_settings.fileName());
+    if (info.exists() && !info.isWritable())
+        qWarning() << "[AppSettings] 设置文件不可写，设置改动将无法保存:"
+                   << info.fileName()
+                   << "属主=" << info.owner() << "（需 chown 回当前用户）";
+}
+
+/**
+ * 落盘 + 属主纠正：以 root 启动的实例写出的文件属主是 root，
+ * 之后普通用户实例将永久无法写入同一文件（QSettings 静默失败）。
+ * 这里写一次就把属主纠正回普通用户，保证两种启动方式共用同一份设置。
+ */
+void AppSettingsService::persist()
+{
+    m_settings.sync();
+    AppPaths::adoptOwnership(m_settings.fileName());
 }
 
 // ============================================================================
@@ -55,7 +75,7 @@ void AppSettingsService::setPriceInputEnabled(bool enabled)
 
     m_priceInputEnabled = enabled;
     m_settings.setValue(kKeyPriceInputEnabled, enabled);
-    m_settings.sync();
+    persist();
 
     qDebug() << "[AppSettings] priceInputEnabled ->" << enabled;
     Q_EMIT priceInputEnabledChanged();
@@ -72,7 +92,7 @@ void AppSettingsService::setCellularEnabled(bool enabled)
 
     m_cellularEnabled = enabled;
     m_settings.setValue(kKeyCellularEnabled, enabled);
-    m_settings.sync();
+    persist();
 
     qDebug() << "[AppSettings] cellularEnabled ->" << enabled;
     Q_EMIT cellularEnabledChanged();
@@ -89,7 +109,7 @@ void AppSettingsService::setWifiEnabled(bool enabled)
 
     m_wifiEnabled = enabled;
     m_settings.setValue(kKeyWifiEnabled, enabled);
-    m_settings.sync();
+    persist();
 
     qDebug() << "[AppSettings] wifiEnabled ->" << enabled;
     Q_EMIT wifiEnabledChanged();
@@ -106,7 +126,7 @@ void AppSettingsService::setNetworkAutoSwitch(bool enabled)
 
     m_networkAutoSwitch = enabled;
     m_settings.setValue(kKeyNetworkAutoSwitch, enabled);
-    m_settings.sync();
+    persist();
 
     qDebug() << "[AppSettings] networkAutoSwitch ->" << enabled;
     Q_EMIT networkAutoSwitchChanged();
@@ -123,7 +143,7 @@ void AppSettingsService::setNetworkMode(int mode)
 
     m_networkMode = mode;
     m_settings.setValue(kKeyNetworkMode, mode);
-    m_settings.sync();
+    persist();
 
     qDebug() << "[AppSettings] networkMode ->" << mode;
     Q_EMIT networkModeChanged();
@@ -140,7 +160,7 @@ void AppSettingsService::setWeightUnit(int unit)
 
     m_weightUnit = unit;
     m_settings.setValue(kKeyWeightUnit, unit);
-    m_settings.sync();
+    persist();
 
     qDebug() << "[AppSettings] weightUnit ->" << unit << (unit == UnitJin ? "(斤)" : "(kg)");
     Q_EMIT weightUnitChanged();

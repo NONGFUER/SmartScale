@@ -52,6 +52,26 @@ void ensureDir(const QString &dir);
  */
 void retireStaleRootData();
 
+/**
+ * @brief 把 path（文件或目录，目录则递归）的属主纠正为家目录属主
+ *
+ * 为什么需要：以 root 身份运行的实例（OTA 脚本兜底拉起）会在**普通用户的家目录**下
+ * 写出 root:root 的配置文件（QSettings 写 INI 是"临时文件 + rename"，结果文件属 root）。
+ * 之后普通用户实例读写同一个文件会失败（权限不够），QSettings 又只静默失败，
+ * 表现为"设置改了、重启后还是旧值"（2026-09-30 实测：AppSettings.ini 属 root:root 644）。
+ *
+ * 非 root 启动时不做任何事（无权限、也不必要）；重复调用幂等。
+ */
+void adoptOwnership(const QString &path);
+
+/**
+ * @brief 启动时把 configDir()/cacheDir() 下所有 root 遗留属主纠正为家目录属主
+ *
+ * 与 adoptOwnership() 同样只在 root 启动时生效，用于一次性修复历史遗留
+ * （例如已被 root 实例写成 root:root 的 AppSettings.ini、AI/ 资源、cache/embedded 目录）。
+ */
+void adoptAppDataOwnership();
+
 } // namespace AppPaths
 
 #endif // APPPATHS_H

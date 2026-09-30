@@ -60,6 +60,21 @@ if [ ! -f "$APP_BIN" ]; then
   exit 1
 fi
 
+# ---------- 1.5 属主纠正工具 ----------
+# 本脚本以 root 运行：cp/替换会让 APP_DIR 下的 appSmartScale、AI/、keyboard_styles/
+# 变成 root 属主 —— 之后普通用户实例无法覆盖更新（QFile::copy 到已存在文件会失败），
+# 用户侧 make/打包也写不进去。统一纠正为"应用目录属主"，与 systemd 的 User=sjwu 一致。
+adopt_owner() {
+  local owner uid gid
+  owner="$(stat -c '%U' "$APP_DIR" 2>/dev/null)"
+  if [ -z "$owner" ] || [ "$owner" = "root" ]; then
+    return 0
+  fi
+  uid="$(stat -c '%u' "$APP_DIR")"
+  gid="$(stat -c '%g' "$APP_DIR")"
+  chown -R "$uid:$gid" "$@" 2>/dev/null || log "警告: 属主纠正失败: $*"
+}
+
 # ---------- 2. 解压到临时目录 ----------
 TMP_DIR="$(mktemp -d /tmp/ota_extract.XXXXXX)"
 trap 'rm -rf "$TMP_DIR"' EXIT
@@ -140,8 +155,9 @@ for asset_dir in AI keyboard_styles; do
   log "同步资源目录 ${asset_dir}..."
   mkdir -p "${APP_DIR}/${asset_dir}"
   if cp -a "${TMP_DIR}/${asset_dir}/." "${APP_DIR}/${asset_dir}/"; then
+    adopt_owner "${APP_DIR}/${asset_dir}"
     sync
-    log "${asset_dir} 已同步"
+    log "${asset_dir} 已同步（属主已纠正）"
   else
     log "错误: ${asset_dir} 同步失败"
     if [ -n "$SVC" ]; then systemctl start "$SVC"; fi
@@ -159,14 +175,32 @@ if ! cp "${TMP_DIR}/appSmartScale" "$APP_BIN"; then
   exit 4
 fi
 chmod 755 "$APP_BIN"
+adopt_owner "$APP_BIN"
 sync
+
+# 兜底拉起：本脚本以 root 运行，若直接 nohup 拉起，应用会以 root 身份写出
+# root 属主的配置文件（AppSettings.ini / last_login.conf / 缓存…），
+# 之后普通用户实例写不进去（QSettings 静默失败 → "设置改了但重启后失效"）。
+# 因此这里切到应用目录属主身份运行，并同步修正 HOME（AppPaths 非 root 时按 HOME 解析）。
+launch_direct() {
+  local owner owner_home
+  owner="$(stat -c '%U' "$APP_DIR" 2>/dev/null)"
+  if [ "$(id -u)" = "0" ] && [ -n "$owner" ] && [ "$owner" != "root" ] && command -v runuser >/dev/null 2>&1; then
+    owner_home="$(getent passwd "$owner" 2>/dev/null | cut -d: -f6)"
+    [ -z "$owner_home" ] && owner_home="/home/$owner"
+    log "以用户 $owner 拉起应用（HOME=$owner_home）"
+    (cd "$APP_DIR" && runuser -u "$owner" -- env HOME="$owner_home" nohup "$APP_BIN" >/dev/null 2>&1 &)
+  else
+    (cd "$APP_DIR" && nohup "$APP_BIN" >/dev/null 2>&1 &)
+  fi
+}
 
 # ---------- 9. 拉起应用 ----------
 log "拉起应用..."
 if [ -n "$SVC" ]; then
   systemctl start "$SVC"
 else
-  (cd "$APP_DIR" && nohup "$APP_BIN" >/dev/null 2>&1 &)
+  launch_direct
 fi
 
 # ---------- 10. 存活验证：60s 内等进程出现，出现后 30s 稳定性观察 ----------
@@ -181,7 +215,7 @@ rollback_and_exit() {
     pkill -x appSmartScale 2>/dev/null
     # 同样等待旧进程退出，避免残留占用串口锁/二进制
     for _ in $(seq 1 15); do pgrep -x appSmartScale >/dev/null 2>&1 || break; sleep 1; done
-    (cd "$APP_DIR" && nohup "$APP_BIN" >/dev/null 2>&1 &)
+    launch_direct
   fi
   echo "$VERSION" > "${OTA_DIR}/result.rolledback"
   exit "$code"

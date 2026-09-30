@@ -16,8 +16,8 @@
  *   - weightUnit          : 重量显示单位（0=kg 默认，1=斤）。仅影响前端展示/输入换算，
  *                            数据库、上传接口、计算逻辑一律保持 kg（见 QML 单例 WeightUnit）
  *
- * 存储：QSettings INI 格式，UserScope，组织 "SmartScale" / 应用 "AppSettings"
- *       路径通常为 ~/.config/SmartScale/AppSettings.conf
+ * 存储：QSettings IniFormat + **显式路径** <AppPaths::configDir()>/AppSettings.ini
+ *       （不再用 QSettings::UserScope —— 它依赖进程 HOME，会被 root 启动的实例带偏）
  *
  * QML 访问：AppSettings.priceInputEnabled / AppSettings.cellularEnabled /
  *          AppSettings.wifiEnabled / AppSettings.networkAutoSwitch / AppSettings.networkMode /
@@ -64,7 +64,6 @@ public:
 
     int weightUnit() const { return m_weightUnit; }
     void setWeightUnit(int unit);
-
 Q_SIGNALS:
     void priceInputEnabledChanged();
     void cellularEnabledChanged();
@@ -74,6 +73,9 @@ Q_SIGNALS:
     void weightUnitChanged();
 
 private:
+    /** 落盘 + 属主纠正（root 实例写出 root 属主文件时立即改回普通用户，见 AppPaths::adoptOwnership） */
+    void persist();
+
     QSettings m_settings;   // IniFormat，显式路径 <AppPaths::configDir()>/AppSettings.ini
     bool m_priceInputEnabled;
     bool m_cellularEnabled;

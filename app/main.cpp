@@ -181,6 +181,10 @@ int main(int argc, char *argv[])
     qInfo() << "[Main] 配置根目录:" << AppPaths::home();
     AppPaths::retireStaleRootData();
 
+    // 把 root 实例曾写在用户家目录下的配置/缓存文件属主纠正回普通用户。
+    // 否则普通用户实例写不进去（QSettings 静默失败）→ 设置改动重启后失效。
+    AppPaths::adoptAppDataOwnership();
+
     // 触摸屏环境：全局隐藏鼠标光标
     QGuiApplication::setOverrideCursor(QCursor(Qt::BlankCursor));
 

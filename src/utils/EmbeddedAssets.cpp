@@ -22,6 +22,22 @@ struct AssetSet {
 };
 
 /**
+ * 返回可用目录前，先把其属主纠正回普通用户。
+ *
+ * 为什么：以 root 启动的实例（OTA 脚本 nohup 兜底）释放内嵌资源、或脚本用 root
+ * `cp -a` 同步资源目录时，`<APP_DIR>/AI`、`<APP_DIR>/keyboard_styles`（含目录本身）
+ * 会变成 root:root。之后普通用户实例会判定"释放目录不可写"而退回缓存目录
+ * （部署布局分裂、运维看不到），用户侧 `make`/打包/覆盖样式也写不进去。
+ * 非 root 时本调用无副作用（内部已做 euid 判定）。
+ */
+QString adoptAndReturn(const QString &dir)
+{
+    if (!dir.isEmpty())
+        AppPaths::adoptOwnership(dir);
+    return dir;
+}
+
+/**
  * 返回可用的资源目录，优先级：
  *   ① 设备目录（`<APP_DIR>/<子目录>`）文件齐备且大小与内嵌副本一致 → 直接用（零拷贝）
  *   ② 把内嵌副本释放到设备目录（与"随包部署"后的布局一致，便于运维查看）——
@@ -58,7 +74,7 @@ QString resolveDir(const AssetSet &set)
             }
         }
         if (same)
-            return set.fsBaseDir;
+            return adoptAndReturn(set.fsBaseDir);
     }
 
     if (!embeddedComplete)
@@ -95,8 +111,10 @@ QString resolveDir(const AssetSet &set)
             }
             qInfo() << "[EmbeddedAssets] 已释放内嵌资源:" << dest;
         }
-        if (ok)
-            return releaseDir;
+        if (ok) {
+            // 释放完成即刻归位属主（root 实例释放的文件属 root，普通用户实例将无法覆盖）
+            return adoptAndReturn(releaseDir);
+        }
     }
 
     qWarning() << "[EmbeddedAssets] 无可用释放目录:" << set.subDir;

@@ -1,11 +1,13 @@
 #include "AppPaths.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QDateTime>
 #include <QDebug>
 #include <QStringList>
 
+#include <cerrno>
 #include <pwd.h>
 #include <unistd.h>
 
@@ -57,6 +59,67 @@ const QString &resolvedHome()
     return cached;
 }
 
+/**
+ * 家目录属主（uid/gid）。仅在"以 root 启动且家目录已纠正到普通用户"时有效，
+ * 其余情况 invalid=true 表示不需要/不能纠正属主。
+ */
+struct HomeOwner
+{
+    uid_t uid = 0;
+    gid_t gid = 0;
+    bool  valid = false;
+};
+
+const HomeOwner &homeOwner()
+{
+    static const HomeOwner cached = []() -> HomeOwner {
+        HomeOwner owner;
+
+        if (::geteuid() != 0)
+            return owner;   // 非 root：无权限，也无必要
+
+        const QString h = resolvedHome();
+        if (h.startsWith(QStringLiteral("/root")))
+            return owner;   // 家目录未纠正成功 → 不动属主（避免把 /root 的东西改了）
+
+        const QFileInfo info(h);
+        if (!info.exists())
+            return owner;
+
+        owner.uid = info.ownerId();
+        owner.gid = info.groupId();
+        owner.valid = (owner.uid != 0);   // 家目录本身属 root 时不纠正
+        return owner;
+    }();
+    return cached;
+}
+
+/** 递归把 path 的属主改为 uid:gid，返回实际纠正的条目数 */
+int chownTree(const QString &path, uid_t uid, gid_t gid)
+{
+    const QFileInfo info(path);
+    if (!info.exists())
+        return 0;
+
+    int fixed = 0;
+    if (info.ownerId() != uid || info.groupId() != gid) {
+        const QByteArray native = QFile::encodeName(path);
+        if (::lchown(native.constData(), uid, gid) == 0)
+            ++fixed;
+        else
+            qWarning() << "[AppPaths] 修正属主失败:" << path << "errno=" << errno;
+    }
+
+    if (info.isDir() && !info.isSymLink()) {
+        const QFileInfoList entries =
+            QDir(path).entryInfoList(QDir::NoDotAndDotDot | QDir::AllEntries | QDir::System | QDir::Hidden);
+        for (const QFileInfo &entry : entries)
+            fixed += chownTree(entry.absoluteFilePath(), uid, gid);
+    }
+
+    return fixed;
+}
+
 } // namespace
 
 namespace AppPaths {
@@ -80,6 +143,32 @@ void ensureDir(const QString &dir)
 {
     if (!dir.isEmpty())
         QDir().mkpath(dir);
+}
+
+void adoptOwnership(const QString &path)
+{
+    const HomeOwner &owner = homeOwner();
+    if (!owner.valid || path.isEmpty())
+        return;
+
+    const int fixed = chownTree(path, owner.uid, owner.gid);
+    if (fixed > 0)
+        qInfo() << "[AppPaths] 已把" << fixed << "项属主纠正为 uid" << owner.uid << ":" << path;
+}
+
+void adoptAppDataOwnership()
+{
+    const HomeOwner &owner = homeOwner();
+    if (!owner.valid)
+        return;
+
+    int fixed = 0;
+    for (const QString &dir : { configDir(), cacheDir() })
+        fixed += chownTree(dir, owner.uid, owner.gid);
+
+    if (fixed > 0)
+        qInfo() << "[AppPaths] 以 root 启动，已修正" << fixed
+                << "项 root 遗留属主（普通用户实例否则无法写入→设置改动后重启失效）";
 }
 
 void retireStaleRootData()
